@@ -3,10 +3,42 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "nest start --watch",
+    "start": "node dist/main",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
     "build": "nest build",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "test": "echo 'no tests yet' && exit 0"
+    "test": "jest"
+  },
+  "dependencies": {
+    "@nestjs/core": "^10.4.15",
+    "@nestjs/common": "^10.4.15",
+    "@nestjs/platform-express": "^10.4.15",
+    "@nestjs/mongoose": "^10.1.0",
+    "@nestjs/config": "^3.3.0",
+    "@nestjs/jwt": "^10.2.0",
+    "@nestjs/bull": "^10.2.3",
+    "@nestjs/schedule": "^4.1.2",
+    "@nestjs/throttler": "^6.4.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "mongoose": "^8.9.5",
+    "ioredis": "^5.4.2",
+    "minio": "^8.0.3",
+    "meilisearch": "^0.47.0",
+    "class-validator": "^0.14.1",
+    "class-transformer": "^0.5.1",
+    "resend": "^4.1.2",
+    "nodemailer": "^6.9.16",
+    "@react-email/render": "^1.0.4"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.4.9",
+    "@nestjs/testing": "^10.4.15",
+    "@types/nodemailer": "^6.4.17",
+    "@types/node": "^22.10.7",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
   }
 }
