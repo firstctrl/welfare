@@ -7,9 +7,9 @@ export const apiClient = axios.create({
 
 // Request interceptor — inject auth token
 apiClient.interceptors.request.use((config) => {
-  // Token retrieved from localStorage to avoid SSR issues
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('welfare_auth_token');
+    const stored = localStorage.getItem('welfare_auth_store');
+    const token = stored ? (JSON.parse(stored) as { state?: { token?: string } })?.state?.token : null;
     if (token) config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
@@ -20,7 +20,7 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 && typeof window !== 'undefined') {
-      localStorage.removeItem('welfare_auth_token');
+      localStorage.removeItem('welfare_auth_store');
       window.location.href = '/login';
     }
     return Promise.reject(error);

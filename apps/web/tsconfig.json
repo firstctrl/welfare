@@ -20,7 +20,13 @@
         "name": "next"
       }
     ],
-    "isolatedModules": true
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@welfare/shared": ["../../packages/shared/src"],
+      "@welfare/shared/*": ["../../packages/shared/src/*"]
+    }
   },
   "include": [
     "next-env.d.ts",

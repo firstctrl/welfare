@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
 import './globals.css';
 import { Providers } from '../components/providers';
@@ -7,7 +8,7 @@ export const metadata: Metadata = {
   description: 'Staff welfare contribution and loan management',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>

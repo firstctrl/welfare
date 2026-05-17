@@ -1,5 +1,3 @@
-'use client';
-
 export function Topbar() {
   return (
     <header className="bg-white shadow-sm px-6 py-4 flex items-center justify-between">

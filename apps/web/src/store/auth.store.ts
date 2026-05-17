@@ -24,6 +24,9 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user) => set({ user }),
       clearAuth: () => set({ token: null, user: null }),
     }),
-    { name: 'welfare_auth_store' },
+    {
+      name: 'welfare_auth_store',
+      skipHydration: true,
+    },
   ),
 );
