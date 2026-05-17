@@ -1,6 +1,7 @@
 import { EmailLogStatus } from '../enums/email-log-status.enum';
 import { EmailLogType } from '../enums/email-log-type.enum';
 import { EmailProvider } from '../enums/email-provider.enum';
+import { EmailTriggerSource } from '../enums/email-trigger-source.enum';
 
 export interface IEmailRecipient {
   staffId: string;
@@ -15,7 +16,7 @@ export interface IEmailLog {
   subject: string;
   status: EmailLogStatus;
   provider: EmailProvider;
-  triggeredBy: 'Cron' | 'Manual';
+  triggeredBy: EmailTriggerSource;
   scheduledFor?: string;
   sentAt?: string;
   errorMessage?: string;

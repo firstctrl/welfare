@@ -1,0 +1,15 @@
+export enum AuditAction {
+  Create = 'CREATE',
+  Update = 'UPDATE',
+  Delete = 'DELETE',
+  Import = 'IMPORT',
+  Approve = 'APPROVE',
+  Disburse = 'DISBURSE',
+  Settle = 'SETTLE',
+  WriteOff = 'WRITE_OFF',
+  RecordPayment = 'RECORD_PAYMENT',
+  GenerateStatement = 'GENERATE_STATEMENT',
+  Login = 'LOGIN',
+  Logout = 'LOGOUT',
+  ConfigChange = 'CONFIG_CHANGE',
+}

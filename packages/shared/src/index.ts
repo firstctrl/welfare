@@ -9,6 +9,9 @@ export { EmailLogStatus } from './enums/email-log-status.enum';
 export { EmailLogType } from './enums/email-log-type.enum';
 export { EmailProvider } from './enums/email-provider.enum';
 export { ConfigKey } from './enums/config-key.enum';
+export { AuditAction } from './enums/audit-action.enum';
+export { AuditEntity } from './enums/audit-entity.enum';
+export { EmailTriggerSource } from './enums/email-trigger-source.enum';
 
 // Interfaces
 export type { IStaff } from './interfaces/staff.interface';
