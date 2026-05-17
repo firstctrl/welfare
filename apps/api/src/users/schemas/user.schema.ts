@@ -1,7 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { HydratedDocument } from 'mongoose';
+import { UserRole } from '../enums/user-role.enum';
 
-export type UserDocument = User & Document;
+export type UserDocument = HydratedDocument<User>;
 
 @Schema({ timestamps: true })
 export class User {
@@ -14,8 +15,8 @@ export class User {
   @Prop({ sparse: true, unique: true })
   email?: string;
 
-  @Prop({ required: true, enum: ['WELFARE_OFFICER'], default: 'WELFARE_OFFICER' })
-  role!: string;
+  @Prop({ required: true, enum: Object.values(UserRole), default: UserRole.WelfareOfficer })
+  role!: UserRole;
 
   @Prop({ required: true, enum: ['ldap', 'local'] })
   source!: 'ldap' | 'local';
