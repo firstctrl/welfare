@@ -33,12 +33,13 @@ export class HealthController {
 
   @Get()
   async check(@Res({ passthrough: true }) res: Response): Promise<HealthResponse> {
-    const services = {
-      mongodb: await this.checkMongoDB(),
-      redis: await this.checkRedis(),
-      minio: await this.checkMinio(),
-      meilisearch: await this.checkMeilisearch(),
-    };
+    const [mongodb, redis, minio, meilisearch] = await Promise.all([
+      this.checkMongoDB(),
+      this.checkRedis(),
+      this.checkMinio(),
+      this.checkMeilisearch(),
+    ]);
+    const services = { mongodb, redis, minio, meilisearch };
 
     const allUp = Object.values(services).every((s) => s === 'up');
     const status = allUp ? 'ok' : 'degraded';
@@ -60,38 +61,47 @@ export class HealthController {
   }
 
   private async checkRedis(): Promise<ServiceStatus> {
+    let id: ReturnType<typeof setTimeout> | undefined;
     try {
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Redis ping timeout')), 3000),
-      );
+      const timeout = new Promise<never>((_, reject) => {
+        id = setTimeout(() => reject(new Error('Redis ping timeout')), 3000);
+      });
       await Promise.race([this.redis.ping(), timeout]);
       return 'up';
     } catch {
       return 'down';
+    } finally {
+      clearTimeout(id);
     }
   }
 
   private async checkMinio(): Promise<ServiceStatus> {
+    let id: ReturnType<typeof setTimeout> | undefined;
     try {
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('MinIO timeout')), 3000),
-      );
+      const timeout = new Promise<never>((_, reject) => {
+        id = setTimeout(() => reject(new Error('MinIO timeout')), 3000);
+      });
       await Promise.race([this.minioClient.listBuckets(), timeout]);
       return 'up';
     } catch {
       return 'down';
+    } finally {
+      clearTimeout(id);
     }
   }
 
   private async checkMeilisearch(): Promise<ServiceStatus> {
+    let id: ReturnType<typeof setTimeout> | undefined;
     try {
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Meilisearch timeout')), 3000),
-      );
+      const timeout = new Promise<never>((_, reject) => {
+        id = setTimeout(() => reject(new Error('Meilisearch timeout')), 3000);
+      });
       await Promise.race([this.meilisearchClient.health(), timeout]);
       return 'up';
     } catch {
       return 'down';
+    } finally {
+      clearTimeout(id);
     }
   }
 }
