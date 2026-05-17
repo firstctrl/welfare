@@ -1,5 +1,10 @@
-import axios from 'axios';
+import axios, { type InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../store/auth.store';
+
+// Extend config type to include _isRetry flag
+interface RetryConfig extends InternalAxiosRequestConfig {
+  _isRetry?: boolean;
+}
 
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000',
@@ -19,13 +24,14 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401 && typeof window !== 'undefined') {
-      // Try refresh first
+    const config = error.config as RetryConfig | undefined;
+    if (error.response?.status === 401 && !config?._isRetry && typeof window !== 'undefined') {
+      if (config) config._isRetry = true;
       const { refreshAccessToken } = await import('./auth');
       const newToken = await refreshAccessToken();
-      if (newToken && error.config) {
-        error.config.headers.Authorization = `Bearer ${newToken}`;
-        return apiClient.request(error.config);
+      if (newToken && config) {
+        config.headers.Authorization = `Bearer ${newToken}`;
+        return apiClient.request(config);
       }
       window.location.href = '/login';
     }

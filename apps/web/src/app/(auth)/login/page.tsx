@@ -19,7 +19,8 @@ function LoginForm() {
     setLoading(true);
     try {
       await login({ username, password });
-      const from = searchParams.get('from') || '/';
+      const raw = searchParams.get('from') || '/';
+      const from = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
       router.push(from);
       router.refresh();
     } catch (err) {

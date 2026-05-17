@@ -24,16 +24,21 @@ export const useAuthStore = create<AuthState>()(
       setToken: (token) => set({ token }),
       setUser: (user) => set({ user }),
       setTokenAndUser: (token: string) => {
-        // Parse JWT payload to extract user info
-        const payload = JSON.parse(atob(token.split('.')[1])) as {
-          sub: string;
-          username: string;
-          role: string;
-        };
-        set({
-          token,
-          user: { id: payload.sub, name: payload.username, role: payload.role },
-        });
+        try {
+          const parts = token.split('.');
+          if (parts.length < 3) throw new Error('malformed token');
+          const payload = JSON.parse(atob(parts[1])) as {
+            sub: string;
+            username: string;
+            role: string;
+          };
+          set({
+            token,
+            user: { id: payload.sub, name: payload.username, role: payload.role },
+          });
+        } catch {
+          throw new Error('Invalid token received from server');
+        }
       },
       clearAuth: () => set({ token: null, user: null }),
     }),
