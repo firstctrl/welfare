@@ -21,6 +21,12 @@ export default () => ({
     secret: process.env.JWT_SECRET || 'changeme',
     expiresIn: process.env.JWT_EXPIRES_IN || '8h',
   },
+  ldap: {
+    url: process.env.LDAP_URL || '',
+    bindDn: process.env.LDAP_BIND_DN || '',
+    bindCredentials: process.env.LDAP_BIND_CREDENTIALS || '',
+    searchBase: process.env.LDAP_SEARCH_BASE || '',
+  },
   email: {
     provider: process.env.EMAIL_PROVIDER || 'resend',
     fromAddress: process.env.EMAIL_FROM_ADDRESS || 'noreply@welfare.local',

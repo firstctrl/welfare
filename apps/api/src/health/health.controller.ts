@@ -8,6 +8,7 @@ import { MeiliSearch } from 'meilisearch';
 import { REDIS_CLIENT } from '../cache/redis.module';
 import { MINIO_CLIENT } from '../storage/minio.module';
 import { MEILISEARCH_CLIENT } from '../search/meilisearch.module';
+import { Public } from '../auth/decorators/public.decorator';
 
 type ServiceStatus = 'up' | 'down';
 
@@ -22,6 +23,7 @@ interface HealthResponse {
   timestamp: string;
 }
 
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(
