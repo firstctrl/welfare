@@ -1,5 +1,6 @@
-import { Controller, Get, Inject } from '@nestjs/common';
+import { Controller, Get, Inject, Res } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
+import { Response } from 'express';
 import { Connection } from 'mongoose';
 import Redis from 'ioredis';
 import { Client as MinioClient } from 'minio';
@@ -31,7 +32,7 @@ export class HealthController {
   ) {}
 
   @Get()
-  async check(): Promise<HealthResponse> {
+  async check(@Res({ passthrough: true }) res: Response): Promise<HealthResponse> {
     const services = {
       mongodb: await this.checkMongoDB(),
       redis: await this.checkRedis(),
@@ -40,9 +41,11 @@ export class HealthController {
     };
 
     const allUp = Object.values(services).every((s) => s === 'up');
+    const status = allUp ? 'ok' : 'degraded';
+    if (!allUp) res.status(503);
 
     return {
-      status: allUp ? 'ok' : 'degraded',
+      status,
       services,
       timestamp: new Date().toISOString(),
     };
@@ -58,8 +61,11 @@ export class HealthController {
 
   private async checkRedis(): Promise<ServiceStatus> {
     try {
-      const result = await this.redis.ping();
-      return result === 'PONG' ? 'up' : 'down';
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Redis ping timeout')), 3000),
+      );
+      await Promise.race([this.redis.ping(), timeout]);
+      return 'up';
     } catch {
       return 'down';
     }
@@ -67,7 +73,10 @@ export class HealthController {
 
   private async checkMinio(): Promise<ServiceStatus> {
     try {
-      await this.minioClient.listBuckets();
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('MinIO timeout')), 3000),
+      );
+      await Promise.race([this.minioClient.listBuckets(), timeout]);
       return 'up';
     } catch {
       return 'down';
@@ -76,7 +85,10 @@ export class HealthController {
 
   private async checkMeilisearch(): Promise<ServiceStatus> {
     try {
-      await this.meilisearchClient.health();
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Meilisearch timeout')), 3000),
+      );
+      await Promise.race([this.meilisearchClient.health(), timeout]);
       return 'up';
     } catch {
       return 'down';
