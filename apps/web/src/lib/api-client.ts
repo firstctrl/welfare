@@ -1,33 +1,32 @@
 import axios from 'axios';
+import { useAuthStore } from '../store/auth.store';
 
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000',
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Request interceptor — inject auth token
+// Request interceptor — inject auth token from Zustand memory store
 apiClient.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    let token: string | null = null;
-    try {
-      const stored = localStorage.getItem('welfare_auth_store');
-      token = stored
-        ? (JSON.parse(stored) as { state?: { token?: string } })?.state?.token ?? null
-        : null;
-    } catch {
-      localStorage.removeItem('welfare_auth_store');
-    }
+    const token = useAuthStore.getState().token;
     if (token) config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
-// Response interceptor — handle 401
+// Response interceptor — attempt refresh on 401 before redirecting
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401 && typeof window !== 'undefined') {
-      localStorage.removeItem('welfare_auth_store');
+      // Try refresh first
+      const { refreshAccessToken } = await import('./auth');
+      const newToken = await refreshAccessToken();
+      if (newToken && error.config) {
+        error.config.headers.Authorization = `Bearer ${newToken}`;
+        return apiClient.request(error.config);
+      }
       window.location.href = '/login';
     }
     return Promise.reject(error);
