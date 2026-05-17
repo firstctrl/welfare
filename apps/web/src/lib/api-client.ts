@@ -8,8 +8,15 @@ export const apiClient = axios.create({
 // Request interceptor — inject auth token
 apiClient.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem('welfare_auth_store');
-    const token = stored ? (JSON.parse(stored) as { state?: { token?: string } })?.state?.token : null;
+    let token: string | null = null;
+    try {
+      const stored = localStorage.getItem('welfare_auth_store');
+      token = stored
+        ? (JSON.parse(stored) as { state?: { token?: string } })?.state?.token ?? null
+        : null;
+    } catch {
+      localStorage.removeItem('welfare_auth_store');
+    }
     if (token) config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
