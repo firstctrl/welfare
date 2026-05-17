@@ -1,6 +1,10 @@
 import { Controller, Get, Post, Patch, Body, Param } from '@nestjs/common';
 import { UsersService } from './users.service';
 
+/**
+ * Apply @Audit(AuditAction.Create, AuditEntity.User) + @UseInterceptors(AuditInterceptor)
+ * to write endpoints in Phase 2+
+ */
 // Guards will be applied globally in Phase 1.1 — stubs for now
 @Controller('users')
 export class UsersController {
