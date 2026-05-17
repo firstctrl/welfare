@@ -9,6 +9,7 @@ import { MinioModule } from './storage/minio.module';
 import { MeilisearchModule } from './search/meilisearch.module';
 import { EmailModule } from './email/email.module';
 import { HealthModule } from './health/health.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { HealthModule } from './health/health.module';
     MeilisearchModule,
     EmailModule,
     HealthModule,
+    UsersModule,
   ],
 })
 export class AppModule {}
