@@ -4,7 +4,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { Observable, tap } from 'rxjs';
 import { Request } from 'express';
-import { AuditService, LogAuditParams } from './audit.service';
+import { AuditService } from './audit.service';
 import { AUDIT_KEY, AuditMetadata } from './audit.decorator';
 import { UserDocument } from '../users/schemas/user.schema';
 
@@ -37,17 +37,17 @@ export class AuditInterceptor implements NestInterceptor {
           (responseData as Record<string, unknown> | null)?._id?.toString() ||
           'unknown';
 
-        const params: LogAuditParams = {
-          actorId: user._id.toString(),
-          actorName: user.displayName,
-          action: metadata.action,
-          entity: metadata.entity,
-          entityId,
-          ip,
-        };
-
         // Fire-and-forget — never block the response
-        void this.auditService.log(params);
+        void this.auditService.log(
+          user._id.toString(),
+          user.displayName,
+          metadata.action,
+          metadata.entity,
+          entityId,
+          undefined,
+          undefined,
+          ip,
+        );
       }),
     );
   }
