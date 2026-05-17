@@ -10,7 +10,7 @@ services:
     volumes:
       - mongodb_data:/data/db
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -26,7 +26,7 @@ services:
     volumes:
       - redis_data:/data
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -34,7 +34,7 @@ services:
       retries: 5
 
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
     container_name: welfare-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -44,8 +44,8 @@ services:
     volumes:
       - minio_data:/data
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
@@ -54,7 +54,7 @@ services:
       start_period: 10s
 
   minio-init:
-    image: minio/mc:latest
+    image: minio/mc:RELEASE.2025-04-22T22-12-26Z
     container_name: welfare-minio-init
     depends_on:
       minio:
@@ -74,16 +74,16 @@ services:
     restart: "no"
 
   meilisearch:
-    image: getmeili/meilisearch:latest
+    image: getmeili/meilisearch:v1.12
     container_name: welfare-meilisearch
     restart: unless-stopped
     environment:
       MEILI_MASTER_KEY: ${MEILISEARCH_API_KEY:-masterKey}
-      MEILI_ENV: development
+      MEILI_ENV: production
     volumes:
       - meilisearch_data:/meili_data
     ports:
-      - "7700:7700"
+      - "127.0.0.1:7700:7700"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
       interval: 10s
@@ -106,7 +106,7 @@ services:
       MINIO_PORT: "9000"
       MEILISEARCH_HOST: http://meilisearch:7700
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     depends_on:
       mongodb:
         condition: service_healthy
@@ -127,12 +127,12 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000
     container_name: welfare-web
     restart: unless-stopped
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:4000
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       api:
         condition: service_healthy
@@ -149,8 +149,10 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - api
-      - web
+      api:
+        condition: service_healthy
+      web:
+        condition: service_started
 
 volumes:
   mongodb_data:
