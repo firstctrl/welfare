@@ -1,0 +1,11 @@
+welfare.local {
+    reverse_proxy web:3000
+}
+
+api.welfare.local {
+    reverse_proxy api:4000
+}
+
+minio.welfare.local {
+    reverse_proxy minio:9001
+}
