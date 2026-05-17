@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
+import { timingSafeEqual } from 'crypto';
 import { UsersService } from '../users/users.service';
 import { UserDocument } from '../users/schemas/user.schema';
 import { JwtPayload } from './strategies/jwt.strategy';
@@ -19,6 +20,9 @@ export class AuthService {
   ) {}
 
   async login(user: UserDocument): Promise<{ accessToken: string; refreshToken: string }> {
+    user.lastLogin = new Date();
+    await user.save();
+
     const payload: JwtPayload = {
       sub: user._id.toString(),
       username: user.username,
@@ -40,32 +44,35 @@ export class AuthService {
     return this.login(user);
   }
 
-  async validateAndLogin(username: string, password: string): Promise<{ accessToken: string; refreshToken: string }> {
-    const user = await this.usersService.findByUsernameWithPassword(username);
-    if (!user || !user.isActive) throw new UnauthorizedException('Invalid credentials');
-    if (user.source === 'local') {
-      const valid = await this.usersService.validatePassword(user, password);
-      if (!valid) throw new UnauthorizedException('Invalid credentials');
-      user.lastLogin = new Date();
-      await user.save();
-      return this.login(user);
-    }
-    throw new UnauthorizedException('Please use LDAP login');
-  }
-
-  async refresh(userId: string, refreshToken: string): Promise<{ accessToken: string }> {
+  async refresh(userId: string, refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
     const stored = await this.redis.get(`refresh:${userId}`);
-    if (!stored || stored !== refreshToken) {
-      throw new UnauthorizedException('Invalid or expired refresh token');
+    if (!stored) throw new UnauthorizedException('Invalid or expired refresh token');
+
+    let isValid = false;
+    try {
+      isValid = timingSafeEqual(Buffer.from(stored, 'utf8'), Buffer.from(refreshToken, 'utf8'));
+    } catch {
+      // Buffers of different lengths — not equal
+      isValid = false;
     }
+    if (!isValid) throw new UnauthorizedException('Invalid or expired refresh token');
+
     const user = await this.usersService.findById(userId);
     if (!user || !user.isActive) throw new UnauthorizedException();
+
+    // Issue new refresh token (rotation)
+    const newRefreshToken = crypto.randomBytes(40).toString('hex');
+    await this.redis.set(`refresh:${userId}`, newRefreshToken, 'EX', REFRESH_TTL_SECONDS);
+
     const payload: JwtPayload = {
       sub: user._id.toString(),
       username: user.username,
       role: user.role,
     };
-    return { accessToken: this.jwtService.sign(payload) };
+    return {
+      accessToken: this.jwtService.sign(payload),
+      refreshToken: newRefreshToken,
+    };
   }
 
   async logout(userId: string): Promise<void> {

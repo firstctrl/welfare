@@ -1,5 +1,5 @@
 import {
-  Controller, Post, Body, UseGuards, HttpCode, HttpStatus, UnauthorizedException,
+  Controller, Post, Body, UseGuards, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
@@ -7,44 +7,39 @@ import { LdapAuthGuard } from './guards/ldap-auth.guard';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { UserDocument } from '../users/schemas/user.schema';
+import { LoginDto, RefreshDto } from './dto/auth.dto';
 
-@Public()
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() body: { username: string; password: string }) {
-    return this.authService.validateAndLogin(body.username, body.password);
-  }
-
-  @Post('login/local')
   @UseGuards(LocalAuthGuard)
-  @HttpCode(HttpStatus.OK)
-  async loginLocal(@CurrentUser() user: UserDocument) {
+  async login(@CurrentUser() user: UserDocument, @Body() _body: LoginDto) {
     return this.authService.login(user);
   }
 
+  @Public()
   @Post('login/ldap')
   @UseGuards(LdapAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async loginLdap(@CurrentUser() ldapUser: { username: string; displayName: string; email?: string }) {
+  async loginLdap(@CurrentUser() ldapUser: { username: string; displayName: string; email?: string }, @Body() _body: LoginDto) {
     return this.authService.loginWithLdap(ldapUser);
   }
 
+  @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  async refresh(@Body() body: { userId: string; refreshToken: string }) {
-    if (!body.userId || !body.refreshToken) throw new UnauthorizedException();
+  async refresh(@Body() body: RefreshDto) {
     return this.authService.refresh(body.userId, body.refreshToken);
   }
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@Body() body: { userId: string }) {
-    if (!body.userId) return;
-    await this.authService.logout(body.userId);
+  async logout(@CurrentUser() user: UserDocument) {
+    await this.authService.logout(user._id.toString());
     return { message: 'Logged out' };
   }
 }
