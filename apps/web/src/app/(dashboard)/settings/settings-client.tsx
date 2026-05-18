@@ -137,7 +137,7 @@ function ContributionsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap
 
   async function save() {
     if (!dirty) return;
-    if (parseFloat(amount) <= 0) {
+    if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
       toast.error('Contribution amount must be greater than 0');
       return;
     }
@@ -225,7 +225,7 @@ function LoansSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
       'INTEREST_RATE_LONG', 'ELIGIBILITY_MONTHS', 'LOAN_MAX_TENURE',
     ];
     for (const k of numericKeys) {
-      if (parseFloat(fields[k]) <= 0) {
+      if (isNaN(parseFloat(fields[k])) || parseFloat(fields[k]) <= 0) {
         toast.error(`${k.replace(/_/g, ' ').toLowerCase()} must be greater than 0`);
         return;
       }

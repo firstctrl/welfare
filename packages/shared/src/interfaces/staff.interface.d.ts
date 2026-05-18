@@ -1,0 +1,19 @@
+import { StaffStatus } from '../enums/staff-status.enum';
+export interface IStaff {
+    _id: string;
+    fullName: string;
+    staffId: string;
+    pfNo: string;
+    dateOfBirth: string;
+    phoneNumber: string;
+    email?: string;
+    photoKey?: string;
+    dateOfEmployment: string;
+    dateOfFirstContribution: string;
+    level: string;
+    point: number;
+    status: StaffStatus;
+    createdAt: string;
+    updatedAt: string;
+}
+//# sourceMappingURL=staff.interface.d.ts.map

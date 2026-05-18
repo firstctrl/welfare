@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"const tseslint = require\\('typescript-eslint'\\); console.log\\(typeof tseslint.config\\);\")",
+      "Bash(node -e \"const js = require\\('@eslint/js'\\); console.log\\(typeof js.configs.recommended\\);\")",
+      "Bash(git -C C:/webapps/welfare status)",
+      "Bash(git -C C:/webapps/welfare log --oneline -5)",
+      "Bash(npm run *)",
+      "Bash(git add *)"
+    ]
+  }
+}
