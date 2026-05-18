@@ -6,9 +6,10 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { StaffStatus } from '@welfare/shared';
-import type { IStaff } from '@welfare/shared';
+import { StaffStatus, ContributionStatus } from '@welfare/shared';
+import type { IStaff, IContribution } from '@welfare/shared';
 import { getStaff, updateStaff, changeStaffStatus, uploadStaffPhoto } from '@/lib/staff';
+import { getContributionsByStaff } from '@/lib/contributions';
 
 const STATUS_BADGE: Record<StaffStatus, string> = {
   [StaffStatus.Active]:    'bg-green-100 text-green-800',
@@ -64,6 +65,12 @@ export default function StaffDetailClient({ id }: { id: string }) {
   const { data: staff, isLoading } = useQuery({
     queryKey: ['staff', id],
     queryFn: () => getStaff(id),
+  });
+
+  const { data: contributions, isLoading: contribLoading } = useQuery({
+    queryKey: ['contributions', 'staff', id],
+    queryFn: () => getContributionsByStaff(id),
+    enabled: activeTab === 'Contributions',
   });
 
   const profileForm = useForm<ProfileForm>({ resolver: zodResolver(profileSchema) });
@@ -302,8 +309,68 @@ export default function StaffDetailClient({ id }: { id: string }) {
       )}
 
       {activeTab === 'Contributions' && (
-        <div className="text-sm text-gray-400 py-8 text-center">
-          Contributions ledger — available in Phase 4.
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-sm font-medium text-gray-700">Contribution Ledger</h3>
+            <a
+              href="/contributions/manual"
+              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              + Add Manual Entry
+            </a>
+          </div>
+          {contribLoading ? (
+            <div className="text-sm text-gray-400 py-4">Loading...</div>
+          ) : !contributions?.length ? (
+            <div className="text-sm text-gray-400 py-8 text-center">No contributions recorded yet.</div>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-gray-200">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {['Month', 'Year', 'Expected', 'Paid', 'Surplus C/F', 'Status', 'Source', 'Recorded By'].map((h) => (
+                      <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {contributions.map((c: IContribution) => (
+                    <tr key={c._id}>
+                      <td className="px-3 py-2">{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][c.month - 1]}</td>
+                      <td className="px-3 py-2">{c.year}</td>
+                      <td className="px-3 py-2 text-right">{c.expectedAmount.toLocaleString()}</td>
+                      <td className="px-3 py-2 text-right">{c.paidAmount.toLocaleString()}</td>
+                      <td className="px-3 py-2 text-right">{c.surplusCarriedForward.toLocaleString()}</td>
+                      <td className="px-3 py-2">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          c.status === ContributionStatus.Paid ? 'bg-green-100 text-green-800' :
+                          c.status === ContributionStatus.Partial ? 'bg-yellow-100 text-yellow-800' :
+                          c.status === ContributionStatus.Missed ? 'bg-red-100 text-red-700' :
+                          'bg-blue-100 text-blue-700'
+                        }`}>
+                          {c.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-gray-500">{c.source}</td>
+                      <td className="px-3 py-2 text-gray-500">{c.recordedBy}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-gray-50 border-t border-gray-200">
+                  <tr>
+                    <td colSpan={2} className="px-3 py-2 text-xs font-medium text-gray-600">Totals</td>
+                    <td className="px-3 py-2 text-right text-xs font-medium text-gray-700">
+                      {contributions.reduce((s, c) => s + c.expectedAmount, 0).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 text-right text-xs font-medium text-gray-700">
+                      {contributions.reduce((s, c) => s + c.paidAmount, 0).toLocaleString()}
+                    </td>
+                    <td colSpan={4} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
       )}
       {activeTab === 'Loans' && (
