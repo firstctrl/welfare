@@ -28,6 +28,7 @@ const baseStaff = {
 const mockStaffModel = {
   create: jest.fn(),
   find: jest.fn(),
+  findOne: jest.fn(),
   findById: jest.fn(),
   findByIdAndUpdate: jest.fn(),
   countDocuments: jest.fn(),
@@ -156,6 +157,21 @@ describe('StaffService', () => {
         { status: StaffStatus.Resigned, effectiveDate: '2025-01-01' },
         'actor-id', 'Actor');
       expect(result.requiresSettlement).toBe(true);
+    });
+  });
+
+  describe('findByStaffId', () => {
+    it('returns staff document when staffId field matches', async () => {
+      mockStaffModel.findOne = jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(baseStaff) });
+      const result = await service.findByStaffId('STF001');
+      expect(result).toBe(baseStaff);
+      expect(mockStaffModel.findOne).toHaveBeenCalledWith({ staffId: 'STF001' });
+    });
+
+    it('returns null when staffId field not found', async () => {
+      mockStaffModel.findOne = jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+      const result = await service.findByStaffId('NOTEXIST');
+      expect(result).toBeNull();
     });
   });
 

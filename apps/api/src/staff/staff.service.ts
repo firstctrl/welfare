@@ -103,6 +103,10 @@ export class StaffService implements OnModuleInit {
     return staff;
   }
 
+  async findByStaffId(staffId: string): Promise<StaffDocument | null> {
+    return this.staffModel.findOne({ staffId }).exec();
+  }
+
   async update(
     id: string,
     dto: UpdateStaffDto,
