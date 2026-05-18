@@ -15,6 +15,7 @@ import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { AuditModule } from './audit/audit.module';
+import { SystemConfigModule } from './system-config/system-config.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { AuditModule } from './audit/audit.module';
     UsersModule,
     AuthModule,
     AuditModule,
+    SystemConfigModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
