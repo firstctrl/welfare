@@ -18,6 +18,7 @@ import { AuditModule } from './audit/audit.module';
 import { SystemConfigModule } from './system-config/system-config.module';
 import { StaffModule } from './staff/staff.module';
 import { SearchModule } from './search/search.module';
+import { ContributionsModule } from './contributions/contributions.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { SearchModule } from './search/search.module';
     SystemConfigModule,
     StaffModule,
     SearchModule,
+    ContributionsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
