@@ -16,6 +16,7 @@ import { AuditService } from '../audit/audit.service';
 import { ConfigSetting, ConfigSettingDocument } from './system-config.schema';
 
 type ConfigMap = Record<string, { value: string; updatedBy: string; updatedAt: string }>;
+type ConfigDoc = { key: string; value: string; updatedBy: string; updatedAt: Date };
 
 const REDIS_KEY = 'config:all';
 const REDIS_TTL = 300; // 5 minutes
@@ -63,11 +64,12 @@ export class SystemConfigService implements OnModuleInit {
   }
 
   private async seedDefaults(): Promise<void> {
-    const count = await this.configModel.countDocuments();
-    if (count === 0) {
-      const docs = SEED_DEFAULTS.map((s) => ({ ...s, updatedBy: 'system' }));
-      await this.configModel.insertMany(docs);
-      this.logger.log('Seeded default config settings');
+    for (const { key, value } of SEED_DEFAULTS) {
+      await this.configModel.updateOne(
+        { key },
+        { $setOnInsert: { key, value, updatedBy: 'system' } },
+        { upsert: true },
+      );
     }
   }
 
@@ -77,13 +79,13 @@ export class SystemConfigService implements OnModuleInit {
       return JSON.parse(cached) as ConfigMap;
     }
 
-    const settings = await this.configModel.find().lean().exec();
+    const settings = await this.configModel.find().lean<ConfigDoc[]>().exec();
     const map: ConfigMap = {};
     for (const s of settings) {
       map[s.key] = {
         value: s.value,
         updatedBy: s.updatedBy,
-        updatedAt: (s as any).updatedAt?.toISOString?.() ?? String((s as any).updatedAt ?? ''),
+        updatedAt: s.updatedAt?.toISOString?.() ?? String(s.updatedAt ?? ''),
       };
     }
 
@@ -97,14 +99,22 @@ export class SystemConfigService implements OnModuleInit {
     actorName: string,
     ip?: string,
   ): Promise<ConfigMap> {
+    // Reject unknown keys
+    const validKeys = new Set(Object.values(ConfigKey));
+    for (const key of Object.keys(updates)) {
+      if (!validKeys.has(key as ConfigKey)) {
+        throw new UnprocessableEntityException(`Unknown config key: ${key}`);
+      }
+    }
+
     // Validate each key value
     this.validateUpdates(updates);
 
     // Cross-field validation: LoanMinAmount vs LoanMaxAmount
     const touchesMin = ConfigKey.LoanMinAmount in updates;
     const touchesMax = ConfigKey.LoanMaxAmount in updates;
+    let current = await this.getAll();
     if (touchesMin || touchesMax) {
-      const current = await this.getAll();
       const resolvedMin = parseFloat(
         touchesMin ? updates[ConfigKey.LoanMinAmount] : (current[ConfigKey.LoanMinAmount]?.value ?? '0'),
       );
@@ -118,8 +128,7 @@ export class SystemConfigService implements OnModuleInit {
       }
     }
 
-    // Capture before snapshot for audit
-    const current = await this.getAll();
+    // Capture before snapshot for audit (reuse current snapshot already fetched above)
     const beforeSnapshot: Record<string, unknown> = {};
     const afterSnapshot: Record<string, unknown> = {};
     for (const key of Object.keys(updates)) {
@@ -132,7 +141,7 @@ export class SystemConfigService implements OnModuleInit {
       await this.configModel.findOneAndUpdate(
         { key },
         { value, updatedBy: actorName },
-        { upsert: true, new: true },
+        { upsert: true, new: true, runValidators: true },
       );
     }
 
@@ -189,8 +198,9 @@ export class SystemConfigService implements OnModuleInit {
       });
       return { success: true };
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      throw new BadRequestException(message);
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      this.logger.error('Test email failed', err);
+      throw new BadRequestException(`Email delivery failed: ${msg}`);
     }
   }
 

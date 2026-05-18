@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserDocument } from '../users/schemas/user.schema';
 import { SystemConfigService } from './system-config.service';
+import { TestEmailDto } from './dto/test-email.dto';
 
 @Controller('config')
 @UseGuards(JwtAuthGuard)
@@ -31,7 +32,7 @@ export class SystemConfigController {
   }
 
   @Post('test-email')
-  testEmail(@Body() body: { provider: 'resend' | 'outlook365'; to: string }) {
+  testEmail(@Body() body: TestEmailDto) {
     return this.systemConfigService.testEmail(body.provider, body.to);
   }
 }
