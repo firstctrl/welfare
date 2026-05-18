@@ -17,6 +17,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
 import { AuditModule } from './audit/audit.module';
 import { SystemConfigModule } from './system-config/system-config.module';
 import { StaffModule } from './staff/staff.module';
+import { SearchModule } from './search/search.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { StaffModule } from './staff/staff.module';
     AuditModule,
     SystemConfigModule,
     StaffModule,
+    SearchModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
