@@ -124,13 +124,15 @@ const CRON_PRESETS: { label: string; value: string }[] = [
 
 const CONTRIBUTION_KEYS = ['MONTHLY_CONTRIBUTION_AMOUNT'] as const;
 
-function ContributionsSection({ cfg, onUpdate }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void }) {
+function ContributionsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void }) {
   const [amount, setAmount] = useState(cfg['MONTHLY_CONTRIBUTION_AMOUNT']?.value ?? '');
   const [saving, setSaving] = useState(false);
 
   const original = cfg['MONTHLY_CONTRIBUTION_AMOUNT']?.value ?? '';
   const dirty = amount !== original;
   const meta = latestEntry(cfg, [...CONTRIBUTION_KEYS]);
+
+  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
 
   async function save() {
     if (!dirty) return;
@@ -194,13 +196,15 @@ function initLoan(cfg: ConfigMap): LoanFields {
   };
 }
 
-function LoansSection({ cfg, onUpdate }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void }) {
+function LoansSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void }) {
   const [fields, setFields] = useState<LoanFields>(() => initLoan(cfg));
   const [saving, setSaving] = useState(false);
 
   const original = initLoan(cfg);
   const dirty = (Object.keys(fields) as (keyof LoanFields)[]).some((k) => fields[k] !== original[k]);
   const meta = latestEntry(cfg, [...LOAN_KEYS]);
+
+  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
 
   function set(k: keyof LoanFields) {
     return (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -255,13 +259,15 @@ function LoansSection({ cfg, onUpdate }: { cfg: ConfigMap; onUpdate: (next: Conf
 
 const GUARANTOR_KEYS = ['MAX_LOANS_PER_GUARANTOR'] as const;
 
-function GuarantorsSection({ cfg, onUpdate }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void }) {
+function GuarantorsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void }) {
   const [max, setMax] = useState(cfg['MAX_LOANS_PER_GUARANTOR']?.value ?? '');
   const [saving, setSaving] = useState(false);
 
   const original = cfg['MAX_LOANS_PER_GUARANTOR']?.value ?? '';
   const dirty = max !== original;
   const meta = latestEntry(cfg, [...GUARANTOR_KEYS]);
+
+  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
 
   async function save() {
     if (!dirty) return;
@@ -315,13 +321,15 @@ function initPayment(cfg: ConfigMap): PaymentFields {
   };
 }
 
-function PaymentsSection({ cfg, onUpdate }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void }) {
+function PaymentsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void }) {
   const [fields, setFields] = useState<PaymentFields>(() => initPayment(cfg));
   const [saving, setSaving] = useState(false);
 
   const original = initPayment(cfg);
   const dirty = (Object.keys(fields) as (keyof PaymentFields)[]).some((k) => fields[k] !== original[k]);
   const meta = latestEntry(cfg, [...PAYMENT_KEYS]);
+
+  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
 
   function set(k: keyof PaymentFields) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -430,7 +438,7 @@ function initEmail(cfg: ConfigMap): EmailFields {
   };
 }
 
-function EmailSection({ cfg, onUpdate }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void }) {
+function EmailSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void }) {
   const [fields, setFields] = useState<EmailFields>(() => initEmail(cfg));
   const [saving, setSaving] = useState(false);
   const [testTo, setTestTo] = useState('');
@@ -439,6 +447,8 @@ function EmailSection({ cfg, onUpdate }: { cfg: ConfigMap; onUpdate: (next: Conf
   const original = initEmail(cfg);
   const dirty = (Object.keys(fields) as (keyof EmailFields)[]).some((k) => fields[k] !== original[k]);
   const meta = latestEntry(cfg, [...EMAIL_KEYS]);
+
+  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
 
   function setField(k: keyof EmailFields) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -577,6 +587,14 @@ function EmailSection({ cfg, onUpdate }: { cfg: ConfigMap; onUpdate: (next: Conf
 export function SettingsClient() {
   const [cfg, setCfg] = useState<ConfigMap | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dirtyMap, setDirtyMap] = useState<Record<string, boolean>>({});
+
+  const anyDirty = Object.values(dirtyMap).some(Boolean);
+
+  function makeDirtyHandler(section: string) {
+    return (dirty: boolean) =>
+      setDirtyMap((prev) => (prev[section] === dirty ? prev : { ...prev, [section]: dirty }));
+  }
 
   useEffect(() => {
     getConfig()
@@ -585,19 +603,16 @@ export function SettingsClient() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Unsaved changes warning — fires when any section is dirty.
-  // Individual sections manage their own dirty state; we approximate here by
-  // storing an "anyDirty" flag that each section updates via a shared ref.
-  // For simplicity we attach the beforeunload guard unconditionally while on
-  // this page — browsers only show the dialog when there are actual changes.
+  // Unsaved changes warning — only fires when at least one section is dirty.
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
+      if (!anyDirty) return;
       e.preventDefault();
       e.returnValue = '';
     };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
-  }, []);
+  }, [anyDirty]);
 
   if (loading) {
     return (
@@ -619,11 +634,11 @@ export function SettingsClient() {
 
   return (
     <div className="space-y-6">
-      <ContributionsSection cfg={cfg} onUpdate={setCfg} />
-      <LoansSection cfg={cfg} onUpdate={setCfg} />
-      <GuarantorsSection cfg={cfg} onUpdate={setCfg} />
-      <PaymentsSection cfg={cfg} onUpdate={setCfg} />
-      <EmailSection cfg={cfg} onUpdate={setCfg} />
+      <ContributionsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('contributions')} />
+      <LoansSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('loans')} />
+      <GuarantorsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('guarantors')} />
+      <PaymentsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('payments')} />
+      <EmailSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('email')} />
     </div>
   );
 }
