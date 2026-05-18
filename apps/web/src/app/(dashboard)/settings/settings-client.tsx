@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { getConfig, updateConfig, testEmail, type ConfigMap } from '../../../lib/config';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 function fmt(iso: string) {
+  if (!iso) return '—';
   try {
     return new Date(iso).toLocaleDateString('en-GB', {
       day: 'numeric',
@@ -128,7 +129,7 @@ function ContributionsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap
   const [amount, setAmount] = useState(cfg['MONTHLY_CONTRIBUTION_AMOUNT']?.value ?? '');
   const [saving, setSaving] = useState(false);
 
-  const original = cfg['MONTHLY_CONTRIBUTION_AMOUNT']?.value ?? '';
+  const [original] = useState(() => cfg['MONTHLY_CONTRIBUTION_AMOUNT']?.value ?? '');
   const dirty = amount !== original;
   const meta = latestEntry(cfg, [...CONTRIBUTION_KEYS]);
 
@@ -136,10 +137,16 @@ function ContributionsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap
 
   async function save() {
     if (!dirty) return;
+    if (parseFloat(amount) <= 0) {
+      toast.error('Contribution amount must be greater than 0');
+      return;
+    }
     setSaving(true);
     try {
       const next = await updateConfig({ MONTHLY_CONTRIBUTION_AMOUNT: amount });
       onUpdate(next);
+      setAmount(next['MONTHLY_CONTRIBUTION_AMOUNT']?.value ?? amount);
+      onDirtyChange(false);
       toast.success('Contributions settings saved');
     } catch {
       toast.error('Failed to save contributions settings');
@@ -200,7 +207,7 @@ function LoansSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
   const [fields, setFields] = useState<LoanFields>(() => initLoan(cfg));
   const [saving, setSaving] = useState(false);
 
-  const original = initLoan(cfg);
+  const [original] = useState(() => initLoan(cfg));
   const dirty = (Object.keys(fields) as (keyof LoanFields)[]).some((k) => fields[k] !== original[k]);
   const meta = latestEntry(cfg, [...LOAN_KEYS]);
 
@@ -213,6 +220,20 @@ function LoansSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
 
   async function save() {
     if (!dirty) return;
+    const numericKeys: (keyof LoanFields)[] = [
+      'LOAN_MIN_AMOUNT', 'LOAN_MAX_AMOUNT', 'INTEREST_RATE_SHORT',
+      'INTEREST_RATE_LONG', 'ELIGIBILITY_MONTHS', 'LOAN_MAX_TENURE',
+    ];
+    for (const k of numericKeys) {
+      if (parseFloat(fields[k]) <= 0) {
+        toast.error(`${k.replace(/_/g, ' ').toLowerCase()} must be greater than 0`);
+        return;
+      }
+    }
+    if (parseFloat(fields.LOAN_MIN_AMOUNT) >= parseFloat(fields.LOAN_MAX_AMOUNT)) {
+      toast.error('Minimum loan amount must be less than maximum');
+      return;
+    }
     setSaving(true);
     const updates: Record<string, string> = {};
     (Object.keys(fields) as (keyof LoanFields)[]).forEach((k) => {
@@ -221,6 +242,8 @@ function LoansSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
     try {
       const next = await updateConfig(updates);
       onUpdate(next);
+      setFields(initLoan(next));
+      onDirtyChange(false);
       toast.success('Loan settings saved');
     } catch {
       toast.error('Failed to save loan settings');
@@ -263,7 +286,7 @@ function GuarantorsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; o
   const [max, setMax] = useState(cfg['MAX_LOANS_PER_GUARANTOR']?.value ?? '');
   const [saving, setSaving] = useState(false);
 
-  const original = cfg['MAX_LOANS_PER_GUARANTOR']?.value ?? '';
+  const [original] = useState(() => cfg['MAX_LOANS_PER_GUARANTOR']?.value ?? '');
   const dirty = max !== original;
   const meta = latestEntry(cfg, [...GUARANTOR_KEYS]);
 
@@ -271,10 +294,16 @@ function GuarantorsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; o
 
   async function save() {
     if (!dirty) return;
+    if (parseInt(max) < 0) {
+      toast.error('Max loans per guarantor cannot be negative');
+      return;
+    }
     setSaving(true);
     try {
       const next = await updateConfig({ MAX_LOANS_PER_GUARANTOR: max });
       onUpdate(next);
+      setMax(next['MAX_LOANS_PER_GUARANTOR']?.value ?? max);
+      onDirtyChange(false);
       toast.success('Guarantor settings saved');
     } catch {
       toast.error('Failed to save guarantor settings');
@@ -325,7 +354,7 @@ function PaymentsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onU
   const [fields, setFields] = useState<PaymentFields>(() => initPayment(cfg));
   const [saving, setSaving] = useState(false);
 
-  const original = initPayment(cfg);
+  const [original] = useState(() => initPayment(cfg));
   const dirty = (Object.keys(fields) as (keyof PaymentFields)[]).some((k) => fields[k] !== original[k]);
   const meta = latestEntry(cfg, [...PAYMENT_KEYS]);
 
@@ -338,6 +367,15 @@ function PaymentsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onU
 
   async function save() {
     if (!dirty) return;
+    const day = parseInt(fields.PAYMENT_DEADLINE_DAY);
+    if (day < 1 || day > 28) {
+      toast.error('Payment deadline day must be between 1 and 28');
+      return;
+    }
+    if (parseFloat(fields.PENALTY_VALUE) < 0) {
+      toast.error('Penalty value cannot be negative');
+      return;
+    }
     setSaving(true);
     const updates: Record<string, string> = {};
     (Object.keys(fields) as (keyof PaymentFields)[]).forEach((k) => {
@@ -346,6 +384,8 @@ function PaymentsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onU
     try {
       const next = await updateConfig(updates);
       onUpdate(next);
+      setFields(initPayment(next));
+      onDirtyChange(false);
       toast.success('Payment settings saved');
     } catch {
       toast.error('Failed to save payment settings');
@@ -444,7 +484,7 @@ function EmailSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
   const [testTo, setTestTo] = useState('');
   const [testing, setTesting] = useState(false);
 
-  const original = initEmail(cfg);
+  const [original] = useState(() => initEmail(cfg));
   const dirty = (Object.keys(fields) as (keyof EmailFields)[]).some((k) => fields[k] !== original[k]);
   const meta = latestEntry(cfg, [...EMAIL_KEYS]);
 
@@ -469,6 +509,8 @@ function EmailSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
     try {
       const next = await updateConfig(updates);
       onUpdate(next);
+      setFields(initEmail(next));
+      onDirtyChange(false);
       toast.success('Email settings saved');
     } catch {
       toast.error('Failed to save email settings');
@@ -478,7 +520,10 @@ function EmailSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
   }
 
   async function handleTestEmail() {
-    if (!testTo) return;
+    if (!testTo || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testTo)) {
+      toast.error('Enter a valid email address');
+      return;
+    }
     setTesting(true);
     try {
       await testEmail(fields.EMAIL_PROVIDER, testTo);
@@ -591,10 +636,14 @@ export function SettingsClient() {
 
   const anyDirty = Object.values(dirtyMap).some(Boolean);
 
-  function makeDirtyHandler(section: string) {
-    return (dirty: boolean) =>
-      setDirtyMap((prev) => (prev[section] === dirty ? prev : { ...prev, [section]: dirty }));
-  }
+  const makeDirtyHandler = useCallback(
+    (section: string) =>
+      (dirty: boolean) =>
+        setDirtyMap((prev) =>
+          prev[section] === dirty ? prev : { ...prev, [section]: dirty },
+        ),
+    [],
+  );
 
   useEffect(() => {
     getConfig()
