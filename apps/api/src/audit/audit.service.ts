@@ -13,7 +13,7 @@ export class AuditService {
   ) {}
 
   async log(
-    actor: string,
+    actorId: string,
     actorName: string,
     action: AuditAction,
     entity: AuditEntity,
@@ -23,26 +23,28 @@ export class AuditService {
     ip?: string,
   ): Promise<void> {
     try {
-      await this.auditModel.create({ actorId: actor, actorName, action, entity, entityId, before, after, ip });
+      await this.auditModel.create({ actorId, actorName, action, entity, entityId, before, after, ip });
     } catch (err) {
       // Never let audit logging crash the main request
       this.logger.error('Failed to write audit log', err);
     }
   }
 
-  async findByEntity(entity: AuditEntity, entityId: string): Promise<AuditLogDocument[]> {
+  async findByEntity(entity: AuditEntity, entityId: string, limit = 100, skip = 0): Promise<AuditLogDocument[]> {
     return this.auditModel
       .find({ entity, entityId })
       .sort({ createdAt: -1 })
-      .limit(100)
+      .skip(skip)
+      .limit(limit)
       .exec();
   }
 
-  async findByActor(actorId: string): Promise<AuditLogDocument[]> {
+  async findByActor(actorId: string, limit = 100, skip = 0): Promise<AuditLogDocument[]> {
     return this.auditModel
       .find({ actorId })
       .sort({ createdAt: -1 })
-      .limit(100)
+      .skip(skip)
+      .limit(limit)
       .exec();
   }
 }

@@ -16,6 +16,8 @@ export class AuditInterceptor implements NestInterceptor {
   ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+    if (context.getType() !== 'http') return next.handle();
+
     const metadata = this.reflector.get<AuditMetadata | undefined>(
       AUDIT_KEY,
       context.getHandler(),
@@ -25,7 +27,7 @@ export class AuditInterceptor implements NestInterceptor {
 
     const request = context.switchToHttp().getRequest<Request & { user?: UserDocument }>();
     const user = request.user;
-    const ip = request.ip || request.socket?.remoteAddress || 'unknown';
+    const ip = request.ip || request.socket?.remoteAddress || undefined;
 
     return next.handle().pipe(
       tap((responseData: unknown) => {
@@ -34,8 +36,10 @@ export class AuditInterceptor implements NestInterceptor {
         // Extract entityId from response or route params
         const entityId =
           (request.params as Record<string, string>)?.id ||
-          (responseData as Record<string, unknown> | null)?._id?.toString() ||
-          'unknown';
+          (responseData as Record<string, unknown> | null)?._id?.toString();
+
+        // Skip logging if entityId cannot be determined
+        if (!entityId) return;
 
         // Fire-and-forget — never block the response
         void this.auditService.log(
