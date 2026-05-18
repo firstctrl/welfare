@@ -11,7 +11,7 @@
     "test": "echo 'no tests yet' && exit 0"
   },
   "dependencies": {
-    "@hookform/resolvers": "^3.9.1",
+    "@hookform/resolvers": "^3.10.0",
     "@tanstack/react-query": "^5.62.8",
     "@tanstack/react-table": "^8.20.5",
     "@welfare/shared": "*",
