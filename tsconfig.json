@@ -7,7 +7,6 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "baseUrl": ".",
     "paths": {
       "@welfare/shared": ["packages/shared/src"],
       "@welfare/shared/*": ["packages/shared/src/*"]

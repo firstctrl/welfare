@@ -21,7 +21,6 @@
       }
     ],
     "isolatedModules": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
       "@welfare/shared": ["../../packages/shared/src"],

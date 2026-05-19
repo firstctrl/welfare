@@ -10,8 +10,8 @@
     "experimentalDecorators": true,
     "jsx": "react",
     "paths": {
-      "@welfare/shared": ["packages/shared/dist"],
-      "@welfare/shared/*": ["packages/shared/dist/*"]
+      "@welfare/shared": ["../../packages/shared/dist"],
+      "@welfare/shared/*": ["../../packages/shared/dist/*"]
     }
   },
   "include": ["src/**/*"],
