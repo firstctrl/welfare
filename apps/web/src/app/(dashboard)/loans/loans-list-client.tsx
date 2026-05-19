@@ -13,6 +13,8 @@ import { LoanStatus } from '@welfare/shared';
 import type { ILoan } from '@welfare/shared';
 import { listLoans, getLoanSchedule } from '@/lib/loans';
 import { listStaff } from '@/lib/staff';
+import { TableSkeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 
 const LOAN_STATUS_BADGE: Record<LoanStatus, string> = {
   [LoanStatus.Active]:    'bg-green-100 text-green-800',
@@ -188,29 +190,40 @@ export function LoansListClient() {
       </div>
 
       {/* Table */}
-      {isLoading ? (
-        <div className="text-sm text-gray-400 py-8 text-center">Loading loans...</div>
-      ) : filtered.length === 0 ? (
-        <div className="text-sm text-gray-400 py-8 text-center">No loans found.</div>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              {table.getHeaderGroups().map((hg) => (
-                <tr key={hg.id}>
-                  {hg.headers.map((h) => (
-                    <th
-                      key={h.id}
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      {flexRender(h.column.columnDef.header, h.getContext())}
-                    </th>
-                  ))}
-                </tr>
-              ))}
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {table.getRowModel().rows.map((row) => (
+      <div className="overflow-x-auto rounded-lg border border-gray-200">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            {table.getHeaderGroups().map((hg) => (
+              <tr key={hg.id}>
+                {hg.headers.map((h) => (
+                  <th
+                    key={h.id}
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    {flexRender(h.column.columnDef.header, h.getContext())}
+                  </th>
+                ))}
+              </tr>
+            ))}
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-100">
+            {isLoading ? (
+              <tr>
+                <td colSpan={columns.length} className="p-2">
+                  <TableSkeleton rows={5} cols={columns.length} />
+                </td>
+              </tr>
+            ) : filtered.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length}>
+                  <EmptyState
+                    title="No loans found"
+                    description={status || filterMonth || filterYear ? 'Try adjusting your filters.' : 'Record the first loan to get started.'}
+                  />
+                </td>
+              </tr>
+            ) : (
+              table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
                   onClick={() => router.push(`/loans/${row.original._id}`)}
@@ -222,11 +235,11 @@ export function LoansListClient() {
                     </td>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {/* Pagination */}
       {(data?.totalPages ?? 0) > 1 && (

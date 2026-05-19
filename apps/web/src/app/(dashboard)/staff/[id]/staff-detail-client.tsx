@@ -146,18 +146,30 @@ export default function StaffDetailClient({ id }: { id: string }) {
 
   const statusMutation = useMutation({
     mutationFn: (values: StatusForm) => changeStaffStatus(id, values),
+    onMutate: async (values) => {
+      await qc.cancelQueries({ queryKey: ['staff', id] });
+      const previous = qc.getQueryData<IStaff>(['staff', id]);
+      qc.setQueryData<IStaff>(['staff', id], (old) =>
+        old ? { ...old, status: values.status } : old,
+      );
+      return { previous };
+    },
+    onError: (err: unknown, _values, context) => {
+      if (context?.previous) qc.setQueryData(['staff', id], context.previous);
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg ?? 'Status change failed');
+    },
     onSuccess: ({ requiresSettlement }) => {
-      qc.invalidateQueries({ queryKey: ['staff', id] });
       setShowStatusModal(false);
       if (requiresSettlement) {
-        toast.warning('Status updated. Outstanding loans require exit settlement (Phase 5).');
+        toast.warning('Status updated. Outstanding loans require exit settlement.');
       } else {
         toast.success('Status updated');
       }
     },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      toast.error(msg ?? 'Status change failed');
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['staff', id] });
+      qc.invalidateQueries({ queryKey: ['staff'] });
     },
   });
 

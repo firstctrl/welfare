@@ -14,6 +14,8 @@ import type { IStaff } from '@welfare/shared';
 import { StaffStatus } from '@welfare/shared';
 import { listStaff, searchStaff } from '@/lib/staff';
 import AddStaffModal from './add-staff-modal';
+import { TableSkeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 
 const STATUS_BADGE: Record<StaffStatus, string> = {
   [StaffStatus.Active]:    'bg-green-100 text-green-800',
@@ -169,20 +171,17 @@ export default function StaffListClient() {
           <tbody className="bg-white divide-y divide-gray-100">
             {isLoading ? (
               <tr>
-                <td
-                  colSpan={columns.length}
-                  className="px-4 py-8 text-center text-sm text-gray-500"
-                >
-                  Loading...
+                <td colSpan={columns.length} className="p-2">
+                  <TableSkeleton rows={5} cols={columns.length} />
                 </td>
               </tr>
             ) : table.getRowModel().rows.length === 0 ? (
               <tr>
-                <td
-                  colSpan={columns.length}
-                  className="px-4 py-8 text-center text-sm text-gray-400"
-                >
-                  No staff found.
+                <td colSpan={columns.length}>
+                  <EmptyState
+                    title="No staff members found"
+                    description={q || status ? 'Try adjusting your filters.' : 'Add the first staff member to get started.'}
+                  />
                 </td>
               </tr>
             ) : (
