@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@welfare/shared": ["packages/shared/src"],
+      "@welfare/shared/*": ["packages/shared/src/*"]
+    }
+  }
+}
