@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import configuration from './config/configuration';
@@ -30,6 +31,15 @@ import { ReportsModule } from './reports/reports.module';
     }),
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60, limit: 100 }]),
+    BullModule.forRootAsync({
+      useFactory: (configService: ConfigService) => ({
+        connection: {
+          host: configService.get<string>('redis.host'),
+          port: configService.get<number>('redis.port'),
+        },
+      }),
+      inject: [ConfigService],
+    }),
     DatabaseModule,
     RedisModule,
     MinioModule,
