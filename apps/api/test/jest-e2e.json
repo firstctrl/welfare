@@ -1,0 +1,13 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "../",
+  "testEnvironment": "node",
+  "testRegex": "test/.+\\.e2e-spec\\.ts$",
+  "transform": {
+    "^.+\\.(t|j)sx?$": "ts-jest"
+  },
+  "moduleNameMapper": {
+    "^@welfare/shared$": "<rootDir>/../../packages/shared/src"
+  },
+  "testTimeout": 30000
+}
