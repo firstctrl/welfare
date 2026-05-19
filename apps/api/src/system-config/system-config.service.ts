@@ -33,6 +33,7 @@ const SEED_DEFAULTS: Array<{ key: ConfigKey; value: string; description?: string
   { key: ConfigKey.PenaltyType, value: 'Fixed' },
   { key: ConfigKey.PenaltyValue, value: '0' },
   { key: ConfigKey.MaxLoansPerGuarantor, value: '0' },
+  { key: ConfigKey.GracePeriodDays, value: '0' },
   { key: ConfigKey.EmailProvider, value: 'resend' },
   { key: ConfigKey.EmailFromAddress, value: '' },
   { key: ConfigKey.EmailFromName, value: 'Welfare System' },
@@ -252,6 +253,10 @@ export class SystemConfigService implements OnModuleInit {
         case ConfigKey.MaxLoansPerGuarantor:
           if (!(parseInt(value, 10) >= 0))
             throw new UnprocessableEntityException(`MaxLoansPerGuarantor must be >= 0`);
+          break;
+        case ConfigKey.GracePeriodDays:
+          if (!(parseInt(value, 10) >= 0))
+            throw new UnprocessableEntityException(`GracePeriodDays must be >= 0`);
           break;
         case ConfigKey.EmailProvider:
           if (value !== 'resend' && value !== 'outlook365')
