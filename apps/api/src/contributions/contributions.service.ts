@@ -181,7 +181,58 @@ export class ContributionsService {
     ]).exec();
     return agg ?? { totalExpected: 0, totalPaid: 0, totalSurplus: 0, countPaid: 0, countPartial: 0, countMissed: 0 };
   }
+
+  async getBalance(staffId: string): Promise<number> {
+    const [creditResult, debitResult] = await Promise.all([
+      this.contributionModel
+        .aggregate([
+          { $match: { staffId, isDebit: { $ne: true } } },
+          { $group: { _id: null, total: { $sum: '$paidAmount' } } },
+        ])
+        .exec(),
+      this.contributionModel
+        .aggregate([
+          { $match: { staffId, isDebit: true } },
+          { $group: { _id: null, total: { $sum: '$paidAmount' } } },
+        ])
+        .exec(),
+    ]);
+    const credits = (creditResult as { total: number }[])[0]?.total ?? 0;
+    const debits = (debitResult as { total: number }[])[0]?.total ?? 0;
+    return credits - debits;
+  }
+
+  async debitGuarantorOffset(
+    guarantorId: string,
+    amount: number,
+    _loanId: string,
+    _actorId: string,
+    actorName: string,
+  ): Promise<{ debited: number; remaining: number }> {
+    const balance = await this.getBalance(guarantorId);
+    const debited = Math.min(amount, Math.max(0, balance));
+    const remaining = amount - debited;
+
+    if (debited > 0) {
+      const now = new Date();
+      await this.contributionModel.create({
+        staffId: guarantorId,
+        month: now.getMonth() + 1,
+        year: now.getFullYear(),
+        expectedAmount: 0,
+        paidAmount: debited,
+        surplusCarriedForward: 0,
+        isDebit: true,
+        status: ContributionStatus.Paid,
+        source: ContributionSource.GuarantorOffset,
+        recordedBy: actorName,
+      });
+    }
+
+    return { debited, remaining };
+  }
 }
 
 // suppress unused import warning for getNextMonthYear (reserved for future penalty calculation)
 void getNextMonthYear;
+

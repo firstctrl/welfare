@@ -9,8 +9,8 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "paths": {
-      "@welfare/shared": ["../../packages/shared/dist"],
-      "@welfare/shared/*": ["../../packages/shared/dist/*"]
+      "@welfare/shared": ["packages/shared/dist"],
+      "@welfare/shared/*": ["packages/shared/dist/*"]
     }
   },
   "include": ["src/**/*"],

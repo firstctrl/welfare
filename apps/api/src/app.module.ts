@@ -19,6 +19,7 @@ import { SystemConfigModule } from './system-config/system-config.module';
 import { StaffModule } from './staff/staff.module';
 import { SearchModule } from './search/search.module';
 import { ContributionsModule } from './contributions/contributions.module';
+import { LoansModule } from './loans/loans.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { ContributionsModule } from './contributions/contributions.module';
     StaffModule,
     SearchModule,
     ContributionsModule,
+    LoansModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

@@ -10,6 +10,7 @@ export enum ConfigKey {
   PenaltyType = 'PENALTY_TYPE',
   PenaltyValue = 'PENALTY_VALUE',
   MaxLoansPerGuarantor = 'MAX_LOANS_PER_GUARANTOR',
+  GracePeriodDays = 'GRACE_PERIOD_DAYS',
   EmailProvider = 'EMAIL_PROVIDER',
   EmailFromAddress = 'EMAIL_FROM_ADDRESS',
   EmailFromName = 'EMAIL_FROM_NAME',

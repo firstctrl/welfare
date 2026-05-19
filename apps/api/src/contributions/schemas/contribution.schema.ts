@@ -15,11 +15,18 @@ export class Contribution {
   @Prop({ required: true, enum: ContributionStatus, default: ContributionStatus.Missed })
   status!: ContributionStatus;
   @Prop({ required: true, enum: ContributionSource }) source!: ContributionSource;
+  @Prop({ default: false }) isDebit!: boolean;
   @Prop() importBatchId?: string;
   @Prop({ required: true }) recordedBy!: string;
 }
 
 export const ContributionSchema = SchemaFactory.createForClass(Contribution);
-ContributionSchema.index({ staffId: 1, month: 1, year: 1 }, { unique: true });
+
+// Unique constraint applies only to credit (non-debit) entries
+ContributionSchema.index(
+  { staffId: 1, month: 1, year: 1 },
+  { unique: true, partialFilterExpression: { isDebit: { $ne: true } } },
+);
 ContributionSchema.index({ status: 1 });
 ContributionSchema.index({ month: 1, year: 1 });
+ContributionSchema.index({ staffId: 1, isDebit: 1 });
