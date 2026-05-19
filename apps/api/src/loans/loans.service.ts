@@ -281,6 +281,22 @@ export class LoansService {
     actorId: string,
     actorName: string,
   ): Promise<LoanRepaymentDocument[]> {
+    return this.recordPaymentInternal(
+      loanId,
+      { amount: dto.amount, paidDate: dto.paidDate, notes: dto.notes },
+      RepaymentSource.DirectPayment,
+      actorId,
+      actorName,
+    );
+  }
+
+  async recordPaymentInternal(
+    loanId: string,
+    dto: { amount: number; paidDate: string; notes?: string },
+    source: RepaymentSource,
+    actorId: string,
+    actorName: string,
+  ): Promise<LoanRepaymentDocument[]> {
     const loan = await this.findOne(loanId);
     if (loan.status === LoanStatus.Completed)
       throw new BadRequestException('Loan is already completed');
@@ -328,7 +344,7 @@ export class LoansService {
       }
 
       inst.paidDate = paidDate;
-      inst.source = RepaymentSource.DirectPayment;
+      inst.source = source;
       if (dto.notes) inst.notes = dto.notes;
       await inst.save();
       updated.push(inst);
@@ -343,7 +359,7 @@ export class LoansService {
       AuditEntity.Loan,
       loanId,
       undefined,
-      { amount: dto.amount, paidDate: dto.paidDate },
+      { amount: dto.amount, paidDate: dto.paidDate, source },
     );
 
     return updated;
