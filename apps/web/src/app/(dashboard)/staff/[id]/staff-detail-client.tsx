@@ -1,15 +1,17 @@
 'use client';
 
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { StaffStatus, ContributionStatus } from '@welfare/shared';
-import type { IStaff, IContribution } from '@welfare/shared';
+import { StaffStatus, ContributionStatus, LoanStatus, RepaymentSource } from '@welfare/shared';
+import type { IStaff, IContribution, ILoan, ILoanRepayment } from '@welfare/shared';
 import { getStaff, updateStaff, changeStaffStatus, uploadStaffPhoto } from '@/lib/staff';
 import { getContributionsByStaff } from '@/lib/contributions';
+import { getLoansByStaff, getLoansByGuarantor, getLoanSchedule } from '@/lib/loans';
+import { getConfig } from '@/lib/config';
 
 const STATUS_BADGE: Record<StaffStatus, string> = {
   [StaffStatus.Active]:    'bg-green-100 text-green-800',
@@ -72,6 +74,55 @@ export default function StaffDetailClient({ id }: { id: string }) {
     queryFn: () => getContributionsByStaff(id),
     enabled: activeTab === 'Contributions',
   });
+
+  const { data: staffLoans, isLoading: loansLoading } = useQuery({
+    queryKey: ['loans', 'staff', id],
+    queryFn: () => getLoansByStaff(id),
+    enabled: activeTab === 'Loans',
+  });
+
+  const { data: guaranteeLoans, isLoading: guaranteeLoading } = useQuery({
+    queryKey: ['loans', 'guarantor', id],
+    queryFn: () => getLoansByGuarantor(id),
+    enabled: activeTab === 'Guaranteeing',
+  });
+
+  const { data: cfg } = useQuery({
+    queryKey: ['config'],
+    queryFn: getConfig,
+    staleTime: 5 * 60 * 1000,
+    enabled: activeTab === 'Guaranteeing',
+  });
+  const maxPerGuarantor = parseInt(cfg?.['MAX_LOANS_PER_GUARANTOR']?.value ?? '0', 10);
+
+  const guaranteeScheduleQueries = useQueries({
+    queries: (guaranteeLoans?.data ?? []).map((loan: ILoan) => ({
+      queryKey: ['loans', loan._id, 'schedule'],
+      queryFn: () => getLoanSchedule(loan._id),
+      enabled: activeTab === 'Guaranteeing' && !!guaranteeLoans,
+      staleTime: 5 * 60 * 1000,
+    })),
+  });
+
+  const offsetHistory = useMemo(() => {
+    const all: Array<ILoanRepayment & { loanPrincipal: number }> = [];
+    (guaranteeLoans?.data ?? []).forEach((loan: ILoan, i: number) => {
+      const schedule = guaranteeScheduleQueries[i]?.data ?? [];
+      schedule
+        .filter(
+          (r) =>
+            r.source === RepaymentSource.GuarantorOffset &&
+            r.guarantorStaffId === id,
+        )
+        .forEach((r) => all.push({ ...r, loanPrincipal: loan.principalAmount }));
+    });
+    return all.sort(
+      (a, b) =>
+        new Date(b.paidDate ?? b.createdAt).getTime() -
+        new Date(a.paidDate ?? a.createdAt).getTime(),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guaranteeLoans, JSON.stringify(guaranteeScheduleQueries.map((q) => q.status)), id]);
 
   const profileForm = useForm<ProfileForm>({ resolver: zodResolver(profileSchema) });
   const statusForm = useForm<StatusForm>({ resolver: zodResolver(statusSchema) });
@@ -374,13 +425,179 @@ export default function StaffDetailClient({ id }: { id: string }) {
         </div>
       )}
       {activeTab === 'Loans' && (
-        <div className="text-sm text-gray-400 py-8 text-center">
-          Loan history — available in Phase 5.
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-sm font-medium text-gray-700">Loan History</h3>
+            <a
+              href="/loans/new"
+              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              + Record New Loan
+            </a>
+          </div>
+          {loansLoading ? (
+            <div className="text-sm text-gray-400 py-4">Loading…</div>
+          ) : !staffLoans?.data.length ? (
+            <div className="text-sm text-gray-400 py-8 text-center">No loans on record.</div>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-gray-200">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {['Principal', 'Total Repayable', 'Tenure', 'Disbursed', 'Status', ''].map((h) => (
+                      <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {staffLoans.data.map((loan: ILoan) => (
+                    <tr key={loan._id}>
+                      <td className="px-3 py-2 font-medium">{loan.principalAmount.toLocaleString()}</td>
+                      <td className="px-3 py-2">{loan.totalRepayable.toLocaleString()}</td>
+                      <td className="px-3 py-2">{loan.tenureMonths}mo</td>
+                      <td className="px-3 py-2">{new Date(loan.disbursedDate).toLocaleDateString('en-GB')}</td>
+                      <td className="px-3 py-2">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          loan.status === LoanStatus.Active    ? 'bg-green-100 text-green-800' :
+                          loan.status === LoanStatus.Completed ? 'bg-blue-100 text-blue-700'  :
+                          loan.status === LoanStatus.BadDebt   ? 'bg-red-100 text-red-700'    :
+                          'bg-gray-100 text-gray-600'
+                        }`}>
+                          {loan.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <a href={`/loans/${loan._id}`} className="text-blue-600 text-xs hover:underline">View</a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
       {activeTab === 'Guaranteeing' && (
-        <div className="text-sm text-gray-400 py-8 text-center">
-          Co-signed loans — available in Phase 5.
+        <div className="space-y-6">
+          <h3 className="text-sm font-medium text-gray-700">Co-Signed Loans</h3>
+          {guaranteeLoading ? (
+            <div className="text-sm text-gray-400 py-4">Loading…</div>
+          ) : !guaranteeLoans?.data.length ? (
+            <div className="text-sm text-gray-400 py-8 text-center">
+              Not currently guaranteeing any loans.
+            </div>
+          ) : (
+            <>
+              {(() => {
+                const active = guaranteeLoans.data.filter(
+                  (l: ILoan) => l.status === LoanStatus.Active,
+                );
+                const totalExposure = active.reduce(
+                  (sum: number, l: ILoan) => sum + l.totalRepayable,
+                  0,
+                );
+                const atCap = maxPerGuarantor > 0 && active.length >= maxPerGuarantor;
+                return (
+                  <div className={`rounded-lg p-3 flex flex-wrap gap-6 text-sm ${atCap ? 'bg-red-50' : 'bg-gray-50'}`}>
+                    <div>
+                      <p className="text-xs text-gray-500">Active Guarantees</p>
+                      <p className="font-semibold text-gray-900">{active.length}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Total Exposure</p>
+                      <p className="font-semibold text-gray-900">{totalExposure.toLocaleString()}</p>
+                    </div>
+                    {atCap && (
+                      <div className="flex items-center">
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                          At cap ({active.length}/{maxPerGuarantor})
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+              <div className="overflow-x-auto rounded-lg border border-gray-200">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      {['Borrower ID', 'Principal', 'Outstanding', 'Disbursed', 'Status', ''].map((h) => (
+                        <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {guaranteeLoans.data.map((loan: ILoan, i: number) => {
+                      const schedule = guaranteeScheduleQueries[i]?.data;
+                      const outstanding = schedule
+                        ? Math.round(
+                            schedule.reduce(
+                              (s, r) => s + Math.max(0, r.dueAmount + r.penaltyAmount - r.paidAmount),
+                              0,
+                            ) * 100,
+                          ) / 100
+                        : null;
+                      return (
+                        <tr key={loan._id}>
+                          <td className="px-3 py-2 text-xs font-mono text-gray-500">{loan.staffId.slice(-8)}</td>
+                          <td className="px-3 py-2 font-medium">{loan.principalAmount.toLocaleString()}</td>
+                          <td className="px-3 py-2">
+                            {outstanding === null ? (
+                              <span className="text-gray-300 text-xs">…</span>
+                            ) : (
+                              outstanding.toLocaleString()
+                            )}
+                          </td>
+                          <td className="px-3 py-2">{new Date(loan.disbursedDate).toLocaleDateString('en-GB')}</td>
+                          <td className="px-3 py-2">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                              loan.status === LoanStatus.Active    ? 'bg-green-100 text-green-800' :
+                              loan.status === LoanStatus.Completed ? 'bg-blue-100 text-blue-700'  :
+                              loan.status === LoanStatus.BadDebt   ? 'bg-red-100 text-red-700'    :
+                              'bg-gray-100 text-gray-600'
+                            }`}>
+                              {loan.status}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <a href={`/loans/${loan._id}`} className="text-blue-600 text-xs hover:underline">View</a>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {offsetHistory.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Offset History</h4>
+                  <div className="overflow-x-auto rounded-lg border border-gray-200">
+                    <table className="min-w-full divide-y divide-gray-200 text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          {['Date', 'Loan Principal', 'Instalment #', 'Amount Applied'].map((h) => (
+                            <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white">
+                        {offsetHistory.map((r) => (
+                          <tr key={r._id} className="bg-amber-50">
+                            <td className="px-3 py-2">
+                              {r.paidDate ? new Date(r.paidDate).toLocaleDateString('en-GB') : '—'}
+                            </td>
+                            <td className="px-3 py-2">{r.loanPrincipal.toLocaleString()}</td>
+                            <td className="px-3 py-2">{r.instalmentNumber}</td>
+                            <td className="px-3 py-2 font-medium text-amber-700">{r.paidAmount.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
