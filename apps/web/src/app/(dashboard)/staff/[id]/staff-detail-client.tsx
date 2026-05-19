@@ -12,6 +12,7 @@ import { getStaff, updateStaff, changeStaffStatus, uploadStaffPhoto } from '@/li
 import { getContributionsByStaff } from '@/lib/contributions';
 import { getLoansByStaff, getLoansByGuarantor, getLoanSchedule } from '@/lib/loans';
 import { getConfig } from '@/lib/config';
+import { sendContributionStatement } from '@/lib/email';
 
 const STATUS_BADGE: Record<StaffStatus, string> = {
   [StaffStatus.Active]:    'bg-green-100 text-green-800',
@@ -63,6 +64,8 @@ export default function StaffDetailClient({ id }: { id: string }) {
   const [activeTab, setActiveTab] = useState<Tab>('Profile');
   const [editing, setEditing] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [sendingStatement, setSendingStatement] = useState(false);
+  const [statementYear, setStatementYear] = useState(new Date().getFullYear());
 
   const { data: staff, isLoading } = useQuery({
     queryKey: ['staff', id],
@@ -297,12 +300,42 @@ export default function StaffDetailClient({ id }: { id: string }) {
                   </div>
                 ))}
               </div>
-              <button
-                onClick={() => startEdit(staff)}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                Edit Profile
-              </button>
+              <div className="flex flex-wrap gap-3 items-center">
+                <button
+                  onClick={() => startEdit(staff)}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Edit Profile
+                </button>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={2000}
+                    max={2100}
+                    value={statementYear}
+                    onChange={(e) => setStatementYear(parseInt(e.target.value, 10))}
+                    className="border border-gray-300 rounded-md px-2 py-1.5 text-sm w-24 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    disabled={!staff.email || sendingStatement}
+                    onClick={async () => {
+                      setSendingStatement(true);
+                      try {
+                        await sendContributionStatement(id, statementYear);
+                        toast.success('Contribution statement sent');
+                      } catch {
+                        toast.error('Failed to send statement');
+                      } finally {
+                        setSendingStatement(false);
+                      }
+                    }}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={!staff.email ? 'No email address on file' : 'Send contribution statement'}
+                  >
+                    {sendingStatement ? 'Sending…' : 'Send Statement'}
+                  </button>
+                </div>
+              </div>
             </div>
           ) : (
             <form

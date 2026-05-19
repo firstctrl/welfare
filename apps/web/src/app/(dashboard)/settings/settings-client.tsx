@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { getConfig, updateConfig, testEmail, type ConfigMap } from '../../../lib/config';
+import { runBulkAnnualStatement } from '../../../lib/email';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -483,6 +484,7 @@ function EmailSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
   const [saving, setSaving] = useState(false);
   const [testTo, setTestTo] = useState('');
   const [testing, setTesting] = useState(false);
+  const [runningBulk, setRunningBulk] = useState(false);
 
   const [original] = useState(() => initEmail(cfg));
   const dirty = (Object.keys(fields) as (keyof EmailFields)[]).some((k) => fields[k] !== original[k]);
@@ -621,6 +623,34 @@ function EmailSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
           >
             {testing ? 'Sending…' : 'Send Test Email'}
           </button>
+        </div>
+      </div>
+
+      {/* Bulk annual statement */}
+      <div className="mt-4 border-t pt-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Bulk Actions</p>
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={async () => {
+              setRunningBulk(true);
+              try {
+                await runBulkAnnualStatement();
+                toast.success('Annual statement batch enqueued');
+              } catch {
+                toast.error('Failed to enqueue annual statement batch');
+              } finally {
+                setRunningBulk(false);
+              }
+            }}
+            disabled={runningBulk}
+            className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+          >
+            {runningBulk ? 'Enqueuing…' : 'Run Annual Statement'}
+          </button>
+          <p className="text-xs text-gray-500">
+            Sends contribution statements for the previous year to all active staff with email addresses.
+          </p>
         </div>
       </div>
     </SectionCard>

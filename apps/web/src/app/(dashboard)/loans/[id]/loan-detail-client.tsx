@@ -22,6 +22,7 @@ import {
   getLoansByGuarantor,
 } from '@/lib/loans';
 import { getStaff } from '@/lib/staff';
+import { sendLoanSchedule } from '@/lib/email';
 
 const LOAN_STATUS_BADGE: Record<LoanStatus, string> = {
   [LoanStatus.Active]:    'bg-green-100 text-green-800',
@@ -85,6 +86,7 @@ function computeAffectedInstalments(schedule: ILoanRepayment[], amount: number) 
 export function LoanDetailClient({ id }: { id: string }) {
   const qc = useQueryClient();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [sendingSchedule, setSendingSchedule] = useState(false);
 
   const { data: loan, isLoading: loanLoading } = useQuery({
     queryKey: ['loans', id],
@@ -249,6 +251,23 @@ export function LoanDetailClient({ id }: { id: string }) {
                 Download Document
               </button>
             )}
+            <button
+              disabled={sendingSchedule}
+              onClick={async () => {
+                setSendingSchedule(true);
+                try {
+                  await sendLoanSchedule(id);
+                  toast.success('Loan schedule emailed');
+                } catch {
+                  toast.error('Failed to send schedule');
+                } finally {
+                  setSendingSchedule(false);
+                }
+              }}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+            >
+              {sendingSchedule ? 'Sending…' : 'Email Schedule'}
+            </button>
             {loan.status === LoanStatus.Active && (
               <button
                 onClick={() => setShowPaymentModal(true)}
