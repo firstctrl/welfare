@@ -3,7 +3,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { APP_GUARD } from '@nestjs/core';
+import Redis from 'ioredis';
 import configuration from './config/configuration';
 import { DatabaseModule } from './database/database.module';
 import { RedisModule } from './cache/redis.module';
@@ -25,20 +27,30 @@ import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      load: [configuration],
-    }),
+    ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
     ScheduleModule.forRoot(),
-    ThrottlerModule.forRoot([{ ttl: 60, limit: 100 }]),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (cs: ConfigService) => ({
+        throttlers: [{ name: 'default', ttl: 60000, limit: 100 }],
+        storage: new ThrottlerStorageRedisService(
+          new Redis({
+            host: cs.get<string>('redis.host') || 'localhost',
+            port: cs.get<number>('redis.port') || 6379,
+            lazyConnect: true,
+          }),
+        ),
+      }),
+    }),
     BullModule.forRootAsync({
-      useFactory: (configService: ConfigService) => ({
+      inject: [ConfigService],
+      useFactory: (cs: ConfigService) => ({
         connection: {
-          host: configService.get<string>('redis.host'),
-          port: configService.get<number>('redis.port'),
+          host: cs.get<string>('redis.host'),
+          port: cs.get<number>('redis.port'),
         },
       }),
-      inject: [ConfigService],
     }),
     DatabaseModule,
     RedisModule,
