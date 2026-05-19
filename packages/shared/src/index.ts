@@ -12,6 +12,7 @@ export { ConfigKey } from './enums/config-key.enum';
 export { AuditAction } from './enums/audit-action.enum';
 export { AuditEntity } from './enums/audit-entity.enum';
 export { EmailTriggerSource } from './enums/email-trigger-source.enum';
+export { RepaymentSource } from './enums/repayment-source.enum';
 
 // Interfaces
 export type { IStaff } from './interfaces/staff.interface';

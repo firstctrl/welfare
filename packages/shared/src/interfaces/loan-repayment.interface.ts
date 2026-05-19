@@ -1,4 +1,5 @@
 import { LoanRepaymentStatus } from '../enums/loan-repayment-status.enum';
+import { RepaymentSource } from '../enums/repayment-source.enum';
 
 export interface ILoanRepayment {
   _id: string;
@@ -8,10 +9,12 @@ export interface ILoanRepayment {
   dueDate: string;
   dueAmount: number;
   paidAmount: number;
-  paidDate?: string;
-  surplusApplied: number;
-  penaltyApplied: number;
+  penaltyAmount: number;
   status: LoanRepaymentStatus;
-  recordedBy: string;
+  paidDate?: string;
+  source?: RepaymentSource;
+  guarantorStaffId?: string;
+  notes?: string;
   createdAt: string;
+  updatedAt: string;
 }
