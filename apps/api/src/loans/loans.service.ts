@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException, // used in findOne, getDocumentUrl
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
@@ -29,6 +30,7 @@ import { CreateLoanDto } from './dto/create-loan.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { ExitSettlementDto } from './dto/exit-settlement.dto';
 import { LoanQueryDto } from './dto/loan-query.dto';
+import { LoanScheduleSenderService } from './loan-schedule-sender.service';
 
 type ConfigMap = Record<string, { value: string }>;
 
@@ -58,6 +60,8 @@ function computeDueDate(disbursedDate: Date, instalmentN: number): Date {
 
 @Injectable()
 export class LoansService {
+  private readonly logger = new Logger(LoansService.name);
+
   constructor(
     @InjectModel(Loan.name) private readonly loanModel: Model<LoanDocument>,
     @InjectModel(LoanRepayment.name)
@@ -67,6 +71,7 @@ export class LoansService {
     private readonly auditService: AuditService,
     private readonly contributionsService: ContributionsService,
     @Inject(MINIO_CLIENT) private readonly minioClient: MinioClient,
+    private readonly loanScheduleSender: LoanScheduleSenderService,
   ) {}
 
   // ───────────────── CREATE LOAN ─────────────────
@@ -163,6 +168,10 @@ export class LoansService {
       loanId,
       undefined,
       { principalAmount: dto.principalAmount, tenureMonths: dto.tenureMonths },
+    );
+
+    void this.loanScheduleSender.sendForLoan(loan).catch(err =>
+      this.logger.warn(`Loan schedule email failed: ${(err as Error).message}`),
     );
 
     return loan;

@@ -12,6 +12,7 @@ import { MINIO_CLIENT } from '../storage/minio.module';
 import { LoanStatus, LoanRepaymentStatus, StaffStatus } from '@welfare/shared';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { ExitSettlementDto } from './dto/exit-settlement.dto';
+import { LoanScheduleSenderService } from './loan-schedule-sender.service';
 
 const activeStaff = (id: string, staffId = 'SF001') => ({
   _id: { toString: () => id },
@@ -76,6 +77,7 @@ describe('LoansService', () => {
         { provide: AuditService, useValue: auditService },
         { provide: ContributionsService, useValue: contributionsService },
         { provide: MINIO_CLIENT, useValue: minioClient },
+        { provide: LoanScheduleSenderService, useValue: { sendForLoan: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 

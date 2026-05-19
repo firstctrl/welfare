@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import configuration from './config/configuration';
@@ -20,6 +21,7 @@ import { StaffModule } from './staff/staff.module';
 import { SearchModule } from './search/search.module';
 import { ContributionsModule } from './contributions/contributions.module';
 import { LoansModule } from './loans/loans.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -29,6 +31,15 @@ import { LoansModule } from './loans/loans.module';
     }),
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60, limit: 100 }]),
+    BullModule.forRootAsync({
+      useFactory: (configService: ConfigService) => ({
+        connection: {
+          host: configService.get<string>('redis.host'),
+          port: configService.get<number>('redis.port'),
+        },
+      }),
+      inject: [ConfigService],
+    }),
     DatabaseModule,
     RedisModule,
     MinioModule,
@@ -43,6 +54,7 @@ import { LoansModule } from './loans/loans.module';
     SearchModule,
     ContributionsModule,
     LoansModule,
+    ReportsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

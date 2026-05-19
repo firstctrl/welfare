@@ -23,6 +23,19 @@ export type { IFlaggedEntry, IImportBatch } from './interfaces/import-batch.inte
 export type { IConfig } from './interfaces/config.interface';
 export type { IAuditLog } from './interfaces/audit-log.interface';
 export type { IEmailRecipient, IEmailLog } from './interfaces/email-log.interface';
+export type {
+  IMonthlyContributionRow,
+  IMonthlyContributionReport,
+  IArrearRow,
+  IGuarantorOffsetRow,
+  IActiveLoanRow,
+  IOverdueLoanRow,
+  IRepaidLoanRow,
+  IGuarantorExposureRow,
+  IBadDebtRow,
+  IExitClearanceRow,
+  IDashboardStats,
+} from './interfaces/report.interface';
 
 // DTOs
 export type { PaginationQuery, PaginatedResult } from './dto/pagination.dto';

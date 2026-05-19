@@ -8,6 +8,8 @@ import { LoansImportService } from './loans.import.service';
 import { OverdueDetectionJob } from './jobs/overdue-detection.job';
 import { Loan, LoanSchema } from './schemas/loan.schema';
 import { LoanRepayment, LoanRepaymentSchema } from './schemas/loan-repayment.schema';
+import { Staff, StaffSchema } from '../staff/schemas/staff.schema';
+import { LoanScheduleSenderService } from './loan-schedule-sender.service';
 import { StaffModule } from '../staff/staff.module';
 import { SystemConfigModule } from '../system-config/system-config.module';
 import { ContributionsModule } from '../contributions/contributions.module';
@@ -17,6 +19,7 @@ import { ContributionsModule } from '../contributions/contributions.module';
     MongooseModule.forFeature([
       { name: Loan.name, schema: LoanSchema },
       { name: LoanRepayment.name, schema: LoanRepaymentSchema },
+      { name: Staff.name, schema: StaffSchema },
     ]),
     MulterModule.register({}),
     StaffModule,
@@ -24,7 +27,7 @@ import { ContributionsModule } from '../contributions/contributions.module';
     ContributionsModule,
   ],
   controllers: [LoansController, StaffLoansController],
-  providers: [LoansService, LoansImportService, OverdueDetectionJob],
+  providers: [LoansService, LoansImportService, OverdueDetectionJob, LoanScheduleSenderService],
   exports: [LoansService],
 })
 export class LoansModule {}
