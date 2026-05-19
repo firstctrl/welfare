@@ -13,6 +13,7 @@ import { LoanStatus, LoanRepaymentStatus, StaffStatus } from '@welfare/shared';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { ExitSettlementDto } from './dto/exit-settlement.dto';
 import { LoanScheduleSenderService } from './loan-schedule-sender.service';
+import { MEILISEARCH_CLIENT } from '../search/meilisearch.module';
 
 const activeStaff = (id: string, staffId = 'SF001') => ({
   _id: { toString: () => id },
@@ -61,7 +62,7 @@ describe('LoansService', () => {
       findByIdAndUpdate: jest.fn(),
       countDocuments: jest.fn(),
     };
-    staffService = { findById: jest.fn() };
+    staffService = { findById: jest.fn().mockResolvedValue(activeStaff('staff-123')) };
     configService = { getAll: jest.fn() };
     auditService = { log: jest.fn() };
     contributionsService = { debitGuarantorOffset: jest.fn() };
@@ -78,6 +79,7 @@ describe('LoansService', () => {
         { provide: ContributionsService, useValue: contributionsService },
         { provide: MINIO_CLIENT, useValue: minioClient },
         { provide: LoanScheduleSenderService, useValue: { sendForLoan: jest.fn().mockResolvedValue(undefined) } },
+        { provide: MEILISEARCH_CLIENT, useValue: { index: jest.fn().mockReturnValue({ addDocuments: jest.fn().mockResolvedValue(undefined), updateSettings: jest.fn().mockResolvedValue(undefined) }) } },
       ],
     }).compile();
 

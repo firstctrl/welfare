@@ -4,11 +4,13 @@ import {
   Inject,
   Injectable,
   Logger,
-  NotFoundException, // used in findOne, getDocumentUrl
+  NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Client as MinioClient } from 'minio';
+import { MeiliSearch } from 'meilisearch';
 import {
   AuditAction,
   AuditEntity,
@@ -26,6 +28,7 @@ import { SystemConfigService } from '../system-config/system-config.service';
 import { AuditService } from '../audit/audit.service';
 import { ContributionsService } from '../contributions/contributions.service';
 import { MINIO_CLIENT } from '../storage/minio.module';
+import { MEILISEARCH_CLIENT } from '../search/meilisearch.module';
 import { CreateLoanDto } from './dto/create-loan.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { ExitSettlementDto } from './dto/exit-settlement.dto';
@@ -59,7 +62,7 @@ function computeDueDate(disbursedDate: Date, instalmentN: number): Date {
 }
 
 @Injectable()
-export class LoansService {
+export class LoansService implements OnModuleInit {
   private readonly logger = new Logger(LoansService.name);
 
   constructor(
@@ -72,7 +75,34 @@ export class LoansService {
     private readonly contributionsService: ContributionsService,
     @Inject(MINIO_CLIENT) private readonly minioClient: MinioClient,
     private readonly loanScheduleSender: LoanScheduleSenderService,
+    @Inject(MEILISEARCH_CLIENT) private readonly meiliClient: MeiliSearch,
   ) {}
+
+  async onModuleInit() {
+    await this.meiliClient
+      .index('loans')
+      .updateSettings({
+        searchableAttributes: ['staffName', 'staffId'],
+        filterableAttributes: ['status'],
+        sortableAttributes: ['disbursedDate', 'principalAmount'],
+      })
+      .catch(() => { /* non-fatal */ });
+  }
+
+  private syncLoanToMeilisearch(loan: LoanDocument, staffName: string): void {
+    const doc = {
+      id: loan._id.toString(),
+      staffId: loan.staffId,
+      staffName,
+      principalAmount: loan.principalAmount,
+      status: loan.status,
+      disbursedDate: loan.disbursedDate,
+    };
+    this.meiliClient
+      .index('loans')
+      .addDocuments([doc])
+      .catch(() => { /* fire-and-forget */ });
+  }
 
   // ───────────────── CREATE LOAN ─────────────────
 
@@ -146,6 +176,8 @@ export class LoansService {
       status: LoanStatus.Active,
       recordedBy: actorName,
     });
+
+    this.syncLoanToMeilisearch(loan, staff.fullName);
 
     const loanId = loan._id.toString();
     const schedule = Array.from({ length: dto.tenureMonths }, (_, i) => ({
@@ -393,12 +425,17 @@ export class LoansService {
       .exec();
 
     if (remaining.length === 0) {
-      await this.loanModel
+      const completedLoan = await this.loanModel
         .findByIdAndUpdate(loanId, { $set: { status: LoanStatus.Completed } }, { new: true })
         .exec();
       this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.Loan, loanId, undefined, {
         status: LoanStatus.Completed,
       });
+      if (completedLoan) {
+        this.staffService.findById(completedLoan.staffId)
+          .then(staff => this.syncLoanToMeilisearch(completedLoan, staff.fullName))
+          .catch(() => { /* non-fatal */ });
+      }
     }
   }
 
@@ -511,6 +548,12 @@ export class LoansService {
       badDebtAmount,
       finalStatus,
     });
+
+    if (updated) {
+      this.staffService.findById(updated.staffId)
+        .then(staff => this.syncLoanToMeilisearch(updated, staff.fullName))
+        .catch(() => { /* non-fatal */ });
+    }
 
     return updated!;
   }
