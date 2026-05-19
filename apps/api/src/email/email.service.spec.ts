@@ -3,6 +3,10 @@ import { getModelToken } from '@nestjs/mongoose';
 import { EmailService } from './email.service';
 import { EmailLog } from './email-log.schema';
 import { SystemConfigService } from '../system-config/system-config.service';
+import { Staff } from '../staff/schemas/staff.schema';
+import { Contribution } from '../contributions/schemas/contribution.schema';
+import { Loan } from '../loans/schemas/loan.schema';
+import { LoanRepayment } from '../loans/schemas/loan-repayment.schema';
 import { EmailLogStatus, EmailLogType, EmailTriggerSource } from '@welfare/shared';
 
 const mockLogCreate = jest.fn();
@@ -35,6 +39,10 @@ describe('EmailService', () => {
       providers: [
         EmailService,
         { provide: getModelToken(EmailLog.name), useValue: mockEmailLogModel },
+        { provide: getModelToken(Staff.name), useValue: {} },
+        { provide: getModelToken(Contribution.name), useValue: {} },
+        { provide: getModelToken(Loan.name), useValue: {} },
+        { provide: getModelToken(LoanRepayment.name), useValue: {} },
         { provide: SystemConfigService, useValue: mockConfigService },
       ],
     }).compile();

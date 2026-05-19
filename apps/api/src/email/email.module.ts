@@ -1,43 +1,30 @@
-import { Module, Global } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
-
-export const EMAIL_TRANSPORTER = 'EMAIL_TRANSPORTER';
+import { Global, Module } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
+import { BullModule } from '@nestjs/bullmq';
+import { EmailService } from './email.service';
+import { EmailController } from './email.controller';
+import { EmailLog, EmailLogSchema } from './email-log.schema';
+import { AnnualStatementJob } from './jobs/annual-statement.job';
+import { EmailBatchProcessor } from './jobs/email-batch.processor';
+import { Staff, StaffSchema } from '../staff/schemas/staff.schema';
+import { Contribution, ContributionSchema } from '../contributions/schemas/contribution.schema';
+import { Loan, LoanSchema } from '../loans/schemas/loan.schema';
+import { LoanRepayment, LoanRepaymentSchema } from '../loans/schemas/loan-repayment.schema';
 
 @Global()
 @Module({
-  providers: [
-    {
-      provide: EMAIL_TRANSPORTER,
-      useFactory: (configService: ConfigService): nodemailer.Transporter => {
-        const provider = configService.get<string>('email.provider');
-
-        if (provider === 'resend') {
-          return nodemailer.createTransport({
-            host: 'smtp.resend.com',
-            port: 465,
-            secure: true,
-            auth: {
-              user: 'resend',
-              pass: configService.get<string>('email.resendApiKey'),
-            },
-          });
-        }
-
-        // SMTP (e.g. Outlook 365)
-        return nodemailer.createTransport({
-          host: configService.get<string>('email.smtp.host'),
-          port: configService.get<number>('email.smtp.port'),
-          secure: false,
-          auth: {
-            user: configService.get<string>('email.smtp.user'),
-            pass: configService.get<string>('email.smtp.pass'),
-          },
-        });
-      },
-      inject: [ConfigService],
-    },
+  imports: [
+    MongooseModule.forFeature([
+      { name: EmailLog.name, schema: EmailLogSchema },
+      { name: Staff.name, schema: StaffSchema },
+      { name: Contribution.name, schema: ContributionSchema },
+      { name: Loan.name, schema: LoanSchema },
+      { name: LoanRepayment.name, schema: LoanRepaymentSchema },
+    ]),
+    BullModule.registerQueue({ name: 'email-batch' }),
   ],
-  exports: [EMAIL_TRANSPORTER],
+  controllers: [EmailController],
+  providers: [EmailService, AnnualStatementJob, EmailBatchProcessor],
+  exports: [EmailService, AnnualStatementJob],
 })
 export class EmailModule {}
