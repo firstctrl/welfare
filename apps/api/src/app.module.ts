@@ -20,6 +20,7 @@ import { StaffModule } from './staff/staff.module';
 import { SearchModule } from './search/search.module';
 import { ContributionsModule } from './contributions/contributions.module';
 import { LoansModule } from './loans/loans.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { LoansModule } from './loans/loans.module';
     SearchModule,
     ContributionsModule,
     LoansModule,
+    ReportsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
