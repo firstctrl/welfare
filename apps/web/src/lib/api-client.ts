@@ -1,7 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../store/auth.store';
 
-// Extend config type to include _isRetry flag
 interface RetryConfig extends InternalAxiosRequestConfig {
   _isRetry?: boolean;
 }
@@ -20,12 +19,14 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor — attempt refresh on 401 before redirecting
+// Response interceptor — 401 refresh, 403 permission toast, 500 server error toast
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const config = error.config as RetryConfig | undefined;
-    if (error.response?.status === 401 && !config?._isRetry && typeof window !== 'undefined') {
+    const status: number | undefined = error.response?.status;
+
+    if (status === 401 && !config?._isRetry && typeof window !== 'undefined') {
       if (config) config._isRetry = true;
       const { refreshAccessToken } = await import('./auth');
       const newToken = await refreshAccessToken();
@@ -35,6 +36,17 @@ apiClient.interceptors.response.use(
       }
       window.location.href = '/login';
     }
+
+    if (status === 403 && typeof window !== 'undefined') {
+      const { toast } = await import('sonner');
+      toast.error('Access denied — you do not have permission for this action.');
+    }
+
+    if (status !== undefined && status >= 500 && typeof window !== 'undefined') {
+      const { toast } = await import('sonner');
+      toast.error('Server error — please try again or contact support.');
+    }
+
     return Promise.reject(error);
   },
 );

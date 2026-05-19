@@ -4,7 +4,6 @@ import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { LoanStatus } from '@welfare/shared';
@@ -12,15 +11,8 @@ import type { IStaff } from '@welfare/shared';
 import { searchStaff, getLoanEligibility } from '@/lib/staff';
 import { createLoan, uploadLoanDocument, getLoansByGuarantor } from '@/lib/loans';
 import { getConfig } from '@/lib/config';
-
-const schema = z.object({
-  staffId:         z.string().min(1, 'Select a staff member'),
-  guarantorId:     z.string().min(1, 'Select a guarantor'),
-  principalAmount: z.coerce.number().min(1, 'Required'),
-  tenureMonths:    z.coerce.number().min(1).max(12),
-  disbursedDate:   z.string().min(1, 'Required'),
-});
-type FormValues = z.infer<typeof schema>;
+import { loanSchema, type LoanFormValues } from '@/lib/form-schemas';
+type FormValues = LoanFormValues;
 
 const inputClass =
   'w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
@@ -49,7 +41,7 @@ export function NewLoanClient() {
     register, handleSubmit, watch, setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(loanSchema),
     defaultValues: { tenureMonths: 6 },
   });
 

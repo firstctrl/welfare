@@ -2,25 +2,10 @@
 
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { createStaff } from '@/lib/staff';
-
-const schema = z.object({
-  fullName:                z.string().min(1, 'Required'),
-  staffId:                 z.string().min(1, 'Required'),
-  pfNo:                    z.string().min(1, 'Required'),
-  dateOfBirth:             z.string().min(1, 'Required'),
-  phoneNumber:             z.string().min(1, 'Required'),
-  email:                   z.string().email('Invalid email').optional().or(z.literal('')),
-  dateOfEmployment:        z.string().min(1, 'Required'),
-  dateOfFirstContribution: z.string().min(1, 'Required'),
-  level:                   z.string().min(1, 'Required'),
-  point:                   z.coerce.number().min(0).default(0),
-});
-
-type FormValues = z.infer<typeof schema>;
+import { staffSchema, type StaffFormValues } from '@/lib/form-schemas';
 
 interface Props {
   onClose: () => void;
@@ -54,9 +39,9 @@ export default function AddStaffModal({ onClose, onSuccess }: Props) {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({ resolver: zodResolver(schema) });
+  } = useForm<StaffFormValues>({ resolver: zodResolver(staffSchema) });
 
-  async function onSubmit(values: FormValues) {
+  async function onSubmit(values: StaffFormValues) {
     try {
       await createStaff({ ...values, email: values.email || undefined });
       await qc.invalidateQueries({ queryKey: ['staff'] });

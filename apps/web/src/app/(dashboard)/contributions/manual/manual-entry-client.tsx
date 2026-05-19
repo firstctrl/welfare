@@ -3,22 +3,14 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ContributionStatus } from '@welfare/shared';
 import type { IContribution, IStaff } from '@welfare/shared';
 import { manualContribution, getContributionSummary } from '@/lib/contributions';
 import { searchStaff } from '@/lib/staff';
-
-const schema = z.object({
-  staffId:  z.string().min(24, 'Select a staff member'),
-  amount:   z.coerce.number().min(1, 'Amount must be > 0'),
-  month:    z.coerce.number().min(1).max(12),
-  year:     z.coerce.number().min(2000),
-  note:     z.string().optional(),
-});
-type FormValues = z.infer<typeof schema>;
+import { contributionSchema, type ContributionFormValues } from '@/lib/form-schemas';
+type FormValues = ContributionFormValues;
 
 const STATUS_COLOR: Record<ContributionStatus, string> = {
   [ContributionStatus.Paid]:          'text-green-700',
@@ -46,7 +38,7 @@ export default function ManualEntryClient() {
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(contributionSchema),
     defaultValues: { month: now.getMonth() + 1, year: now.getFullYear() },
   });
 
