@@ -20,6 +20,7 @@ export default () => ({
   jwt: {
     secret: process.env.JWT_SECRET || 'changeme',
     expiresIn: process.env.JWT_EXPIRES_IN || '8h',
+    rotationSecret: process.env.JWT_SECRET_ROTATION_KEY || '',
   },
   ldap: {
     url: process.env.LDAP_URL || '',
