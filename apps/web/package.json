@@ -16,6 +16,7 @@
     "@tanstack/react-table": "^8.20.5",
     "@welfare/shared": "*",
     "axios": "^1.7.9",
+    "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "next": "^14.2.21",
     "react": "^18.3.1",
