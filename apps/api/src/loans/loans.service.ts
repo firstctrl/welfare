@@ -1,0 +1,492 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException, // used in findOne, getDocumentUrl
+} from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { Client as MinioClient } from 'minio';
+import {
+  AuditAction,
+  AuditEntity,
+  ConfigKey,
+  LoanRepaymentStatus,
+  LoanStatus,
+  PaginatedResult,
+  RepaymentSource,
+  StaffStatus,
+} from '@welfare/shared';
+import { Loan, LoanDocument } from './schemas/loan.schema';
+import { LoanRepayment, LoanRepaymentDocument } from './schemas/loan-repayment.schema';
+import { StaffService } from '../staff/staff.service';
+import { SystemConfigService } from '../system-config/system-config.service';
+import { AuditService } from '../audit/audit.service';
+import { ContributionsService } from '../contributions/contributions.service';
+import { MINIO_CLIENT } from '../storage/minio.module';
+import { CreateLoanDto } from './dto/create-loan.dto';
+import { RecordPaymentDto } from './dto/record-payment.dto';
+import { ExitSettlementDto } from './dto/exit-settlement.dto';
+import { LoanQueryDto } from './dto/loan-query.dto';
+
+type ConfigMap = Record<string, { value: string }>;
+
+const LOAN_DOCS_BUCKET = 'loan-docs';
+const LOAN_DOC_PRESIGN_TTL = 15 * 60;
+const ALLOWED_DOC_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
+const MAX_DOC_BYTES = 10 * 1024 * 1024;
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function monthsBetween(from: Date, to: Date): number {
+  return (
+    (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth())
+  );
+}
+
+function computeDueDate(disbursedDate: Date, instalmentN: number): Date {
+  const d = new Date(disbursedDate);
+  d.setDate(1);
+  d.setMonth(d.getMonth() + instalmentN);
+  d.setDate(5);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+@Injectable()
+export class LoansService {
+  constructor(
+    @InjectModel(Loan.name) private readonly loanModel: Model<LoanDocument>,
+    @InjectModel(LoanRepayment.name)
+    private readonly repaymentModel: Model<LoanRepaymentDocument>,
+    private readonly staffService: StaffService,
+    private readonly configService: SystemConfigService,
+    private readonly auditService: AuditService,
+    private readonly contributionsService: ContributionsService,
+    @Inject(MINIO_CLIENT) private readonly minioClient: MinioClient,
+  ) {}
+
+  // ───────────────── CREATE LOAN ─────────────────
+
+  async create(dto: CreateLoanDto, actorId: string, actorName: string): Promise<LoanDocument> {
+    const config = await this.configService.getAll();
+
+    const staff = await this.staffService.findById(dto.staffId);
+    if (staff.status !== StaffStatus.Active)
+      throw new BadRequestException('Staff is not Active');
+
+    const activeLoan = await this.loanModel
+      .findOne({ staffId: dto.staffId, status: LoanStatus.Active })
+      .exec();
+    if (activeLoan) throw new ConflictException('Staff already has an active loan');
+
+    const eligibilityMonths = parseInt(config[ConfigKey.EligibilityMonths]?.value ?? '6', 10);
+    const employed = monthsBetween(new Date(staff.dateOfEmployment), new Date());
+    if (employed < eligibilityMonths)
+      throw new BadRequestException(
+        `Staff must be employed for at least ${eligibilityMonths} months (currently ${employed})`,
+      );
+
+    if (dto.guarantorId === dto.staffId)
+      throw new BadRequestException('Guarantor must be different from borrower');
+
+    const guarantor = await this.staffService.findById(dto.guarantorId);
+    if (guarantor.status !== StaffStatus.Active)
+      throw new BadRequestException('Guarantor is not Active');
+
+    const maxPerGuarantor = parseInt(config[ConfigKey.MaxLoansPerGuarantor]?.value ?? '0', 10);
+    if (maxPerGuarantor > 0) {
+      const guarantorLoanCount = await this.loanModel
+        .countDocuments({ guarantorId: dto.guarantorId, status: LoanStatus.Active })
+        .exec();
+      if (guarantorLoanCount >= maxPerGuarantor)
+        throw new BadRequestException(
+          `Guarantor has reached the maximum of ${maxPerGuarantor} guaranteed active loans`,
+        );
+    }
+
+    const minAmount = parseFloat(config[ConfigKey.LoanMinAmount]?.value ?? '500');
+    const maxAmount = parseFloat(config[ConfigKey.LoanMaxAmount]?.value ?? '50000');
+    if (dto.principalAmount < minAmount || dto.principalAmount > maxAmount)
+      throw new BadRequestException(
+        `Loan amount must be between ${minAmount} and ${maxAmount}`,
+      );
+
+    if (dto.tenureMonths < 1 || dto.tenureMonths > 12)
+      throw new BadRequestException('Tenure must be between 1 and 12 months');
+
+    const interestRate =
+      dto.tenureMonths <= 6
+        ? parseFloat(config[ConfigKey.InterestRateShort]?.value ?? '5')
+        : parseFloat(config[ConfigKey.InterestRateLong]?.value ?? '8');
+
+    const totalRepayable = round2(
+      dto.principalAmount + dto.principalAmount * (interestRate / 100),
+    );
+    const monthlyInstalment = round2(totalRepayable / dto.tenureMonths);
+    const disbursedDate = new Date(dto.disbursedDate);
+
+    const loan = await this.loanModel.create({
+      staffId: dto.staffId,
+      guarantorId: dto.guarantorId,
+      principalAmount: dto.principalAmount,
+      interestRate,
+      totalRepayable,
+      monthlyInstalment,
+      tenureMonths: dto.tenureMonths,
+      disbursedDate,
+      status: LoanStatus.Active,
+      recordedBy: actorName,
+    });
+
+    const loanId = loan._id.toString();
+    const schedule = Array.from({ length: dto.tenureMonths }, (_, i) => ({
+      loanId,
+      staffId: dto.staffId,
+      instalmentNumber: i + 1,
+      dueDate: computeDueDate(disbursedDate, i + 1),
+      dueAmount: monthlyInstalment,
+      paidAmount: 0,
+      penaltyAmount: 0,
+      status: LoanRepaymentStatus.Pending,
+    }));
+    await this.repaymentModel.insertMany(schedule);
+
+    this.auditService.log(
+      actorId,
+      actorName,
+      AuditAction.Disburse,
+      AuditEntity.Loan,
+      loanId,
+      undefined,
+      { principalAmount: dto.principalAmount, tenureMonths: dto.tenureMonths },
+    );
+
+    return loan;
+  }
+
+  // ───────────────── QUERIES ─────────────────
+
+  async findAll(query: LoanQueryDto): Promise<PaginatedResult<LoanDocument>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+    const filter: Record<string, unknown> = {};
+    if (query.staffId) filter['staffId'] = query.staffId;
+    if (query.status) filter['status'] = query.status;
+
+    const [data, total] = await Promise.all([
+      this.loanModel.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      this.loanModel.countDocuments(filter).exec(),
+    ]);
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  async findOne(id: string): Promise<LoanDocument> {
+    const loan = await this.loanModel.findById(id).exec();
+    if (!loan) throw new NotFoundException(`Loan ${id} not found`);
+    return loan;
+  }
+
+  async findByStaff(staffId: string, page = 1, limit = 20): Promise<PaginatedResult<LoanDocument>> {
+    const skip = (page - 1) * limit;
+    const [data, total] = await Promise.all([
+      this.loanModel.find({ staffId }).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      this.loanModel.countDocuments({ staffId }).exec(),
+    ]);
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  async findByGuarantor(guarantorId: string, page = 1, limit = 20): Promise<PaginatedResult<LoanDocument>> {
+    const skip = (page - 1) * limit;
+    const [data, total] = await Promise.all([
+      this.loanModel.find({ guarantorId }).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      this.loanModel.countDocuments({ guarantorId }).exec(),
+    ]);
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  async findBadDebt(page = 1, limit = 20): Promise<PaginatedResult<LoanDocument>> {
+    const skip = (page - 1) * limit;
+    const filter = { status: LoanStatus.BadDebt };
+    const [data, total] = await Promise.all([
+      this.loanModel.find(filter).sort({ updatedAt: -1 }).skip(skip).limit(limit).exec(),
+      this.loanModel.countDocuments(filter).exec(),
+    ]);
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  async getRepaymentSchedule(loanId: string): Promise<LoanRepaymentDocument[]> {
+    return this.repaymentModel.find({ loanId }).sort({ instalmentNumber: 1 }).exec();
+  }
+
+  // ───────────────── DOCUMENT ─────────────────
+
+  async uploadDocument(
+    loanId: string,
+    file: Express.Multer.File,
+    actorId: string,
+    actorName: string,
+  ): Promise<LoanDocument> {
+    const loan = await this.findOne(loanId);
+
+    if (!ALLOWED_DOC_TYPES.includes(file.mimetype))
+      throw new BadRequestException('Document must be PDF, JPEG, or PNG');
+    if (file.size > MAX_DOC_BYTES)
+      throw new BadRequestException('Document must not exceed 10 MB');
+
+    const ext = file.originalname.split('.').pop()?.toLowerCase() ?? 'pdf';
+    const key = `${loanId}/approval.${ext}`;
+    await this.minioClient.putObject(LOAN_DOCS_BUCKET, key, file.buffer, file.size, {
+      'Content-Type': file.mimetype,
+    });
+
+    const updated = await this.loanModel
+      .findByIdAndUpdate(loanId, { $set: { documentKey: key } }, { new: true })
+      .exec();
+
+    this.auditService.log(
+      actorId,
+      actorName,
+      AuditAction.Update,
+      AuditEntity.Loan,
+      loanId,
+      { documentKey: loan.documentKey },
+      { documentKey: key },
+    );
+
+    return updated!;
+  }
+
+  async getDocumentUrl(loanId: string): Promise<{ url: string }> {
+    const loan = await this.findOne(loanId);
+    if (!loan.documentKey)
+      throw new NotFoundException('No approval document uploaded for this loan');
+    const url = await this.minioClient.presignedGetObject(
+      LOAN_DOCS_BUCKET,
+      loan.documentKey,
+      LOAN_DOC_PRESIGN_TTL,
+    );
+    return { url };
+  }
+
+  // ───────────────── RECORD PAYMENT ─────────────────
+
+  async recordPayment(
+    loanId: string,
+    dto: RecordPaymentDto,
+    actorId: string,
+    actorName: string,
+  ): Promise<LoanRepaymentDocument[]> {
+    const loan = await this.findOne(loanId);
+    if (loan.status === LoanStatus.Completed)
+      throw new BadRequestException('Loan is already completed');
+
+    const config = await this.configService.getAll();
+    const paidDate = new Date(dto.paidDate);
+
+    const pendingInstalments = await this.repaymentModel
+      .find({
+        loanId,
+        status: {
+          $in: [
+            LoanRepaymentStatus.Pending,
+            LoanRepaymentStatus.Partial,
+            LoanRepaymentStatus.Overdue,
+          ],
+        },
+      })
+      .sort({ instalmentNumber: 1 })
+      .exec();
+
+    if (pendingInstalments.length === 0)
+      throw new BadRequestException('No pending instalments for this loan');
+
+    let remaining = dto.amount;
+    const updated: LoanRepaymentDocument[] = [];
+
+    for (const inst of pendingInstalments) {
+      if (remaining <= 0) break;
+
+      if (inst.status === LoanRepaymentStatus.Overdue && paidDate > inst.dueDate && inst.penaltyAmount === 0) {
+        inst.penaltyAmount = this.calculatePenalty(inst.dueAmount, config as ConfigMap);
+      }
+
+      const outstanding = round2(inst.dueAmount + inst.penaltyAmount - inst.paidAmount);
+
+      if (remaining >= outstanding) {
+        inst.paidAmount = round2(inst.paidAmount + outstanding);
+        inst.status = LoanRepaymentStatus.Paid;
+        remaining = round2(remaining - outstanding);
+      } else {
+        inst.paidAmount = round2(inst.paidAmount + remaining);
+        inst.status = LoanRepaymentStatus.Partial;
+        remaining = 0;
+      }
+
+      inst.paidDate = paidDate;
+      inst.source = RepaymentSource.DirectPayment;
+      if (dto.notes) inst.notes = dto.notes;
+      await inst.save();
+      updated.push(inst);
+    }
+
+    await this.checkAndCompleteIfDone(loanId, actorId, actorName);
+
+    this.auditService.log(
+      actorId,
+      actorName,
+      AuditAction.RecordPayment,
+      AuditEntity.Loan,
+      loanId,
+      undefined,
+      { amount: dto.amount, paidDate: dto.paidDate },
+    );
+
+    return updated;
+  }
+
+  private calculatePenalty(dueAmount: number, config: ConfigMap): number {
+    const penaltyType = config[ConfigKey.PenaltyType]?.value ?? 'Fixed';
+    const penaltyValue = parseFloat(config[ConfigKey.PenaltyValue]?.value ?? '0');
+    if (penaltyValue === 0) return 0;
+    return penaltyType === 'Percentage'
+      ? round2(dueAmount * (penaltyValue / 100))
+      : penaltyValue;
+  }
+
+  private async checkAndCompleteIfDone(
+    loanId: string,
+    actorId: string,
+    actorName: string,
+  ): Promise<void> {
+    const remaining = await this.repaymentModel
+      .find({ loanId, status: { $nin: [LoanRepaymentStatus.Paid, LoanRepaymentStatus.Waived] } })
+      .exec();
+
+    if (remaining.length === 0) {
+      await this.loanModel
+        .findByIdAndUpdate(loanId, { $set: { status: LoanStatus.Completed } }, { new: true })
+        .exec();
+      this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.Loan, loanId, undefined, {
+        status: LoanStatus.Completed,
+      });
+    }
+  }
+
+  // ───────────────── EXIT SETTLEMENT ─────────────────
+
+  async exitSettle(
+    loanId: string,
+    dto: ExitSettlementDto,
+    actorId: string,
+    actorName: string,
+  ): Promise<LoanDocument> {
+    const loan = await this.findOne(loanId);
+    if (loan.status !== LoanStatus.Active)
+      throw new BadRequestException('Loan is not Active');
+
+    const unpaidInstalments = await this.repaymentModel
+      .find({ loanId, status: { $nin: [LoanRepaymentStatus.Paid, LoanRepaymentStatus.Waived] } })
+      .exec();
+
+    const outstanding = round2(
+      unpaidInstalments.reduce((sum, i) => sum + i.dueAmount + i.penaltyAmount - i.paidAmount, 0),
+    );
+    let remaining = round2(Math.max(0, outstanding - dto.exitDeductionAmount));
+
+    let guarantorOffsetAmount = 0;
+    let badDebtAmount = 0;
+    let finalStatus = LoanStatus.Completed;
+
+    let budgetLeft = dto.exitDeductionAmount;
+    for (const inst of unpaidInstalments) {
+      if (budgetLeft <= 0) break;
+      const owed = round2(inst.dueAmount + inst.penaltyAmount - inst.paidAmount);
+      if (budgetLeft >= owed) {
+        inst.paidAmount = round2(inst.paidAmount + owed);
+        inst.status = LoanRepaymentStatus.Paid;
+        inst.source = RepaymentSource.ExitDeduction;
+        inst.paidDate = new Date();
+        budgetLeft = round2(budgetLeft - owed);
+      } else {
+        inst.paidAmount = round2(inst.paidAmount + budgetLeft);
+        inst.status = LoanRepaymentStatus.Partial;
+        inst.source = RepaymentSource.ExitDeduction;
+        inst.paidDate = new Date();
+        budgetLeft = 0;
+      }
+      await inst.save();
+    }
+
+    if (remaining > 0) {
+      const { debited, remaining: stillUnpaid } =
+        await this.contributionsService.debitGuarantorOffset(
+          loan.guarantorId,
+          remaining,
+          loanId,
+          actorId,
+          actorName,
+        );
+      guarantorOffsetAmount = debited;
+      badDebtAmount = round2(stillUnpaid);
+      finalStatus = badDebtAmount > 0 ? LoanStatus.BadDebt : LoanStatus.Completed;
+
+      if (guarantorOffsetAmount > 0) {
+        let offsetLeft = guarantorOffsetAmount;
+        const stillUnpaidInsts = await this.repaymentModel
+          .find({ loanId, status: { $nin: [LoanRepaymentStatus.Paid, LoanRepaymentStatus.Waived] } })
+          .exec();
+        for (const inst of stillUnpaidInsts) {
+          if (offsetLeft <= 0) break;
+          const owed = round2(inst.dueAmount + inst.penaltyAmount - inst.paidAmount);
+          if (offsetLeft >= owed) {
+            inst.paidAmount = round2(inst.paidAmount + owed);
+            inst.status = LoanRepaymentStatus.Paid;
+            inst.source = RepaymentSource.GuarantorOffset;
+            inst.guarantorStaffId = loan.guarantorId;
+            inst.paidDate = new Date();
+            offsetLeft = round2(offsetLeft - owed);
+          } else {
+            inst.paidAmount = round2(inst.paidAmount + offsetLeft);
+            inst.status = LoanRepaymentStatus.Partial;
+            inst.source = RepaymentSource.GuarantorOffset;
+            inst.guarantorStaffId = loan.guarantorId;
+            inst.paidDate = new Date();
+            offsetLeft = 0;
+          }
+          await inst.save();
+        }
+      }
+    }
+
+    const updated = await this.loanModel
+      .findByIdAndUpdate(
+        loanId,
+        {
+          $set: {
+            status: finalStatus,
+            exitDeductionAmount: dto.exitDeductionAmount,
+            guarantorOffsetAmount,
+            badDebtAmount,
+            settledAt: new Date(),
+            notes: dto.notes,
+          },
+        },
+        { new: true },
+      )
+      .exec();
+
+    this.auditService.log(actorId, actorName, AuditAction.Settle, AuditEntity.Loan, loanId, undefined, {
+      exitDeductionAmount: dto.exitDeductionAmount,
+      guarantorOffsetAmount,
+      badDebtAmount,
+      finalStatus,
+    });
+
+    return updated!;
+  }
+}

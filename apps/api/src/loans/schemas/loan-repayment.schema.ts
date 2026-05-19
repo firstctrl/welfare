@@ -16,7 +16,7 @@ export class LoanRepayment {
   @Prop({ required: true, enum: LoanRepaymentStatus, default: LoanRepaymentStatus.Pending })
   status!: LoanRepaymentStatus;
   @Prop() paidDate?: Date;
-  @Prop({ enum: Object.values(RepaymentSource) }) source?: RepaymentSource;
+  @Prop({ enum: RepaymentSource }) source?: RepaymentSource;
   @Prop() guarantorStaffId?: string;
   @Prop() notes?: string;
 }
