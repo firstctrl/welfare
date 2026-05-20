@@ -2,18 +2,23 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Search, LogOut } from 'lucide-react';
 import { logout } from '../../lib/auth';
+import { useAuthStore } from '../../store/auth.store';
 import { CommandPalette } from '../search/command-palette';
+import { Avatar } from '../ui/avatar';
+import { cn } from '@/lib/utils';
 
 export function Topbar() {
   const router = useRouter();
+  const user = useAuthStore((s) => s.user);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        setOpen(prev => !prev);
+        setOpen((prev) => !prev);
       }
       if (e.key === 'Escape') setOpen(false);
     }
@@ -28,24 +33,38 @@ export function Topbar() {
 
   return (
     <>
-      <header className="bg-white shadow-sm px-6 py-4 flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-gray-800">Welfare Management System</h1>
+      <header className="bg-white border-b border-neutral-200 px-6 flex items-center justify-between shrink-0 h-[var(--row-relaxed)]">
+        {/* Search trigger */}
+        <button
+          onClick={() => setOpen(true)}
+          className={cn(
+            'flex items-center gap-2 px-3 h-9 text-sm text-neutral-400 bg-neutral-50 border border-neutral-200 rounded-sm',
+            'hover:border-neutral-300 hover:text-neutral-600 transition-colors duration-fast',
+            'w-64',
+          )}
+        >
+          <Search size={14} strokeWidth={1.75} />
+          <span className="flex-1 text-left">Search&hellip;</span>
+          <kbd className="text-xs bg-white border border-neutral-200 rounded-xs px-1 py-0.5 font-mono text-neutral-400">
+            ⌘K
+          </kbd>
+        </button>
+
+        {/* Right actions */}
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => setOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 111 11a6 6 0 0116 0z" />
-            </svg>
-            <span>Search</span>
-            <kbd className="ml-1 text-xs bg-white border border-gray-300 rounded px-1 py-0.5 font-mono">⌘K</kbd>
-          </button>
+          {user && (
+            <div className="flex items-center gap-2.5">
+              <Avatar name={user.name} size="sm" />
+              <span className="text-sm font-medium text-neutral-700">{user.name}</span>
+            </div>
+          )}
           <button
             onClick={handleLogout}
-            className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-800 transition-colors duration-fast"
+            aria-label="Sign out"
           >
-            Sign out
+            <LogOut size={16} strokeWidth={1.75} />
+            <span>Sign out</span>
           </button>
         </div>
       </header>

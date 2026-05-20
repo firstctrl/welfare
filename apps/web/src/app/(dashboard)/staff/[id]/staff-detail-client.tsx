@@ -6,6 +6,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
+import { UserCog, Send, Pencil, Plus } from 'lucide-react';
+import Link from 'next/link';
 import { StaffStatus, ContributionStatus, LoanStatus, RepaymentSource } from '@welfare/shared';
 import type { IStaff, IContribution, ILoan, ILoanRepayment } from '@welfare/shared';
 import { getStaff, updateStaff, changeStaffStatus, uploadStaffPhoto } from '@/lib/staff';
@@ -13,23 +15,22 @@ import { getContributionsByStaff } from '@/lib/contributions';
 import { getLoansByStaff, getLoansByGuarantor, getLoanSchedule } from '@/lib/loans';
 import { getConfig } from '@/lib/config';
 import { sendContributionStatement } from '@/lib/email';
+import { Avatar } from '@/components/ui/avatar';
+import { StatusBadge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardBody } from '@/components/ui/card';
+import { Field, Input, Select } from '@/components/ui/field';
+import { Modal } from '@/components/ui/modal';
+import { fmtDate, fmtGHS } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
-const STATUS_BADGE: Record<StaffStatus, string> = {
-  [StaffStatus.Active]:    'bg-green-100 text-green-800',
-  [StaffStatus.Resigned]:  'bg-gray-100 text-gray-600',
-  [StaffStatus.Retired]:   'bg-blue-100 text-blue-700',
-  [StaffStatus.Dismissed]: 'bg-red-100 text-red-700',
-  [StaffStatus.Deceased]:  'bg-black text-white',
-};
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 const TABS = ['Profile', 'Contributions', 'Loans', 'Guaranteeing'] as const;
 type Tab = (typeof TABS)[number];
 
 const TERMINAL_STATUSES: StaffStatus[] = [
-  StaffStatus.Resigned,
-  StaffStatus.Retired,
-  StaffStatus.Dismissed,
-  StaffStatus.Deceased,
+  StaffStatus.Resigned, StaffStatus.Retired, StaffStatus.Dismissed, StaffStatus.Deceased,
 ];
 
 const profileSchema = z.object({
@@ -52,12 +53,7 @@ const statusSchema = z.object({
 });
 type StatusForm = z.infer<typeof statusSchema>;
 
-function toDateInput(d: string) {
-  return d.substring(0, 10);
-}
-
-const inputClass =
-  'w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
+function toDateInput(d: string) { return d.substring(0, 10); }
 
 export default function StaffDetailClient({ id }: { id: string }) {
   const qc = useQueryClient();
@@ -67,10 +63,7 @@ export default function StaffDetailClient({ id }: { id: string }) {
   const [sendingStatement, setSendingStatement] = useState(false);
   const [statementYear, setStatementYear] = useState(new Date().getFullYear());
 
-  const { data: staff, isLoading } = useQuery({
-    queryKey: ['staff', id],
-    queryFn: () => getStaff(id),
-  });
+  const { data: staff, isLoading } = useQuery({ queryKey: ['staff', id], queryFn: () => getStaff(id) });
 
   const { data: contributions, isLoading: contribLoading } = useQuery({
     queryKey: ['contributions', 'staff', id],
@@ -112,17 +105,11 @@ export default function StaffDetailClient({ id }: { id: string }) {
     (guaranteeLoans?.data ?? []).forEach((loan: ILoan, i: number) => {
       const schedule = guaranteeScheduleQueries[i]?.data ?? [];
       schedule
-        .filter(
-          (r) =>
-            r.source === RepaymentSource.GuarantorOffset &&
-            r.guarantorStaffId === id,
-        )
+        .filter((r) => r.source === RepaymentSource.GuarantorOffset && r.guarantorStaffId === id)
         .forEach((r) => all.push({ ...r, loanPrincipal: loan.principalAmount }));
     });
-    return all.sort(
-      (a, b) =>
-        new Date(b.paidDate ?? b.createdAt).getTime() -
-        new Date(a.paidDate ?? a.createdAt).getTime(),
+    return all.sort((a, b) =>
+      new Date(b.paidDate ?? b.createdAt).getTime() - new Date(a.paidDate ?? a.createdAt).getTime(),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guaranteeLoans, JSON.stringify(guaranteeScheduleQueries.map((q) => q.status)), id]);
@@ -131,17 +118,9 @@ export default function StaffDetailClient({ id }: { id: string }) {
   const statusForm = useForm<StatusForm>({ resolver: zodResolver(statusSchema) });
 
   const updateMutation = useMutation({
-    mutationFn: (values: ProfileForm) =>
-      updateStaff(id, { ...values, email: values.email || undefined }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['staff', id] });
-      setEditing(false);
-      toast.success('Profile updated');
-    },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      toast.error(msg ?? 'Update failed');
-    },
+    mutationFn: (values: ProfileForm) => updateStaff(id, { ...values, email: values.email || undefined }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['staff', id] }); setEditing(false); toast.success('Profile updated'); },
+    onError: (err: unknown) => { toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Update failed'); },
   });
 
   const statusMutation = useMutation({
@@ -149,130 +128,106 @@ export default function StaffDetailClient({ id }: { id: string }) {
     onMutate: async (values) => {
       await qc.cancelQueries({ queryKey: ['staff', id] });
       const previous = qc.getQueryData<IStaff>(['staff', id]);
-      qc.setQueryData<IStaff>(['staff', id], (old) =>
-        old ? { ...old, status: values.status } : old,
-      );
+      qc.setQueryData<IStaff>(['staff', id], (old) => old ? { ...old, status: values.status } : old);
       return { previous };
     },
     onError: (err: unknown, _values, context) => {
       if (context?.previous) qc.setQueryData(['staff', id], context.previous);
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      toast.error(msg ?? 'Status change failed');
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Status change failed');
     },
     onSuccess: ({ requiresSettlement }) => {
       setShowStatusModal(false);
-      if (requiresSettlement) {
-        toast.warning('Status updated. Outstanding loans require exit settlement.');
-      } else {
-        toast.success('Status updated');
-      }
+      if (requiresSettlement) toast.warning('Status updated. Outstanding loans require exit settlement.');
+      else toast.success('Status updated');
     },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ['staff', id] });
-      qc.invalidateQueries({ queryKey: ['staff'] });
-    },
+    onSettled: () => { qc.invalidateQueries({ queryKey: ['staff', id] }); qc.invalidateQueries({ queryKey: ['staff'] }); },
   });
 
   const photoMutation = useMutation({
     mutationFn: (file: File) => uploadStaffPhoto(id, file),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['staff', id] });
-      toast.success('Photo updated');
-    },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      toast.error(msg ?? 'Photo upload failed');
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['staff', id] }); toast.success('Photo updated'); },
+    onError: (err: unknown) => { toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Photo upload failed'); },
   });
 
   function startEdit(s: IStaff) {
     profileForm.reset({
-      fullName:                s.fullName,
-      pfNo:                    s.pfNo,
-      phoneNumber:             s.phoneNumber,
-      email:                   s.email ?? '',
-      dateOfBirth:             toDateInput(s.dateOfBirth),
-      dateOfEmployment:        toDateInput(s.dateOfEmployment),
-      dateOfFirstContribution: toDateInput(s.dateOfFirstContribution),
-      level:                   s.level,
-      point:                   s.point,
+      fullName: s.fullName, pfNo: s.pfNo, phoneNumber: s.phoneNumber, email: s.email ?? '',
+      dateOfBirth: toDateInput(s.dateOfBirth), dateOfEmployment: toDateInput(s.dateOfEmployment),
+      dateOfFirstContribution: toDateInput(s.dateOfFirstContribution), level: s.level, point: s.point,
     });
     setEditing(true);
   }
 
-  if (isLoading) return <div className="text-sm text-gray-500">Loading...</div>;
-  if (!staff) return <div className="text-sm text-red-500">Staff not found.</div>;
+  if (isLoading) return <p className="text-sm text-neutral-400">Loading…</p>;
+  if (!staff) return <p className="text-sm text-danger-600">Staff not found.</p>;
 
   const isTerminal = TERMINAL_STATUSES.includes(staff.status);
 
   return (
     <div className="space-y-6 max-w-4xl">
-      {/* Header */}
-      <div className="flex items-start gap-6">
-        <div className="relative group shrink-0">
-          <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-2xl text-gray-500 overflow-hidden">
+      {/* Header card */}
+      <Card>
+        <CardBody className="flex items-start gap-5">
+          {/* Photo */}
+          <div className="relative group shrink-0">
             {staff.photoKey ? (
               <img
                 src={`/api/staff/${id}/photo-proxy`}
                 alt={staff.fullName}
-                className="w-full h-full object-cover"
+                className="w-18 h-18 rounded-pill object-cover border border-neutral-200"
               />
             ) : (
-              <span>{staff.fullName.charAt(0).toUpperCase()}</span>
+              <Avatar name={staff.fullName} size="lg" />
             )}
+            <label className="absolute inset-0 rounded-pill flex items-center justify-center bg-neutral-900/40 opacity-0 group-hover:opacity-100 cursor-pointer text-white text-xs font-semibold transition-opacity duration-fast">
+              Upload
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => e.target.files?.[0] && photoMutation.mutate(e.target.files[0])}
+              />
+            </label>
           </div>
-          <label className="absolute inset-0 rounded-full flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 cursor-pointer text-white text-xs font-medium">
-            Upload
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={(e) => e.target.files?.[0] && photoMutation.mutate(e.target.files[0])}
-            />
-          </label>
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center flex-wrap gap-2">
-            <h1 className="text-2xl font-semibold text-gray-900 truncate">{staff.fullName}</h1>
-            <span
-              className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGE[staff.status]}`}
-            >
-              {staff.status}
-            </span>
-            {!staff.email && (
-              <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-800">
-                Email missing
-              </span>
-            )}
-          </div>
-          <p className="text-sm text-gray-500 mt-1">
-            {staff.staffId} &middot; PF: {staff.pfNo} &middot; {staff.level}
-          </p>
-          {!isTerminal && (
-            <div className="mt-3">
-              <button
-                onClick={() => setShowStatusModal(true)}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-              >
-                Change Status
-              </button>
+
+          {/* Identity */}
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-bold text-neutral-900 truncate">{staff.fullName}</h1>
+              <StatusBadge status={staff.status} />
+              {!staff.email && (
+                <span className="px-2 py-0.5 rounded-xs bg-warning-50 text-warning-700 text-xs font-medium border border-warning-200">
+                  No email
+                </span>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+            <p className="text-sm text-neutral-500 mt-1">
+              {staff.staffId} &middot; PF: {staff.pfNo} &middot; {staff.level}
+            </p>
+            {!isTerminal && (
+              <div className="mt-3">
+                <Button variant="secondary" size="sm" Icon={UserCog} onClick={() => setShowStatusModal(true)}>
+                  Change Status
+                </Button>
+              </div>
+            )}
+          </div>
+        </CardBody>
+      </Card>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="flex gap-6">
+      <div className="border-b border-neutral-200">
+        <nav className="flex gap-0">
           {TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              className={cn(
+                'px-4 pb-3 text-sm font-medium border-b-2 transition-colors duration-fast',
                 activeTab === tab
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
+                  ? 'border-primary-600 text-primary-700'
+                  : 'border-transparent text-neutral-500 hover:text-neutral-800',
+              )}
             >
               {tab}
             </button>
@@ -282,364 +237,317 @@ export default function StaffDetailClient({ id }: { id: string }) {
 
       {/* Profile Tab */}
       {activeTab === 'Profile' && (
-        <div>
-          {!editing ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
-                {(
-                  [
-                    ['Full Name', staff.fullName],
-                    ['Staff ID', staff.staffId],
-                    ['PF Number', staff.pfNo],
-                    ['Phone', staff.phoneNumber],
-                    ['Email', staff.email ?? '—'],
-                    ['Level', staff.level],
-                    ['Points', String(staff.point)],
-                    ['Date of Birth', new Date(staff.dateOfBirth).toLocaleDateString('en-GB')],
+        <Card>
+          <CardHeader title="Profile Information" action={
+            !editing && (
+              <Button variant="secondary" size="sm" Icon={Pencil} onClick={() => startEdit(staff)}>
+                Edit
+              </Button>
+            )
+          } />
+          <CardBody>
+            {!editing ? (
+              <div className="space-y-5">
+                <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                  {(
                     [
-                      'Date of Employment',
-                      new Date(staff.dateOfEmployment).toLocaleDateString('en-GB'),
-                    ],
-                    [
-                      'First Contribution',
-                      new Date(staff.dateOfFirstContribution).toLocaleDateString('en-GB'),
-                    ],
-                  ] as [string, string][]
-                ).map(([label, value]) => (
-                  <div key={label}>
-                    <p className="text-gray-500">{label}</p>
-                    <p className="font-medium text-gray-900 mt-0.5">{value}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-3 items-center">
-                <button
-                  onClick={() => startEdit(staff)}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
-                  Edit Profile
-                </button>
-                <div className="flex items-center gap-2">
-                  <input
+                      ['Full Name', staff.fullName],
+                      ['Staff ID', staff.staffId],
+                      ['PF Number', staff.pfNo],
+                      ['Phone', staff.phoneNumber],
+                      ['Email', staff.email ?? '—'],
+                      ['Level', staff.level],
+                      ['Points', String(staff.point)],
+                      ['Date of Birth', fmtDate(staff.dateOfBirth)],
+                      ['Date of Employment', fmtDate(staff.dateOfEmployment)],
+                      ['First Contribution', fmtDate(staff.dateOfFirstContribution)],
+                    ] as [string, string][]
+                  ).map(([label, value]) => (
+                    <div key={label}>
+                      <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">{label}</p>
+                      <p className="text-base font-medium text-neutral-900 mt-0.5">{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Statement sender */}
+                <div className="flex items-center gap-3 pt-3 border-t border-neutral-100">
+                  <Input
                     type="number"
                     min={2000}
                     max={2100}
                     value={statementYear}
                     onChange={(e) => setStatementYear(parseInt(e.target.value, 10))}
-                    className="border border-gray-300 rounded-md px-2 py-1.5 text-sm w-24 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    style={{ width: 100 }}
                   />
-                  <button
+                  <Button
+                    variant="secondary"
+                    Icon={Send}
                     disabled={!staff.email || sendingStatement}
+                    loading={sendingStatement}
                     onClick={async () => {
                       setSendingStatement(true);
-                      try {
-                        await sendContributionStatement(id, statementYear);
-                        toast.success('Contribution statement sent');
-                      } catch {
-                        toast.error('Failed to send statement');
-                      } finally {
-                        setSendingStatement(false);
-                      }
+                      try { await sendContributionStatement(id, statementYear); toast.success('Statement sent'); }
+                      catch { toast.error('Failed to send statement'); }
+                      finally { setSendingStatement(false); }
                     }}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={!staff.email ? 'No email address on file' : 'Send contribution statement'}
+                    title={!staff.email ? 'No email address on file' : undefined}
                   >
-                    {sendingStatement ? 'Sending…' : 'Send Statement'}
-                  </button>
+                    Send Statement
+                  </Button>
                 </div>
               </div>
-            </div>
-          ) : (
-            <form
-              onSubmit={profileForm.handleSubmit((v) => updateMutation.mutate(v))}
-              className="space-y-4"
-            >
-              <div className="grid grid-cols-2 gap-4">
-                {(
-                  [
-                    ['fullName', 'Full Name', 'text'],
-                    ['pfNo', 'PF Number', 'text'],
-                    ['phoneNumber', 'Phone Number', 'text'],
-                    ['email', 'Email', 'email'],
-                    ['level', 'Level', 'text'],
-                    ['point', 'Points', 'number'],
-                    ['dateOfBirth', 'Date of Birth', 'date'],
-                    ['dateOfEmployment', 'Date of Employment', 'date'],
-                    ['dateOfFirstContribution', 'Date of First Contribution', 'date'],
-                  ] as [keyof ProfileForm, string, string][]
-                ).map(([field, label, type]) => (
-                  <div key={field} className="space-y-1">
-                    <label className="text-xs font-medium text-gray-600">{label}</label>
-                    <input
-                      {...profileForm.register(field)}
-                      type={type}
-                      className={inputClass}
-                    />
-                    {profileForm.formState.errors[field] && (
-                      <p className="text-xs text-red-600">
-                        {profileForm.formState.errors[field]?.message}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-3">
-                <button
-                  type="submit"
-                  disabled={updateMutation.isPending}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-60"
-                >
-                  {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditing(false)}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
+            ) : (
+              <form onSubmit={profileForm.handleSubmit((v) => updateMutation.mutate(v))} className="space-y-5">
+                <div className="grid grid-cols-2 gap-4">
+                  {(
+                    [
+                      ['fullName', 'Full Name', 'text'],
+                      ['pfNo', 'PF Number', 'text'],
+                      ['phoneNumber', 'Phone Number', 'text'],
+                      ['email', 'Email', 'email'],
+                      ['level', 'Level', 'text'],
+                      ['point', 'Points', 'number'],
+                      ['dateOfBirth', 'Date of Birth', 'date'],
+                      ['dateOfEmployment', 'Date of Employment', 'date'],
+                      ['dateOfFirstContribution', 'Date of First Contribution', 'date'],
+                    ] as [keyof ProfileForm, string, string][]
+                  ).map(([field, label, type]) => (
+                    <Field key={field} label={label} error={profileForm.formState.errors[field]?.message}>
+                      <Input {...profileForm.register(field)} type={type} error={!!profileForm.formState.errors[field]} />
+                    </Field>
+                  ))}
+                </div>
+                <div className="flex gap-3 pt-2 border-t border-neutral-100">
+                  <Button type="submit" variant="primary" loading={updateMutation.isPending}>Save Changes</Button>
+                  <Button type="button" variant="secondary" onClick={() => setEditing(false)}>Cancel</Button>
+                </div>
+              </form>
+            )}
+          </CardBody>
+        </Card>
       )}
 
+      {/* Contributions Tab */}
       {activeTab === 'Contributions' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-sm font-medium text-gray-700">Contribution Ledger</h3>
-            <a
-              href="/contributions/manual"
-              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              + Add Manual Entry
-            </a>
-          </div>
-          {contribLoading ? (
-            <div className="text-sm text-gray-400 py-4">Loading...</div>
-          ) : !contributions?.length ? (
-            <div className="text-sm text-gray-400 py-8 text-center">No contributions recorded yet.</div>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border border-gray-200">
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    {['Month', 'Year', 'Expected', 'Paid', 'Surplus C/F', 'Status', 'Source', 'Recorded By'].map((h) => (
-                      <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
-                  {contributions.map((c: IContribution) => (
-                    <tr key={c._id}>
-                      <td className="px-3 py-2">{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][c.month - 1]}</td>
-                      <td className="px-3 py-2">{c.year}</td>
-                      <td className="px-3 py-2 text-right">{c.expectedAmount.toLocaleString()}</td>
-                      <td className="px-3 py-2 text-right">{c.paidAmount.toLocaleString()}</td>
-                      <td className="px-3 py-2 text-right">{c.surplusCarriedForward.toLocaleString()}</td>
-                      <td className="px-3 py-2">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          c.status === ContributionStatus.Paid ? 'bg-green-100 text-green-800' :
-                          c.status === ContributionStatus.Partial ? 'bg-yellow-100 text-yellow-800' :
-                          c.status === ContributionStatus.Missed ? 'bg-red-100 text-red-700' :
-                          'bg-blue-100 text-blue-700'
-                        }`}>
-                          {c.status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-gray-500">{c.source}</td>
-                      <td className="px-3 py-2 text-gray-500">{c.recordedBy}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-gray-50 border-t border-gray-200">
-                  <tr>
-                    <td colSpan={2} className="px-3 py-2 text-xs font-medium text-gray-600">Totals</td>
-                    <td className="px-3 py-2 text-right text-xs font-medium text-gray-700">
-                      {contributions.reduce((s, c) => s + c.expectedAmount, 0).toLocaleString()}
-                    </td>
-                    <td className="px-3 py-2 text-right text-xs font-medium text-gray-700">
-                      {contributions.reduce((s, c) => s + c.paidAmount, 0).toLocaleString()}
-                    </td>
-                    <td colSpan={4} />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
-        </div>
+        <Card>
+          <CardHeader
+            title="Contribution Ledger"
+            action={
+              <Button variant="secondary" size="sm" Icon={Plus} onClick={() => window.location.href = '/contributions/manual'}>
+                Add Manual Entry
+              </Button>
+            }
+          />
+          <CardBody noPadding>
+            {contribLoading ? (
+              <p className="px-5 py-4 text-sm text-neutral-400">Loading…</p>
+            ) : !contributions?.length ? (
+              <p className="px-5 py-8 text-sm text-neutral-400 text-center">No contributions recorded yet.</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-neutral-200 bg-neutral-50">
+                        {['Month','Year','Expected','Paid','Surplus C/F','Status','Source','Recorded By'].map((h) => (
+                          <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100">
+                      {contributions.map((c: IContribution) => (
+                        <tr key={c._id} className="hover:bg-neutral-50">
+                          <td className="px-4 py-2">{MONTHS[c.month - 1]}</td>
+                          <td className="px-4 py-2">{c.year}</td>
+                          <td className="px-4 py-2 text-right font-mono tabular">{fmtGHS(c.expectedAmount)}</td>
+                          <td className="px-4 py-2 text-right font-mono tabular">{fmtGHS(c.paidAmount)}</td>
+                          <td className="px-4 py-2 text-right font-mono tabular">{fmtGHS(c.surplusCarriedForward)}</td>
+                          <td className="px-4 py-2">
+                            <span className={cn(
+                              'px-2 py-0.5 rounded-xs text-xs font-medium',
+                              c.status === ContributionStatus.Paid    ? 'bg-success-50 text-success-700' :
+                              c.status === ContributionStatus.Partial ? 'bg-warning-50 text-warning-700' :
+                              c.status === ContributionStatus.Missed  ? 'bg-danger-50 text-danger-700' :
+                              'bg-info-50 text-info-700',
+                            )}>
+                              {c.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-neutral-500">{c.source}</td>
+                          <td className="px-4 py-2 text-neutral-500">{c.recordedBy}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="border-t border-neutral-200 bg-neutral-50">
+                      <tr>
+                        <td colSpan={2} className="px-4 py-2 text-xs font-semibold text-neutral-600">Totals</td>
+                        <td className="px-4 py-2 text-right text-xs font-semibold text-neutral-700 font-mono tabular">
+                          {fmtGHS(contributions.reduce((s, c) => s + c.expectedAmount, 0))}
+                        </td>
+                        <td className="px-4 py-2 text-right text-xs font-semibold text-neutral-700 font-mono tabular">
+                          {fmtGHS(contributions.reduce((s, c) => s + c.paidAmount, 0))}
+                        </td>
+                        <td colSpan={4} />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </>
+            )}
+          </CardBody>
+        </Card>
       )}
+
+      {/* Loans Tab */}
       {activeTab === 'Loans' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-sm font-medium text-gray-700">Loan History</h3>
-            <a
-              href="/loans/new"
-              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              + Record New Loan
-            </a>
-          </div>
-          {loansLoading ? (
-            <div className="text-sm text-gray-400 py-4">Loading…</div>
-          ) : !staffLoans?.data.length ? (
-            <div className="text-sm text-gray-400 py-8 text-center">No loans on record.</div>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border border-gray-200">
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    {['Principal', 'Total Repayable', 'Tenure', 'Disbursed', 'Status', ''].map((h) => (
-                      <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
-                  {staffLoans.data.map((loan: ILoan) => (
-                    <tr key={loan._id}>
-                      <td className="px-3 py-2 font-medium">{loan.principalAmount.toLocaleString()}</td>
-                      <td className="px-3 py-2">{loan.totalRepayable.toLocaleString()}</td>
-                      <td className="px-3 py-2">{loan.tenureMonths}mo</td>
-                      <td className="px-3 py-2">{new Date(loan.disbursedDate).toLocaleDateString('en-GB')}</td>
-                      <td className="px-3 py-2">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          loan.status === LoanStatus.Active    ? 'bg-green-100 text-green-800' :
-                          loan.status === LoanStatus.Completed ? 'bg-blue-100 text-blue-700'  :
-                          loan.status === LoanStatus.BadDebt   ? 'bg-red-100 text-red-700'    :
-                          'bg-gray-100 text-gray-600'
-                        }`}>
-                          {loan.status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <a href={`/loans/${loan._id}`} className="text-blue-600 text-xs hover:underline">View</a>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-      {activeTab === 'Guaranteeing' && (
-        <div className="space-y-6">
-          <h3 className="text-sm font-medium text-gray-700">Co-Signed Loans</h3>
-          {guaranteeLoading ? (
-            <div className="text-sm text-gray-400 py-4">Loading…</div>
-          ) : !guaranteeLoans?.data.length ? (
-            <div className="text-sm text-gray-400 py-8 text-center">
-              Not currently guaranteeing any loans.
-            </div>
-          ) : (
-            <>
-              {(() => {
-                const active = guaranteeLoans.data.filter(
-                  (l: ILoan) => l.status === LoanStatus.Active,
-                );
-                const totalExposure = active.reduce(
-                  (sum: number, l: ILoan) => sum + l.totalRepayable,
-                  0,
-                );
-                const atCap = maxPerGuarantor > 0 && active.length >= maxPerGuarantor;
-                return (
-                  <div className={`rounded-lg p-3 flex flex-wrap gap-6 text-sm ${atCap ? 'bg-red-50' : 'bg-gray-50'}`}>
-                    <div>
-                      <p className="text-xs text-gray-500">Active Guarantees</p>
-                      <p className="font-semibold text-gray-900">{active.length}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Total Exposure</p>
-                      <p className="font-semibold text-gray-900">{totalExposure.toLocaleString()}</p>
-                    </div>
-                    {atCap && (
-                      <div className="flex items-center">
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                          At cap ({active.length}/{maxPerGuarantor})
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-              <div className="overflow-x-auto rounded-lg border border-gray-200">
-                <table className="min-w-full divide-y divide-gray-200 text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      {['Borrower ID', 'Principal', 'Outstanding', 'Disbursed', 'Status', ''].map((h) => (
-                        <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+        <Card>
+          <CardHeader
+            title="Loan History"
+            action={
+              <Button variant="secondary" size="sm" Icon={Plus} onClick={() => window.location.href = '/loans/new'}>
+                Record New Loan
+              </Button>
+            }
+          />
+          <CardBody noPadding>
+            {loansLoading ? (
+              <p className="px-5 py-4 text-sm text-neutral-400">Loading…</p>
+            ) : !staffLoans?.data.length ? (
+              <p className="px-5 py-8 text-sm text-neutral-400 text-center">No loans on record.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-neutral-200 bg-neutral-50">
+                      {['Principal','Total Repayable','Tenure','Disbursed','Status',''].map((h) => (
+                        <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 bg-white">
-                    {guaranteeLoans.data.map((loan: ILoan, i: number) => {
-                      const schedule = guaranteeScheduleQueries[i]?.data;
-                      const outstanding = schedule
-                        ? Math.round(
-                            schedule.reduce(
-                              (s, r) => s + Math.max(0, r.dueAmount + r.penaltyAmount - r.paidAmount),
-                              0,
-                            ) * 100,
-                          ) / 100
-                        : null;
-                      return (
-                        <tr key={loan._id}>
-                          <td className="px-3 py-2 text-xs font-mono text-gray-500">{loan.staffId.slice(-8)}</td>
-                          <td className="px-3 py-2 font-medium">{loan.principalAmount.toLocaleString()}</td>
-                          <td className="px-3 py-2">
-                            {outstanding === null ? (
-                              <span className="text-gray-300 text-xs">…</span>
-                            ) : (
-                              outstanding.toLocaleString()
-                            )}
-                          </td>
-                          <td className="px-3 py-2">{new Date(loan.disbursedDate).toLocaleDateString('en-GB')}</td>
-                          <td className="px-3 py-2">
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                              loan.status === LoanStatus.Active    ? 'bg-green-100 text-green-800' :
-                              loan.status === LoanStatus.Completed ? 'bg-blue-100 text-blue-700'  :
-                              loan.status === LoanStatus.BadDebt   ? 'bg-red-100 text-red-700'    :
-                              'bg-gray-100 text-gray-600'
-                            }`}>
-                              {loan.status}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2">
-                            <a href={`/loans/${loan._id}`} className="text-blue-600 text-xs hover:underline">View</a>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                  <tbody className="divide-y divide-neutral-100">
+                    {staffLoans.data.map((loan: ILoan) => (
+                      <tr key={loan._id} className="hover:bg-neutral-50">
+                        <td className="px-4 py-2 font-mono tabular font-medium">{fmtGHS(loan.principalAmount)}</td>
+                        <td className="px-4 py-2 font-mono tabular">{fmtGHS(loan.totalRepayable)}</td>
+                        <td className="px-4 py-2">{loan.tenureMonths}mo</td>
+                        <td className="px-4 py-2 font-mono tabular">{fmtDate(loan.disbursedDate)}</td>
+                        <td className="px-4 py-2"><StatusBadge status={loan.status} /></td>
+                        <td className="px-4 py-2">
+                          <Link href={`/loans/${loan._id}`} className="text-primary-600 text-xs hover:underline">View</Link>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
-              {offsetHistory.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-3">Offset History</h4>
-                  <div className="overflow-x-auto rounded-lg border border-gray-200">
-                    <table className="min-w-full divide-y divide-gray-200 text-sm">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          {['Date', 'Loan Principal', 'Instalment #', 'Amount Applied'].map((h) => (
-                            <th key={h} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+            )}
+          </CardBody>
+        </Card>
+      )}
+
+      {/* Guaranteeing Tab */}
+      {activeTab === 'Guaranteeing' && (
+        <div className="space-y-5">
+          {guaranteeLoading ? (
+            <p className="text-sm text-neutral-400">Loading…</p>
+          ) : !guaranteeLoans?.data.length ? (
+            <p className="text-sm text-neutral-400 py-8 text-center">Not currently guaranteeing any loans.</p>
+          ) : (
+            <>
+              {(() => {
+                const active = guaranteeLoans.data.filter((l: ILoan) => l.status === LoanStatus.Active);
+                const totalExposure = active.reduce((sum: number, l: ILoan) => sum + l.totalRepayable, 0);
+                const atCap = maxPerGuarantor > 0 && active.length >= maxPerGuarantor;
+                return (
+                  <Card>
+                    <CardBody className={cn('flex flex-wrap gap-6', atCap && 'bg-danger-50')}>
+                      <div>
+                        <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">Active Guarantees</p>
+                        <p className="text-xl font-bold text-neutral-900 mt-0.5">{active.length}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">Total Exposure</p>
+                        <p className="text-xl font-bold text-neutral-900 mt-0.5 font-mono tabular">{fmtGHS(totalExposure)}</p>
+                      </div>
+                      {atCap && (
+                        <div className="flex items-center">
+                          <span className="px-2 py-0.5 rounded-xs text-xs font-medium bg-danger-100 text-danger-700">
+                            At cap ({active.length}/{maxPerGuarantor})
+                          </span>
+                        </div>
+                      )}
+                    </CardBody>
+                  </Card>
+                );
+              })()}
+
+              <Card>
+                <CardHeader title="Co-Signed Loans" />
+                <CardBody noPadding>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="border-b border-neutral-200 bg-neutral-50">
+                          {['Borrower ID','Principal','Outstanding','Disbursed','Status',''].map((h) => (
+                            <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100 bg-white">
-                        {offsetHistory.map((r) => (
-                          <tr key={r._id} className="bg-amber-50">
-                            <td className="px-3 py-2">
-                              {r.paidDate ? new Date(r.paidDate).toLocaleDateString('en-GB') : '—'}
-                            </td>
-                            <td className="px-3 py-2">{r.loanPrincipal.toLocaleString()}</td>
-                            <td className="px-3 py-2">{r.instalmentNumber}</td>
-                            <td className="px-3 py-2 font-medium text-amber-700">{r.paidAmount.toLocaleString()}</td>
-                          </tr>
-                        ))}
+                      <tbody className="divide-y divide-neutral-100">
+                        {guaranteeLoans.data.map((loan: ILoan, i: number) => {
+                          const schedule = guaranteeScheduleQueries[i]?.data;
+                          const outstanding = schedule
+                            ? Math.round(schedule.reduce((s, r) => s + Math.max(0, r.dueAmount + r.penaltyAmount - r.paidAmount), 0) * 100) / 100
+                            : null;
+                          return (
+                            <tr key={loan._id} className="hover:bg-neutral-50">
+                              <td className="px-4 py-2 font-mono text-xs text-neutral-500">{loan.staffId.slice(-8)}</td>
+                              <td className="px-4 py-2 font-mono tabular">{fmtGHS(loan.principalAmount)}</td>
+                              <td className="px-4 py-2 font-mono tabular">
+                                {outstanding === null ? <span className="text-neutral-300">…</span> : fmtGHS(outstanding)}
+                              </td>
+                              <td className="px-4 py-2 font-mono tabular">{fmtDate(loan.disbursedDate)}</td>
+                              <td className="px-4 py-2"><StatusBadge status={loan.status} /></td>
+                              <td className="px-4 py-2">
+                                <Link href={`/loans/${loan._id}`} className="text-primary-600 text-xs hover:underline">View</Link>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
-                </div>
+                </CardBody>
+              </Card>
+
+              {offsetHistory.length > 0 && (
+                <Card>
+                  <CardHeader title="Offset History" />
+                  <CardBody noPadding>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm border-collapse">
+                        <thead>
+                          <tr className="border-b border-neutral-200 bg-neutral-50">
+                            {['Date','Loan Principal','Instalment #','Amount Applied'].map((h) => (
+                              <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-neutral-100">
+                          {offsetHistory.map((r) => (
+                            <tr key={r._id} className="bg-accent-50">
+                              <td className="px-4 py-2 font-mono tabular">{r.paidDate ? fmtDate(r.paidDate) : '—'}</td>
+                              <td className="px-4 py-2 font-mono tabular">{fmtGHS(r.loanPrincipal)}</td>
+                              <td className="px-4 py-2">{r.instalmentNumber}</td>
+                              <td className="px-4 py-2 font-mono tabular font-semibold text-accent-700">{fmtGHS(r.paidAmount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardBody>
+                </Card>
               )}
             </>
           )}
@@ -648,80 +556,47 @@ export default function StaffDetailClient({ id }: { id: string }) {
 
       {/* Status Change Modal */}
       {showStatusModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Change Staff Status</h2>
-              <button
-                onClick={() => setShowStatusModal(false)}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+        <Modal
+          open
+          onClose={() => setShowStatusModal(false)}
+          title="Change Staff Status"
+          size="sm"
+          icon={<UserCog size={20} strokeWidth={1.75} />}
+          iconKind="warning"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setShowStatusModal(false)}>Cancel</Button>
+              <Button
+                variant="danger"
+                loading={statusMutation.isPending}
+                onClick={statusForm.handleSubmit((v) => statusMutation.mutate(v))}
               >
-                &times;
-              </button>
-            </div>
-            <form
-              onSubmit={statusForm.handleSubmit((v) => statusMutation.mutate(v))}
-              className="px-6 py-4 space-y-4"
-            >
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">New Status *</label>
-                <select
-                  {...statusForm.register('status')}
-                  className={inputClass}
-                >
-                  <option value="">Select new status...</option>
-                  {TERMINAL_STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                {statusForm.formState.errors.status && (
-                  <p className="text-xs text-red-600">
-                    {statusForm.formState.errors.status.message}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">Effective Date *</label>
-                <input
-                  {...statusForm.register('effectiveDate')}
-                  type="date"
-                  className={inputClass}
-                />
-                {statusForm.formState.errors.effectiveDate && (
-                  <p className="text-xs text-red-600">
-                    {statusForm.formState.errors.effectiveDate.message}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">Notes</label>
-                <textarea
-                  {...statusForm.register('notes')}
-                  rows={3}
-                  className={inputClass}
-                />
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowStatusModal(false)}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={statusMutation.isPending}
-                  className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-60"
-                >
-                  {statusMutation.isPending ? 'Updating...' : 'Confirm Change'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+                Confirm Change
+              </Button>
+            </>
+          }
+        >
+          <form onSubmit={statusForm.handleSubmit((v) => statusMutation.mutate(v))} className="space-y-4 mt-2">
+            <Field label="New Status" required error={statusForm.formState.errors.status?.message}>
+              <Select
+                {...statusForm.register('status')}
+                error={!!statusForm.formState.errors.status}
+                placeholder="Select new status…"
+                options={TERMINAL_STATUSES.map((s) => ({ value: s, label: s }))}
+              />
+            </Field>
+            <Field label="Effective Date" required error={statusForm.formState.errors.effectiveDate?.message}>
+              <Input {...statusForm.register('effectiveDate')} type="date" error={!!statusForm.formState.errors.effectiveDate} />
+            </Field>
+            <Field label="Notes" error={statusForm.formState.errors.notes?.message}>
+              <textarea
+                {...statusForm.register('notes')}
+                rows={3}
+                className="w-full border border-neutral-200 rounded-sm px-3 py-2 text-base focus:outline-none focus:border-primary-500 focus:shadow-focus resize-none"
+              />
+            </Field>
+          </form>
+        </Modal>
       )}
     </div>
   );

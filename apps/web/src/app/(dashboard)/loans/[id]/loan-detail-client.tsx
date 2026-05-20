@@ -6,45 +6,22 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import {
-  LoanStatus,
-  LoanRepaymentStatus,
-  RepaymentSource,
-  StaffStatus,
-} from '@welfare/shared';
+import { Download, Send, CreditCard } from 'lucide-react';
+import { LoanStatus, LoanRepaymentStatus, RepaymentSource, StaffStatus } from '@welfare/shared';
 import type { ILoanRepayment } from '@welfare/shared';
-import {
-  getLoan,
-  getLoanSchedule,
-  getLoanDocumentUrl,
-  recordPayment,
-  exitSettle,
-  getLoansByGuarantor,
-} from '@/lib/loans';
+import { getLoan, getLoanSchedule, getLoanDocumentUrl, recordPayment, exitSettle, getLoansByGuarantor } from '@/lib/loans';
 import { getStaff } from '@/lib/staff';
 import { sendLoanSchedule } from '@/lib/email';
+import { StatusBadge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardBody } from '@/components/ui/card';
+import { Field, Input } from '@/components/ui/field';
+import { Modal } from '@/components/ui/modal';
+import { RepaymentBar } from '@/components/ui/repayment-bar';
+import { fmtGHS, fmtDate } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
-const LOAN_STATUS_BADGE: Record<LoanStatus, string> = {
-  [LoanStatus.Active]:    'bg-green-100 text-green-800',
-  [LoanStatus.Completed]: 'bg-blue-100 text-blue-700',
-  [LoanStatus.Defaulted]: 'bg-orange-100 text-orange-700',
-  [LoanStatus.WrittenOff]:'bg-gray-100 text-gray-600',
-  [LoanStatus.BadDebt]:   'bg-red-100 text-red-800',
-};
-
-const REPAYMENT_STATUS_BADGE: Record<LoanRepaymentStatus, string> = {
-  [LoanRepaymentStatus.Pending]: 'bg-gray-100 text-gray-600',
-  [LoanRepaymentStatus.Paid]:    'bg-green-100 text-green-700',
-  [LoanRepaymentStatus.Partial]: 'bg-yellow-100 text-yellow-700',
-  [LoanRepaymentStatus.Overdue]: 'bg-red-100 text-red-700',
-  [LoanRepaymentStatus.Waived]:  'bg-purple-100 text-purple-700',
-};
-
-const EXIT_STATUSES = new Set<StaffStatus>([
-  StaffStatus.Resigned,
-  StaffStatus.Dismissed,
-  StaffStatus.Deceased,
-]);
+const EXIT_STATUSES = new Set<StaffStatus>([StaffStatus.Resigned, StaffStatus.Dismissed, StaffStatus.Deceased]);
 
 const paymentSchema = z.object({
   amount:   z.coerce.number().min(0.01, 'Required'),
@@ -59,19 +36,13 @@ const settlementSchema = z.object({
 });
 type SettlementForm = z.infer<typeof settlementSchema>;
 
-const inputClass =
-  'w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
-
 function round2(n: number) { return Math.round(n * 100) / 100; }
 
 function computeAffectedInstalments(schedule: ILoanRepayment[], amount: number) {
   let remaining = amount;
   const affected: Array<{ instalment: ILoanRepayment; applied: number }> = [];
   for (const inst of [...schedule].sort((a, b) => a.instalmentNumber - b.instalmentNumber)) {
-    if (
-      inst.status === LoanRepaymentStatus.Paid ||
-      inst.status === LoanRepaymentStatus.Waived
-    ) continue;
+    if (inst.status === LoanRepaymentStatus.Paid || inst.status === LoanRepaymentStatus.Waived) continue;
     const due = round2(inst.dueAmount + inst.penaltyAmount - inst.paidAmount);
     if (due <= 0) continue;
     const applied = round2(Math.min(remaining, due));
@@ -83,44 +54,32 @@ function computeAffectedInstalments(schedule: ILoanRepayment[], amount: number) 
   return affected;
 }
 
+const repaymentStatusStyle: Record<LoanRepaymentStatus, string> = {
+  [LoanRepaymentStatus.Pending]: 'bg-neutral-100 text-neutral-600',
+  [LoanRepaymentStatus.Paid]:    'bg-success-50 text-success-700',
+  [LoanRepaymentStatus.Partial]: 'bg-warning-50 text-warning-700',
+  [LoanRepaymentStatus.Overdue]: 'bg-danger-50 text-danger-700',
+  [LoanRepaymentStatus.Waived]:  'bg-info-50 text-info-700',
+};
+
 export function LoanDetailClient({ id }: { id: string }) {
   const qc = useQueryClient();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [sendingSchedule, setSendingSchedule] = useState(false);
 
-  const { data: loan, isLoading: loanLoading } = useQuery({
-    queryKey: ['loans', id],
-    queryFn: () => getLoan(id),
-  });
+  const { data: loan, isLoading: loanLoading } = useQuery({ queryKey: ['loans', id], queryFn: () => getLoan(id) });
   const { data: schedule, isLoading: scheduleLoading } = useQuery({
     queryKey: ['loans', id, 'schedule'],
     queryFn: () => getLoanSchedule(id),
     enabled: !!loan,
   });
-  const { data: borrower } = useQuery({
-    queryKey: ['staff', loan?.staffId],
-    queryFn: () => getStaff(loan!.staffId),
-    enabled: !!loan,
-  });
-  const { data: guarantor } = useQuery({
-    queryKey: ['staff', loan?.guarantorId],
-    queryFn: () => getStaff(loan!.guarantorId),
-    enabled: !!loan,
-  });
-  const { data: guarantorLoans } = useQuery({
-    queryKey: ['loans', 'guarantor', loan?.guarantorId],
-    queryFn: () => getLoansByGuarantor(loan!.guarantorId),
-    enabled: !!loan,
-  });
-  const activeGuaranteeCount = guarantorLoans?.data.filter(
-    (l) => l.status === LoanStatus.Active,
-  ).length ?? 0;
+  const { data: borrower } = useQuery({ queryKey: ['staff', loan?.staffId], queryFn: () => getStaff(loan!.staffId), enabled: !!loan });
+  const { data: guarantor } = useQuery({ queryKey: ['staff', loan?.guarantorId], queryFn: () => getStaff(loan!.guarantorId), enabled: !!loan });
+  const { data: guarantorLoans } = useQuery({ queryKey: ['loans', 'guarantor', loan?.guarantorId], queryFn: () => getLoansByGuarantor(loan!.guarantorId), enabled: !!loan });
+  const activeGuaranteeCount = guarantorLoans?.data.filter((l) => l.status === LoanStatus.Active).length ?? 0;
 
   const paymentForm    = useForm<PaymentForm>({ resolver: zodResolver(paymentSchema) });
-  const settlementForm = useForm<SettlementForm>({
-    resolver: zodResolver(settlementSchema),
-    defaultValues: { exitDeductionAmount: 0 },
-  });
+  const settlementForm = useForm<SettlementForm>({ resolver: zodResolver(settlementSchema), defaultValues: { exitDeductionAmount: 0 } });
 
   const paymentAmount = paymentForm.watch('amount');
 
@@ -132,20 +91,9 @@ export function LoanDetailClient({ id }: { id: string }) {
   const summary = useMemo(() => {
     if (!schedule) return { totalPaid: 0, outstanding: 0, nextDueDate: null as string | null, nextDueAmount: 0 };
     const totalPaid = round2(schedule.reduce((s, r) => s + r.paidAmount, 0));
-    const outstanding = round2(
-      schedule.reduce((s, r) => s + Math.max(0, r.dueAmount + r.penaltyAmount - r.paidAmount), 0),
-    );
-    const next = schedule.find(
-      (r) =>
-        r.status !== LoanRepaymentStatus.Paid &&
-        r.status !== LoanRepaymentStatus.Waived,
-    );
-    return {
-      totalPaid,
-      outstanding,
-      nextDueDate:   next?.dueDate ?? null,
-      nextDueAmount: next ? round2(next.dueAmount + next.penaltyAmount - next.paidAmount) : 0,
-    };
+    const outstanding = round2(schedule.reduce((s, r) => s + Math.max(0, r.dueAmount + r.penaltyAmount - r.paidAmount), 0));
+    const next = schedule.find((r) => r.status !== LoanRepaymentStatus.Paid && r.status !== LoanRepaymentStatus.Waived);
+    return { totalPaid, outstanding, nextDueDate: next?.dueDate ?? null, nextDueAmount: next ? round2(next.dueAmount + next.penaltyAmount - next.paidAmount) : 0 };
   }, [schedule]);
 
   const deductionAmount         = settlementForm.watch('exitDeductionAmount') ?? 0;
@@ -154,423 +102,272 @@ export function LoanDetailClient({ id }: { id: string }) {
 
   const paymentMutation = useMutation({
     mutationFn: (values: PaymentForm) => recordPayment(id, values),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['loans', id] });
-      setShowPaymentModal(false);
-      paymentForm.reset();
-      toast.success('Payment recorded');
-    },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      toast.error(msg ?? 'Payment failed');
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans', id] }); setShowPaymentModal(false); paymentForm.reset(); toast.success('Payment recorded'); },
+    onError: (err: unknown) => { toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Payment failed'); },
   });
 
   const settlementMutation = useMutation({
     mutationFn: (values: SettlementForm) => exitSettle(id, values),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['loans', id] });
-      toast.success('Exit settlement recorded');
-    },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      toast.error(msg ?? 'Settlement failed');
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans', id] }); toast.success('Exit settlement recorded'); },
+    onError: (err: unknown) => { toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Settlement failed'); },
   });
 
   async function handleDownloadDoc() {
-    try {
-      const url = await getLoanDocumentUrl(id);
-      window.open(url, '_blank');
-    } catch {
-      toast.error('Document not found');
-    }
+    try { window.open(await getLoanDocumentUrl(id), '_blank'); }
+    catch { toast.error('Document not found'); }
   }
 
-  if (loanLoading) return <div className="text-sm text-gray-400">Loading…</div>;
-  if (!loan)       return <div className="text-sm text-red-500">Loan not found.</div>;
+  if (loanLoading) return <p className="text-sm text-neutral-400">Loading…</p>;
+  if (!loan) return <p className="text-sm text-danger-600">Loan not found.</p>;
 
-  const showExitPanel =
-    !!borrower &&
-    EXIT_STATUSES.has(borrower.status) &&
-    loan.status === LoanStatus.Active;
+  const showExitPanel = !!borrower && EXIT_STATUSES.has(borrower.status) && loan.status === LoanStatus.Active;
+  const showSettlementSummary = loan.status !== LoanStatus.Active &&
+    ((loan.exitDeductionAmount ?? 0) > 0 || (loan.guarantorOffsetAmount ?? 0) > 0 || (loan.badDebtAmount ?? 0) > 0);
 
-  const showSettlementSummary =
-    loan.status !== LoanStatus.Active &&
-    ((loan.exitDeductionAmount ?? 0) > 0 ||
-      (loan.guarantorOffsetAmount ?? 0) > 0 ||
-      (loan.badDebtAmount ?? 0) > 0);
+  const paidPct = loan.totalRepayable > 0 ? Math.round((summary.totalPaid / loan.totalRepayable) * 100) : 0;
 
   return (
-    <div className="space-y-6 max-w-4xl">
-
-      {/* ── Header ── */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <div className="flex items-start justify-between flex-wrap gap-4">
+    <div className="space-y-5 max-w-4xl">
+      {/* Header */}
+      <Card>
+        <CardBody className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-xl font-semibold text-gray-900">
-                {borrower?.fullName ?? '—'}
-              </h1>
-              <span
-                className={`px-2 py-0.5 rounded-full text-xs font-medium ${LOAN_STATUS_BADGE[loan.status]}`}
-              >
-                {loan.status}
-              </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-bold text-neutral-900">{borrower?.fullName ?? '—'}</h1>
+              <StatusBadge status={loan.status} />
             </div>
-            <p className="text-sm text-gray-500 mt-1">
-              Principal:{' '}
-              <span className="font-medium text-gray-900">
-                {loan.principalAmount.toLocaleString()}
-              </span>
-              &nbsp;·&nbsp;Tenure:{' '}
-              <span className="font-medium text-gray-900">{loan.tenureMonths}mo</span>
-              &nbsp;·&nbsp;Disbursed:{' '}
-              <span className="font-medium text-gray-900">
-                {new Date(loan.disbursedDate).toLocaleDateString('en-GB')}
-              </span>
+            <p className="text-sm text-neutral-500 mt-1">
+              Principal: <span className="font-medium text-neutral-900 font-mono tabular">{fmtGHS(loan.principalAmount)}</span>
+              &nbsp;·&nbsp;Tenure: <span className="font-medium text-neutral-900">{loan.tenureMonths}mo</span>
+              &nbsp;·&nbsp;Disbursed: <span className="font-medium text-neutral-900 font-mono tabular">{fmtDate(loan.disbursedDate)}</span>
             </p>
-            <p className="text-sm text-gray-500 mt-1">
-              Guarantor:{' '}
-              <span className="font-medium text-gray-900">
-                {guarantor?.fullName ?? '—'}
-              </span>
-              &nbsp;
-              <span className="text-gray-400">
-                ({activeGuaranteeCount} active guarantee
-                {activeGuaranteeCount !== 1 ? 's' : ''})
-              </span>
+            <p className="text-sm text-neutral-500 mt-0.5">
+              Guarantor: <span className="font-medium text-neutral-900">{guarantor?.fullName ?? '—'}</span>
+              &nbsp;<span className="text-neutral-400">({activeGuaranteeCount} active guarantee{activeGuaranteeCount !== 1 ? 's' : ''})</span>
             </p>
           </div>
-          <div className="flex gap-3 flex-wrap">
+          <div className="flex gap-2 flex-wrap">
             {loan.documentKey && (
-              <button
-                onClick={handleDownloadDoc}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-              >
-                Download Document
-              </button>
+              <Button variant="secondary" size="sm" Icon={Download} onClick={handleDownloadDoc}>Document</Button>
             )}
-            <button
-              disabled={sendingSchedule}
+            <Button
+              variant="secondary"
+              size="sm"
+              Icon={Send}
+              loading={sendingSchedule}
               onClick={async () => {
                 setSendingSchedule(true);
-                try {
-                  await sendLoanSchedule(id);
-                  toast.success('Loan schedule emailed');
-                } catch {
-                  toast.error('Failed to send schedule');
-                } finally {
-                  setSendingSchedule(false);
-                }
+                try { await sendLoanSchedule(id); toast.success('Schedule emailed'); }
+                catch { toast.error('Failed to send schedule'); }
+                finally { setSendingSchedule(false); }
               }}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
             >
-              {sendingSchedule ? 'Sending…' : 'Email Schedule'}
-            </button>
+              Email Schedule
+            </Button>
             {loan.status === LoanStatus.Active && (
-              <button
-                onClick={() => setShowPaymentModal(true)}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
+              <Button variant="primary" size="sm" Icon={CreditCard} onClick={() => setShowPaymentModal(true)}>
                 Record Payment
-              </button>
+              </Button>
             )}
           </div>
-        </div>
-      </div>
+        </CardBody>
+      </Card>
 
-      {/* ── Payment Summary ── */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <h2 className="text-sm font-semibold text-gray-900 mb-4">Payment Summary</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {(
-            [
-              ['Total Paid',      summary.totalPaid.toLocaleString()],
-              ['Outstanding',     summary.outstanding.toLocaleString()],
-              [
-                'Next Due Date',
-                summary.nextDueDate
-                  ? new Date(summary.nextDueDate).toLocaleDateString('en-GB')
-                  : '—',
-              ],
-              [
-                'Next Due Amount',
-                summary.nextDueAmount > 0 ? summary.nextDueAmount.toLocaleString() : '—',
-              ],
-            ] as [string, string][]
-          ).map(([label, value]) => (
-            <div key={label}>
-              <p className="text-xs text-gray-500">{label}</p>
-              <p className="text-base font-semibold text-gray-900 mt-0.5">{value}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Repayment Schedule ── */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <h2 className="text-sm font-semibold text-gray-900 mb-4">Repayment Schedule</h2>
-        {scheduleLoading ? (
-          <div className="text-sm text-gray-400">Loading schedule…</div>
-        ) : !schedule?.length ? (
-          <div className="text-sm text-gray-400">No schedule found.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  {['#', 'Due Date', 'Due', 'Paid', 'Penalty', 'Status', 'Source'].map((h) => (
-                    <th
-                      key={h}
-                      className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {schedule.map((row) => {
-                  const isOverdue   = row.status === LoanRepaymentStatus.Overdue;
-                  const isGuarantor = row.source  === RepaymentSource.GuarantorOffset;
-                  return (
-                    <tr
-                      key={row._id}
-                      className={
-                        isOverdue
-                          ? 'bg-red-50'
-                          : isGuarantor
-                          ? 'bg-amber-50'
-                          : 'bg-white'
-                      }
-                    >
-                      <td className="px-3 py-2 text-gray-500">{row.instalmentNumber}</td>
-                      <td className="px-3 py-2">
-                        {new Date(row.dueDate).toLocaleDateString('en-GB')}
-                      </td>
-                      <td className="px-3 py-2 text-right">{row.dueAmount.toLocaleString()}</td>
-                      <td className="px-3 py-2 text-right">{row.paidAmount.toLocaleString()}</td>
-                      <td className="px-3 py-2 text-right">
-                        {row.penaltyAmount > 0 ? (
-                          <span className="text-red-600">
-                            {row.penaltyAmount.toLocaleString()}
-                          </span>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${REPAYMENT_STATUS_BADGE[row.status]}`}
-                        >
-                          {row.status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-500">
-                        {isGuarantor ? (
-                          <span className="text-amber-700">Guarantor offset</span>
-                        ) : (
-                          row.source ?? '—'
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* ── Exit Settlement Panel ── */}
-      {showExitPanel && (
-        <div className="bg-white border border-orange-200 rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-orange-800 mb-1">Exit Settlement</h2>
-          <p className="text-xs text-orange-600 mb-4">
-            {borrower?.fullName} has status{' '}
-            <strong>{borrower?.status}</strong>. Record the exit settlement below.
-          </p>
-          <p className="text-sm text-gray-600 mb-4">
-            Outstanding Balance:{' '}
-            <span className="font-semibold">{summary.outstanding.toLocaleString()}</span>
-          </p>
-          <form
-            onSubmit={settlementForm.handleSubmit((v) => settlementMutation.mutate(v))}
-            className="space-y-4"
-          >
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">
-                Deduction from Final Pay / Gratuity
-              </label>
-              <input
-                {...settlementForm.register('exitDeductionAmount')}
-                type="number"
-                min={0}
-                step="0.01"
-                className={inputClass}
-              />
-            </div>
-            {deductionAmount >= 0 && summary.outstanding > 0 && (
-              <div className="bg-orange-50 rounded-lg p-3 text-sm space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Amount covered by deduction:</span>
-                  <span className="font-medium">{amountCovered.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Remaining balance:</span>
-                  <span
-                    className={`font-medium ${
-                      remainingAfterDeduction > 0 ? 'text-orange-700' : 'text-green-700'
-                    }`}
-                  >
-                    {remainingAfterDeduction.toLocaleString()}
-                  </span>
-                </div>
-                {remainingAfterDeduction > 0 && (
-                  <p className="text-xs text-orange-600 mt-1">
-                    Remaining will be offset against guarantor contributions where available;
-                    remainder becomes bad debt.
-                  </p>
-                )}
-              </div>
-            )}
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">Notes</label>
-              <textarea
-                {...settlementForm.register('notes')}
-                rows={2}
-                className={inputClass}
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={settlementMutation.isPending}
-              className="px-4 py-2 text-sm bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-60"
-            >
-              {settlementMutation.isPending ? 'Processing…' : 'Confirm Exit Settlement'}
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* ── Settlement Summary ── */}
-      {showSettlementSummary && (
-        <div className="bg-white border border-gray-200 rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-gray-900 mb-4">Settlement Summary</h2>
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            {(
-              [
-                ['Exit Deduction',   loan.exitDeductionAmount   ?? 0, false],
-                ['Guarantor Offset', loan.guarantorOffsetAmount ?? 0, false],
-                ['Bad Debt',         loan.badDebtAmount         ?? 0, true],
-              ] as [string, number, boolean][]
-            ).map(([label, value, red]) => (
+      {/* Payment summary */}
+      <Card>
+        <CardHeader title="Payment Summary" />
+        <CardBody>
+          <div className="grid grid-cols-4 gap-4 mb-4">
+            {([
+              ['Total Paid',     fmtGHS(summary.totalPaid)],
+              ['Outstanding',    fmtGHS(summary.outstanding)],
+              ['Next Due Date',  summary.nextDueDate ? fmtDate(summary.nextDueDate) : '—'],
+              ['Next Due Amt',   summary.nextDueAmount > 0 ? fmtGHS(summary.nextDueAmount) : '—'],
+            ] as [string, string][]).map(([label, value]) => (
               <div key={label}>
-                <p className="text-xs text-gray-500">{label}</p>
-                <p
-                  className={`font-semibold mt-0.5 ${
-                    red && value > 0 ? 'text-red-600' : 'text-gray-900'
-                  }`}
-                >
-                  {value.toLocaleString()}
-                </p>
+                <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">{label}</p>
+                <p className="text-lg font-bold text-neutral-900 mt-0.5 font-mono tabular">{value}</p>
               </div>
             ))}
           </div>
-          {loan.settledAt && (
-            <p className="text-xs text-gray-400 mt-3">
-              Settled on {new Date(loan.settledAt).toLocaleDateString('en-GB')}
-            </p>
-          )}
-        </div>
-      )}
+          <RepaymentBar
+            paid={summary.totalPaid}
+            total={loan.totalRepayable}
+            overdue={summary.outstanding > 0 && loan.status === LoanStatus.Active && summary.nextDueDate ? new Date(summary.nextDueDate) < new Date() : false}
+            partial={paidPct > 0 && paidPct < 100}
+          />
+        </CardBody>
+      </Card>
 
-      {/* ── Record Payment Modal ── */}
-      {showPaymentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
-              <h2 className="text-lg font-semibold text-gray-900">Record Payment</h2>
-              <button
-                onClick={() => { setShowPaymentModal(false); paymentForm.reset(); }}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
-              >
-                &times;
-              </button>
-            </div>
-            <form
-              onSubmit={paymentForm.handleSubmit((v) => paymentMutation.mutate(v))}
-              className="px-6 py-4 space-y-4"
-            >
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">Amount *</label>
-                <input
-                  {...paymentForm.register('amount')}
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  className={inputClass}
-                />
-                {paymentForm.formState.errors.amount && (
-                  <p className="text-xs text-red-600">
-                    {paymentForm.formState.errors.amount.message}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">Payment Date *</label>
-                <input {...paymentForm.register('paidDate')} type="date" className={inputClass} />
-                {paymentForm.formState.errors.paidDate && (
-                  <p className="text-xs text-red-600">
-                    {paymentForm.formState.errors.paidDate.message}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">Notes</label>
-                <textarea {...paymentForm.register('notes')} rows={2} className={inputClass} />
-              </div>
-              {affectedInstalments.length > 0 && (
-                <div className="bg-blue-50 rounded-lg p-3 text-sm">
-                  <p className="text-xs font-medium text-blue-700 mb-2">
-                    Instalments that will be affected:
-                  </p>
-                  <ul className="space-y-1">
-                    {affectedInstalments.map(({ instalment, applied }) => (
-                      <li
-                        key={instalment._id}
-                        className="flex justify-between text-blue-800 text-xs"
-                      >
-                        <span>
-                          #{instalment.instalmentNumber} (
-                          {new Date(instalment.dueDate).toLocaleDateString('en-GB')})
-                        </span>
-                        <span className="font-medium">+{applied.toLocaleString()}</span>
-                      </li>
+      {/* Schedule */}
+      <Card>
+        <CardHeader title="Repayment Schedule" />
+        <CardBody noPadding>
+          {scheduleLoading ? (
+            <p className="px-5 py-4 text-sm text-neutral-400">Loading schedule…</p>
+          ) : !schedule?.length ? (
+            <p className="px-5 py-4 text-sm text-neutral-400">No schedule found.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b border-neutral-200 bg-neutral-50">
+                    {['#','Due Date','Due','Paid','Penalty','Status','Source'].map((h) => (
+                      <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
                     ))}
-                  </ul>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {schedule.map((row) => {
+                    const isOverdue   = row.status === LoanRepaymentStatus.Overdue;
+                    const isGuarantor = row.source  === RepaymentSource.GuarantorOffset;
+                    return (
+                      <tr
+                        key={row._id}
+                        className={cn(
+                          isOverdue   ? 'bg-danger-50' :
+                          isGuarantor ? 'bg-accent-50' :
+                          'hover:bg-neutral-50',
+                        )}
+                      >
+                        <td className="px-4 py-2 text-neutral-500">{row.instalmentNumber}</td>
+                        <td className="px-4 py-2 font-mono tabular">{fmtDate(row.dueDate)}</td>
+                        <td className="px-4 py-2 text-right font-mono tabular">{fmtGHS(row.dueAmount)}</td>
+                        <td className="px-4 py-2 text-right font-mono tabular">{fmtGHS(row.paidAmount)}</td>
+                        <td className="px-4 py-2 text-right font-mono tabular">
+                          {row.penaltyAmount > 0 ? <span className="text-danger-600">{fmtGHS(row.penaltyAmount)}</span> : '—'}
+                        </td>
+                        <td className="px-4 py-2">
+                          <span className={cn('px-2 py-0.5 rounded-xs text-xs font-medium', repaymentStatusStyle[row.status])}>
+                            {row.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-xs text-neutral-500">
+                          {isGuarantor ? <span className="text-accent-700 font-medium">Guarantor offset</span> : (row.source ?? '—')}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardBody>
+      </Card>
+
+      {/* Exit settlement panel */}
+      {showExitPanel && (
+        <Card className="border-warning-300">
+          <CardHeader title="Exit Settlement" subtitle={`${borrower?.fullName} has status ${borrower?.status}. Record exit settlement below.`} />
+          <CardBody>
+            <p className="text-sm text-neutral-600 mb-4">
+              Outstanding balance: <span className="font-semibold font-mono tabular">{fmtGHS(summary.outstanding)}</span>
+            </p>
+            <form onSubmit={settlementForm.handleSubmit((v) => settlementMutation.mutate(v))} className="space-y-4">
+              <Field label="Deduction from Final Pay / Gratuity" required>
+                <Input {...settlementForm.register('exitDeductionAmount')} type="number" min={0} step="0.01" />
+              </Field>
+              {deductionAmount >= 0 && summary.outstanding > 0 && (
+                <div className="bg-warning-50 border border-warning-200 rounded-sm p-3 text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-neutral-600">Covered by deduction:</span>
+                    <span className="font-mono tabular font-medium">{fmtGHS(amountCovered)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-neutral-600">Remaining balance:</span>
+                    <span className={cn('font-mono tabular font-medium', remainingAfterDeduction > 0 ? 'text-warning-700' : 'text-success-700')}>
+                      {fmtGHS(remainingAfterDeduction)}
+                    </span>
+                  </div>
+                  {remainingAfterDeduction > 0 && (
+                    <p className="text-xs text-warning-600 mt-1">Remaining will be offset against guarantor contributions where available; remainder becomes bad debt.</p>
+                  )}
                 </div>
               )}
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => { setShowPaymentModal(false); paymentForm.reset(); }}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={paymentMutation.isPending}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-60"
-                >
-                  {paymentMutation.isPending ? 'Recording…' : 'Record Payment'}
-                </button>
-              </div>
+              <Field label="Notes">
+                <textarea
+                  {...settlementForm.register('notes')}
+                  rows={2}
+                  className="w-full border border-neutral-200 rounded-sm px-3 py-2 text-base focus:outline-none focus:border-primary-500 focus:shadow-focus resize-none"
+                />
+              </Field>
+              <Button type="submit" variant="danger" loading={settlementMutation.isPending}>
+                Confirm Exit Settlement
+              </Button>
             </form>
-          </div>
-        </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* Settlement summary */}
+      {showSettlementSummary && (
+        <Card>
+          <CardHeader title="Settlement Summary" />
+          <CardBody>
+            <div className="grid grid-cols-3 gap-4">
+              {([
+                ['Exit Deduction',   loan.exitDeductionAmount   ?? 0, false],
+                ['Guarantor Offset', loan.guarantorOffsetAmount ?? 0, false],
+                ['Bad Debt',         loan.badDebtAmount         ?? 0, true],
+              ] as [string, number, boolean][]).map(([label, value, red]) => (
+                <div key={label}>
+                  <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">{label}</p>
+                  <p className={cn('text-lg font-bold font-mono tabular mt-0.5', red && value > 0 ? 'text-danger-600' : 'text-neutral-900')}>
+                    {fmtGHS(value)}
+                  </p>
+                </div>
+              ))}
+            </div>
+            {loan.settledAt && (
+              <p className="text-xs text-neutral-400 mt-3">Settled on {fmtDate(loan.settledAt)}</p>
+            )}
+          </CardBody>
+        </Card>
+      )}
+
+      {/* Record Payment Modal */}
+      {showPaymentModal && (
+        <Modal
+          open
+          onClose={() => { setShowPaymentModal(false); paymentForm.reset(); }}
+          title="Record Payment"
+          size="sm"
+          icon={<CreditCard size={20} strokeWidth={1.75} />}
+          iconKind="success"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => { setShowPaymentModal(false); paymentForm.reset(); }}>Cancel</Button>
+              <Button variant="primary" loading={paymentMutation.isPending} onClick={paymentForm.handleSubmit((v) => paymentMutation.mutate(v))}>
+                Record Payment
+              </Button>
+            </>
+          }
+        >
+          <form onSubmit={paymentForm.handleSubmit((v) => paymentMutation.mutate(v))} className="space-y-4 mt-2">
+            <Field label="Amount" required error={paymentForm.formState.errors.amount?.message}>
+              <Input {...paymentForm.register('amount')} type="number" min="0.01" step="0.01" error={!!paymentForm.formState.errors.amount} />
+            </Field>
+            <Field label="Payment Date" required error={paymentForm.formState.errors.paidDate?.message}>
+              <Input {...paymentForm.register('paidDate')} type="date" error={!!paymentForm.formState.errors.paidDate} />
+            </Field>
+            <Field label="Notes">
+              <textarea {...paymentForm.register('notes')} rows={2} className="w-full border border-neutral-200 rounded-sm px-3 py-2 text-base focus:outline-none focus:border-primary-500 focus:shadow-focus resize-none" />
+            </Field>
+            {affectedInstalments.length > 0 && (
+              <div className="bg-primary-50 border border-primary-200 rounded-sm p-3 text-sm">
+                <p className="text-xs font-semibold text-primary-700 mb-2">Instalments affected:</p>
+                <ul className="space-y-1">
+                  {affectedInstalments.map(({ instalment, applied }) => (
+                    <li key={instalment._id} className="flex justify-between text-primary-800 text-xs">
+                      <span>#{instalment.instalmentNumber} ({fmtDate(instalment.dueDate)})</span>
+                      <span className="font-semibold font-mono tabular">+{fmtGHS(applied)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </form>
+        </Modal>
       )}
     </div>
   );

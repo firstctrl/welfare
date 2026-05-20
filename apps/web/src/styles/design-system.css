@@ -1,0 +1,141 @@
+/* ============================================================
+   WELFARE MANAGEMENT DESIGN SYSTEM — CSS custom properties
+   Import this file first. All tokens live here.
+   ============================================================ */
+
+/* ---- Font faces ---- */
+@font-face { font-family: "Nunito"; src: url("/fonts/Nunito-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Nunito"; src: url("/fonts/Nunito-Italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Nunito"; src: url("/fonts/Nunito-Medium.ttf") format("truetype"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Nunito"; src: url("/fonts/Nunito-MediumItalic.ttf") format("truetype"); font-weight: 500; font-style: italic; font-display: swap; }
+@font-face { font-family: "Nunito"; src: url("/fonts/Nunito-SemiBold.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Nunito"; src: url("/fonts/Nunito-SemiBoldItalic.ttf") format("truetype"); font-weight: 600; font-style: italic; font-display: swap; }
+@font-face { font-family: "Nunito"; src: url("/fonts/Nunito-Bold.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Nunito"; src: url("/fonts/Nunito-BoldItalic.ttf") format("truetype"); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: "Nunito"; src: url("/fonts/Nunito-ExtraBold.ttf") format("truetype"); font-weight: 800; font-style: normal; font-display: swap; }
+@font-face { font-family: "Nunito"; src: url("/fonts/Nunito-ExtraBoldItalic.ttf") format("truetype"); font-weight: 800; font-style: italic; font-display: swap; }
+@font-face { font-family: "Nunito"; src: url("/fonts/Nunito-Black.ttf") format("truetype"); font-weight: 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Nunito"; src: url("/fonts/Nunito-BlackItalic.ttf") format("truetype"); font-weight: 900; font-style: italic; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("/fonts/JetBrainsMono-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("/fonts/JetBrainsMono-Medium.ttf") format("truetype"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("/fonts/JetBrainsMono-SemiBold.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("/fonts/JetBrainsMono-Bold.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+
+:root {
+  /* Surface hierarchy */
+  --surface-sunken:  #F7F9FC;
+  --surface:         #FFFFFF;
+  --surface-overlay: #FFFFFF;
+  --surface-inverse: #101928;
+
+  /* Borders */
+  --border-subtle:  #F0F2F5;
+  --border-default: #E4E7EC;
+  --border-strong:  #D0D5DD;
+  --border-focus:   #720026;
+
+  /* Text */
+  --text-primary:    #101928;
+  --text-secondary:  #667085;
+  --text-tertiary:   #98A2B3;
+  --text-disabled:   #D0D5DD;
+  --text-inverse:    #FFFFFF;
+  --text-on-primary: #FFFFFF;
+  --text-link:       #720026;
+  --text-danger:     #9E0A07;
+  --text-success:    #036B26;
+
+  /* Elevation — 4 discrete levels, never interpolate */
+  --elev-flat:     none;
+  --elev-raised:   0 1px 2px 0 rgba(16, 24, 40, 0.06);
+  --elev-floating: 0 4px 8px -2px rgba(16, 24, 40, 0.08), 0 2px 4px -2px rgba(16, 24, 40, 0.04);
+  --elev-modal:    0 20px 32px -8px rgba(16, 24, 40, 0.16), 0 8px 16px -4px rgba(16, 24, 40, 0.08);
+  --focus-ring:    0 0 0 3px rgba(114, 0, 38, 0.20);
+
+  /* Motion */
+  --duration-fast:    100ms;
+  --duration-normal:  200ms;
+  --duration-slow:    300ms;
+  --ease-out:   cubic-bezier(0, 0, 0.2, 1);
+  --ease-in:    cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out:cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Density row heights */
+  --row-compact:  36px;
+  --row-default:  48px;
+  --row-relaxed:  56px;
+
+  /* Icon sizes */
+  --icon-xs: 12px;
+  --icon-sm: 16px;
+  --icon-md: 20px;
+  --icon-lg: 24px;
+  --icon-xl: 32px;
+
+  /* Chart palette — all AAA on white */
+  --chart-1: #720026;
+  --chart-2: #B7791F;
+  --chart-3: #0F973D;
+  --chart-4: #CB1A14;
+  --chart-5: #7C3AED;
+  --chart-6: #0E9384;
+  --chart-7: #98A2B3;
+  --chart-8: #344054;
+
+  /* Z-index stack */
+  --z-sidebar:  200;
+  --z-topbar:   300;
+  --z-dropdown: 400;
+  --z-modal:    500;
+  --z-toast:    600;
+}
+
+/* Shimmer animation for skeletons */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.wm-shimmer {
+  background: linear-gradient(90deg, #F0F2F5 25%, #E4E7EC 50%, #F0F2F5 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* Modal entry animation */
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Sonner toast reskin ---- */
+[data-sonner-toaster] {
+  --width: 360px;
+}
+
+[data-sonner-toast] {
+  background: #FFFFFF !important;
+  border: 1px solid var(--border-default) !important;
+  box-shadow: var(--elev-floating) !important;
+  border-radius: 6px !important;
+  font-family: "Nunito", sans-serif !important;
+  font-size: 13px !important;
+  padding: 14px 16px !important;
+  border-left-width: 4px !important;
+}
+
+[data-sonner-toast][data-type="success"] { border-left-color: #0F973D !important; }
+[data-sonner-toast][data-type="error"]   { border-left-color: #CB1A14 !important; }
+[data-sonner-toast][data-type="warning"] { border-left-color: #D69E2E !important; }
+[data-sonner-toast][data-type="info"]    { border-left-color: #1671D9 !important; }
+[data-sonner-toast]:not([data-type])     { border-left-color: var(--border-default) !important; }
+
+[data-sonner-toast] [data-title] {
+  color: var(--text-primary) !important;
+  font-weight: 600 !important;
+}
+
+[data-sonner-toast] [data-description] {
+  color: var(--text-secondary) !important;
+  font-size: 12px !important;
+}
