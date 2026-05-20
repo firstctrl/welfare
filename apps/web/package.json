@@ -18,14 +18,17 @@
     "@tanstack/react-table": "^8.20.5",
     "@welfare/shared": "*",
     "axios": "^1.7.9",
+    "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
+    "lucide-react": "^1.16.0",
     "next": "^14.2.21",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.54.2",
     "recharts": "^2.14.1",
     "sonner": "^1.7.1",
+    "tailwind-merge": "^3.6.0",
     "xlsx": "^0.18.5",
     "zod": "^3.24.1",
     "zustand": "^5.0.3"
@@ -37,6 +40,7 @@
     "@types/react-dom": "^18.3.5",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.17"
+    "tailwindcss": "^3.4.17",
+    "vitest": "^4.1.7"
   }
 }
