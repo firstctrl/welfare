@@ -1,13 +1,13 @@
-import React from 'react';
+import { cn } from '@/lib/utils';
 
 interface SkeletonProps {
   className?: string;
 }
 
-export function Skeleton({ className = '' }: SkeletonProps) {
+export function Skeleton({ className }: SkeletonProps) {
   return (
     <div
-      className={`animate-pulse bg-gray-200 rounded ${className}`}
+      className={cn('rounded-xs wm-shimmer', className)}
       aria-hidden="true"
     />
   );
@@ -15,11 +15,14 @@ export function Skeleton({ className = '' }: SkeletonProps) {
 
 export function TableSkeleton({ rows = 5, cols = 5 }: { rows?: number; cols?: number }) {
   return (
-    <div className="space-y-2 p-2">
+    <div className="divide-y divide-neutral-100">
       {Array.from({ length: rows }).map((_, r) => (
-        <div key={r} className="flex gap-4">
+        <div key={r} className="flex gap-4 px-4 items-center" style={{ height: 'var(--row-compact)' }}>
           {Array.from({ length: cols }).map((_, c) => (
-            <Skeleton key={c} className="h-8 flex-1" />
+            <Skeleton
+              key={c}
+              className={cn('h-3 flex-1', c === 0 && 'max-w-[32px] rounded-pill')}
+            />
           ))}
         </div>
       ))}
@@ -29,10 +32,20 @@ export function TableSkeleton({ rows = 5, cols = 5 }: { rows?: number; cols?: nu
 
 export function CardSkeleton() {
   return (
-    <div className="bg-white rounded-lg shadow p-4 space-y-3">
+    <div className="bg-white border border-neutral-200 rounded-md p-5 space-y-3">
       <Skeleton className="h-4 w-1/3" />
       <Skeleton className="h-8 w-1/2" />
       <Skeleton className="h-3 w-2/3" />
+    </div>
+  );
+}
+
+export function KpiSkeleton() {
+  return (
+    <div className="bg-white border border-neutral-200 rounded-md p-5 space-y-3">
+      <Skeleton className="h-3 w-24" />
+      <Skeleton className="h-8 w-32" />
+      <Skeleton className="h-3 w-16" />
     </div>
   );
 }
