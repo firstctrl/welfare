@@ -43,7 +43,7 @@ export default () => ({
 });
 
 export function validateConfig(): void {
-  const required = ['MONGODB_URI', 'REDIS_HOST', 'JWT_SECRET', 'LDAP_URL', 'LDAP_BIND_CREDENTIALS'];
+  const required = ['MONGODB_URI', 'REDIS_HOST', 'JWT_SECRET'];
   if (process.env.NODE_ENV === 'production') {
     const missing = required.filter((key) => !process.env[key]);
     if (missing.length > 0) {

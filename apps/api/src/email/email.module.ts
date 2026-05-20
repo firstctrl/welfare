@@ -6,6 +6,7 @@ import { EmailController } from './email.controller';
 import { EmailLog, EmailLogSchema } from './email-log.schema';
 import { AnnualStatementJob } from './jobs/annual-statement.job';
 import { EmailBatchProcessor } from './jobs/email-batch.processor';
+import { SystemConfigModule } from '../system-config/system-config.module';
 import { Staff, StaffSchema } from '../staff/schemas/staff.schema';
 import { Contribution, ContributionSchema } from '../contributions/schemas/contribution.schema';
 import { Loan, LoanSchema } from '../loans/schemas/loan.schema';
@@ -22,6 +23,7 @@ import { LoanRepayment, LoanRepaymentSchema } from '../loans/schemas/loan-repaym
       { name: LoanRepayment.name, schema: LoanRepaymentSchema },
     ]),
     BullModule.registerQueue({ name: 'email-batch' }),
+    SystemConfigModule,
   ],
   controllers: [EmailController],
   providers: [EmailService, AnnualStatementJob, EmailBatchProcessor],
