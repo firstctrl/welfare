@@ -9,23 +9,19 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
+import { X } from 'lucide-react';
 import { LoanStatus } from '@welfare/shared';
 import type { ILoan } from '@welfare/shared';
 import { listLoans, getLoanSchedule } from '@/lib/loans';
 import { listStaff } from '@/lib/staff';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
-
-const LOAN_STATUS_BADGE: Record<LoanStatus, string> = {
-  [LoanStatus.Active]:    'bg-green-100 text-green-800',
-  [LoanStatus.Completed]: 'bg-blue-100 text-blue-700',
-  [LoanStatus.Defaulted]: 'bg-orange-100 text-orange-700',
-  [LoanStatus.WrittenOff]:'bg-gray-100 text-gray-600',
-  [LoanStatus.BadDebt]:   'bg-red-100 text-red-700',
-};
+import { StatusBadge } from '@/components/ui/badge';
+import { Select } from '@/components/ui/field';
+import { Pagination } from '@/components/ui/data-table';
+import { fmtGHS, fmtDate } from '@/lib/format';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
 const col = createColumnHelper<ILoan>();
 
 export function LoansListClient() {
@@ -41,7 +37,6 @@ export function LoansListClient() {
     queryFn: () => listLoans({ page, limit, status: status || undefined }),
   });
 
-  // Staff name lookup — one request, cached 10 min
   const { data: staffData } = useQuery({
     queryKey: ['staff', 'all'],
     queryFn: () => listStaff({ limit: 1000 }),
@@ -53,7 +48,6 @@ export function LoansListClient() {
     return m;
   }, [staffData]);
 
-  // Outstanding balance — one schedule query per visible loan
   const scheduleQueries = useQueries({
     queries: (data?.data ?? []).map((loan) => ({
       queryKey: ['loans', loan._id, 'schedule'],
@@ -68,17 +62,13 @@ export function LoansListClient() {
     (data?.data ?? []).forEach((loan, i) => {
       const schedule = scheduleQueries[i]?.data;
       if (!schedule) { m.set(loan._id, null); return; }
-      const val = schedule.reduce(
-        (sum, r) => sum + Math.max(0, r.dueAmount + r.penaltyAmount - r.paidAmount),
-        0,
-      );
+      const val = schedule.reduce((sum, r) => sum + Math.max(0, r.dueAmount + r.penaltyAmount - r.paidAmount), 0);
       m.set(loan._id, Math.round(val * 100) / 100);
     });
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, JSON.stringify(scheduleQueries.map((q) => q.status))]);
 
-  // Client-side disbursed date filter
   const filtered = useMemo(() => {
     const loans = data?.data ?? [];
     if (!filterMonth && !filterYear) return loans;
@@ -95,24 +85,22 @@ export function LoansListClient() {
       header: 'Staff',
       cell: (info) => (
         <div>
-          <div className="font-medium text-gray-900 text-sm">
-            {staffMap.get(info.getValue()) ?? '—'}
-          </div>
-          <div className="text-xs text-gray-400 font-mono">{info.getValue().slice(-8)}</div>
+          <div className="font-medium text-neutral-900">{staffMap.get(info.getValue()) ?? '—'}</div>
+          <div className="text-xs text-neutral-400 font-mono">{info.getValue().slice(-8)}</div>
         </div>
       ),
     }),
     col.accessor('principalAmount', {
       header: 'Principal',
-      cell: (info) => info.getValue().toLocaleString(),
+      cell: (info) => <span className="font-mono tabular">{fmtGHS(info.getValue())}</span>,
     }),
     col.accessor('totalRepayable', {
       header: 'Total Repayable',
-      cell: (info) => info.getValue().toLocaleString(),
+      cell: (info) => <span className="font-mono tabular">{fmtGHS(info.getValue())}</span>,
     }),
     col.accessor('disbursedDate', {
       header: 'Disbursed',
-      cell: (info) => new Date(info.getValue()).toLocaleDateString('en-GB'),
+      cell: (info) => <span className="font-mono tabular">{fmtDate(info.getValue())}</span>,
     }),
     col.accessor('tenureMonths', {
       header: 'Tenure',
@@ -123,24 +111,19 @@ export function LoansListClient() {
       header: 'Outstanding',
       cell: ({ row }) => {
         const val = outstandingMap.get(row.original._id);
-        if (val === null || val === undefined)
-          return <span className="text-gray-300 text-xs">…</span>;
-        return <span className="font-medium">{val.toLocaleString()}</span>;
+        if (val === null || val === undefined) return <span className="text-neutral-300">…</span>;
+        return <span className="font-mono tabular font-medium">{fmtGHS(val)}</span>;
       },
     }),
     col.accessor('status', {
       header: 'Status',
-      cell: (info) => (
-        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${LOAN_STATUS_BADGE[info.getValue()]}`}>
-          {info.getValue()}
-        </span>
-      ),
+      cell: (info) => <StatusBadge status={info.getValue()} />,
     }),
   ], [staffMap, outstandingMap]);
 
   const table = useReactTable({ data: filtered, columns, getCoreRowModel: getCoreRowModel() });
 
-  if (error) return <div className="text-sm text-red-500">Failed to load loans.</div>;
+  if (error) return <p className="text-sm text-danger-600">Failed to load loans.</p>;
 
   const currentYear = new Date().getFullYear();
   const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - i);
@@ -149,122 +132,83 @@ export function LoansListClient() {
     <div className="space-y-4">
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
-        <select
+        <Select
           value={status}
           onChange={(e) => { setStatus(e.target.value as LoanStatus | ''); setPage(1); }}
-          className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">All Statuses</option>
-          {Object.values(LoanStatus).map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-        <select
+          options={[{ value: '', label: 'All Statuses' }, ...Object.values(LoanStatus).map((s) => ({ value: s, label: s }))]}
+          style={{ width: 160 }}
+        />
+        <Select
           value={filterMonth}
           onChange={(e) => setFilterMonth(e.target.value)}
-          className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">All Months</option>
-          {MONTHS.map((m, i) => (
-            <option key={m} value={i + 1}>{m}</option>
-          ))}
-        </select>
-        <select
+          options={[{ value: '', label: 'All Months' }, ...MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))]}
+          style={{ width: 130 }}
+        />
+        <Select
           value={filterYear}
           onChange={(e) => setFilterYear(e.target.value)}
-          className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">All Years</option>
-          {yearOptions.map((y) => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
+          options={[{ value: '', label: 'All Years' }, ...yearOptions.map((y) => ({ value: String(y), label: String(y) }))]}
+          style={{ width: 110 }}
+        />
         {(filterMonth || filterYear) && (
           <button
             onClick={() => { setFilterMonth(''); setFilterYear(''); }}
-            className="text-sm text-blue-600 hover:underline"
+            className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-800"
           >
+            <X size={14} strokeWidth={1.75} />
             Clear filters
           </button>
         )}
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-lg border border-gray-200">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id}>
-                {hg.headers.map((h) => (
-                  <th
-                    key={h.id}
-                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    {flexRender(h.column.columnDef.header, h.getContext())}
-                  </th>
-                ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-100">
-            {isLoading ? (
-              <tr>
-                <td colSpan={columns.length} className="p-2">
-                  <TableSkeleton rows={5} cols={columns.length} />
-                </td>
-              </tr>
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length}>
-                  <EmptyState
-                    title="No loans found"
-                    description={status || filterMonth || filterYear ? 'Try adjusting your filters.' : 'Record the first loan to get started.'}
-                  />
-                </td>
-              </tr>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <tr
-                  key={row.id}
-                  onClick={() => router.push(`/loans/${row.original._id}`)}
-                  className="hover:bg-gray-50 cursor-pointer"
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3 text-sm text-gray-700">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
+      <div className="bg-white border border-neutral-200 rounded-md overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-base">
+            <thead>
+              {table.getHeaderGroups().map((hg) => (
+                <tr key={hg.id} className="border-b border-neutral-200 bg-neutral-50">
+                  {hg.headers.map((h) => (
+                    <th key={h.id} className="px-4 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide whitespace-nowrap" style={{ height: 'var(--row-compact)' }}>
+                      {flexRender(h.column.columnDef.header, h.getContext())}
+                    </th>
                   ))}
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination */}
-      {(data?.totalPages ?? 0) > 1 && (
-        <div className="flex items-center justify-between text-sm text-gray-600">
-          <span>
-            Showing {(page - 1) * limit + 1}–{Math.min(page * limit, data?.total ?? 0)} of {data?.total ?? 0}
-          </span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage((p) => p - 1)}
-              disabled={page <= 1}
-              className="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40"
-            >
-              Previous
-            </button>
-            <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={page >= (data?.totalPages ?? 1)}
-              className="px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40"
-            >
-              Next
-            </button>
-          </div>
+              ))}
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {isLoading ? (
+                <tr><td colSpan={columns.length} className="p-0"><TableSkeleton rows={5} cols={columns.length} /></td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={columns.length}>
+                  <EmptyState
+                    heading="No loans found"
+                    body={status || filterMonth || filterYear ? 'Try adjusting your filters.' : 'Record the first loan to get started.'}
+                  />
+                </td></tr>
+              ) : (
+                table.getRowModel().rows.map((row) => (
+                  <tr
+                    key={row.id}
+                    onClick={() => router.push(`/loans/${row.original._id}`)}
+                    className="hover:bg-neutral-50 cursor-pointer transition-colors duration-fast"
+                    style={{ height: 'var(--row-compact)' }}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <td key={cell.id} className="px-4 text-neutral-800">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+        {data && data.total > limit && (
+          <Pagination page={page} total={data.total} limit={limit} onPageChange={setPage} />
+        )}
+      </div>
     </div>
   );
 }
