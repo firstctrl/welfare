@@ -4,23 +4,19 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { getConfig, updateConfig, testEmail, type ConfigMap } from '../../../lib/config';
 import { runBulkAnnualStatement } from '../../../lib/email';
+import { Card, CardHeader, CardBody } from '@/components/ui/card';
+import { Field, Input, Select } from '@/components/ui/field';
+import { Button } from '@/components/ui/button';
+import { fmtDate } from '@/lib/format';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 function fmt(iso: string) {
   if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
+  try { return fmtDate(new Date(iso)); } catch { return iso; }
 }
 
-/** Returns the most-recent updatedAt across a set of keys */
 function latestEntry(cfg: ConfigMap, keys: string[]): { updatedBy: string; updatedAt: string } | null {
   let latest: { updatedBy: string; updatedAt: string } | null = null;
   for (const k of keys) {
@@ -37,20 +33,20 @@ function latestEntry(cfg: ConfigMap, keys: string[]): { updatedBy: string; updat
 
 function SkeletonCard() {
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6 animate-pulse">
-      <div className="h-5 bg-gray-200 rounded w-48 mb-6" />
-      <div className="space-y-4">
+    <Card>
+      <CardBody className="space-y-4 animate-pulse">
+        <Skeleton className="h-5 w-48" />
         {[1, 2, 3].map((i) => (
           <div key={i}>
-            <div className="h-3 bg-gray-200 rounded w-32 mb-2" />
-            <div className="h-9 bg-gray-200 rounded" />
+            <Skeleton className="h-3 w-32 mb-2" />
+            <Skeleton className="h-9 w-full" />
           </div>
         ))}
-      </div>
-      <div className="mt-6 flex justify-end">
-        <div className="h-9 bg-gray-200 rounded w-20" />
-      </div>
-    </div>
+        <div className="flex justify-end">
+          <Skeleton className="h-9 w-20" />
+        </div>
+      </CardBody>
+    </Card>
   );
 }
 
@@ -65,51 +61,27 @@ interface SectionCardProps {
 
 function SectionCard({ title, meta, children, onSave, saving, dirty }: SectionCardProps) {
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6">
-      <div className="flex items-start justify-between mb-5">
-        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-        {meta && (
-          <span className="text-xs text-gray-400 mt-0.5">
-            Last updated by {meta.updatedBy} on {fmt(meta.updatedAt)}
-          </span>
-        )}
-      </div>
-      <div className="space-y-4">{children}</div>
-      <div className="mt-6 flex justify-end">
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={saving || !dirty}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {saving ? 'Saving…' : 'Save'}
-        </button>
-      </div>
-    </div>
+    <Card>
+      <CardHeader
+        title={title}
+        subtitle={meta ? `Last updated by ${meta.updatedBy} on ${fmt(meta.updatedAt)}` : undefined}
+        action={
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            onClick={onSave}
+            disabled={saving || !dirty}
+            loading={saving}
+          >
+            Save
+          </Button>
+        }
+      />
+      <CardBody className="space-y-4">{children}</CardBody>
+    </Card>
   );
 }
-
-interface FieldProps {
-  label: string;
-  helper?: string;
-  children: React.ReactNode;
-}
-
-function Field({ label, helper, children }: FieldProps) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      {children}
-      {helper && <p className="mt-1 text-xs text-gray-500">{helper}</p>}
-    </div>
-  );
-}
-
-const inputCls =
-  'w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50';
-
-const selectCls =
-  'w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50';
 
 // ─── cron presets ───────────────────────────────────────────────────────────
 
@@ -158,16 +130,8 @@ function ContributionsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap
 
   return (
     <SectionCard title="Contributions" meta={meta} onSave={save} saving={saving} dirty={dirty}>
-      <Field label="Monthly Contribution Amount (GHS)">
-        <input
-          type="number"
-          min={1}
-          step={0.01}
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          disabled={saving}
-          className={inputCls}
-        />
+      <Field label="Monthly Contribution Amount" required>
+        <Input type="number" min={1} step={0.01} value={amount} onChange={(e) => setAmount(e.target.value)} disabled={saving} prefix="₵" />
       </Field>
     </SectionCard>
   );
@@ -176,12 +140,8 @@ function ContributionsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap
 // ─── section: Loans ─────────────────────────────────────────────────────────
 
 const LOAN_KEYS = [
-  'LOAN_MIN_AMOUNT',
-  'LOAN_MAX_AMOUNT',
-  'INTEREST_RATE_SHORT',
-  'INTEREST_RATE_LONG',
-  'ELIGIBILITY_MONTHS',
-  'LOAN_MAX_TENURE',
+  'LOAN_MIN_AMOUNT', 'LOAN_MAX_AMOUNT', 'INTEREST_RATE_SHORT',
+  'INTEREST_RATE_LONG', 'ELIGIBILITY_MONTHS', 'LOAN_MAX_TENURE',
 ] as const;
 
 type LoanFields = {
@@ -195,12 +155,12 @@ type LoanFields = {
 
 function initLoan(cfg: ConfigMap): LoanFields {
   return {
-    LOAN_MIN_AMOUNT: cfg['LOAN_MIN_AMOUNT']?.value ?? '',
-    LOAN_MAX_AMOUNT: cfg['LOAN_MAX_AMOUNT']?.value ?? '',
+    LOAN_MIN_AMOUNT:     cfg['LOAN_MIN_AMOUNT']?.value ?? '',
+    LOAN_MAX_AMOUNT:     cfg['LOAN_MAX_AMOUNT']?.value ?? '',
     INTEREST_RATE_SHORT: cfg['INTEREST_RATE_SHORT']?.value ?? '',
-    INTEREST_RATE_LONG: cfg['INTEREST_RATE_LONG']?.value ?? '',
-    ELIGIBILITY_MONTHS: cfg['ELIGIBILITY_MONTHS']?.value ?? '',
-    LOAN_MAX_TENURE: cfg['LOAN_MAX_TENURE']?.value ?? '',
+    INTEREST_RATE_LONG:  cfg['INTEREST_RATE_LONG']?.value ?? '',
+    ELIGIBILITY_MONTHS:  cfg['ELIGIBILITY_MONTHS']?.value ?? '',
+    LOAN_MAX_TENURE:     cfg['LOAN_MAX_TENURE']?.value ?? '',
   };
 }
 
@@ -215,8 +175,7 @@ function LoansSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
   useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
 
   function set(k: keyof LoanFields) {
-    return (e: React.ChangeEvent<HTMLInputElement>) =>
-      setFields((prev) => ({ ...prev, [k]: e.target.value }));
+    return (e: React.ChangeEvent<HTMLInputElement>) => setFields((prev) => ({ ...prev, [k]: e.target.value }));
   }
 
   async function save() {
@@ -256,23 +215,23 @@ function LoansSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
   return (
     <SectionCard title="Loans" meta={meta} onSave={save} saving={saving} dirty={dirty}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Minimum Loan Amount (GHS)">
-          <input type="number" min={1} value={fields.LOAN_MIN_AMOUNT} onChange={set('LOAN_MIN_AMOUNT')} disabled={saving} className={inputCls} />
+        <Field label="Minimum Loan Amount" required>
+          <Input type="number" min={1} value={fields.LOAN_MIN_AMOUNT} onChange={set('LOAN_MIN_AMOUNT')} disabled={saving} prefix="₵" />
         </Field>
-        <Field label="Maximum Loan Amount (GHS)">
-          <input type="number" min={1} value={fields.LOAN_MAX_AMOUNT} onChange={set('LOAN_MAX_AMOUNT')} disabled={saving} className={inputCls} />
+        <Field label="Maximum Loan Amount" required>
+          <Input type="number" min={1} value={fields.LOAN_MAX_AMOUNT} onChange={set('LOAN_MAX_AMOUNT')} disabled={saving} prefix="₵" />
         </Field>
-        <Field label="Interest Rate 1–6 Months (%)">
-          <input type="number" min={0} step={0.1} value={fields.INTEREST_RATE_SHORT} onChange={set('INTEREST_RATE_SHORT')} disabled={saving} className={inputCls} />
+        <Field label="Interest Rate 1–6 Months" required>
+          <Input type="number" min={0} step={0.1} value={fields.INTEREST_RATE_SHORT} onChange={set('INTEREST_RATE_SHORT')} disabled={saving} suffix="%" />
         </Field>
-        <Field label="Interest Rate 7–12 Months (%)">
-          <input type="number" min={0} step={0.1} value={fields.INTEREST_RATE_LONG} onChange={set('INTEREST_RATE_LONG')} disabled={saving} className={inputCls} />
+        <Field label="Interest Rate 7–12 Months" required>
+          <Input type="number" min={0} step={0.1} value={fields.INTEREST_RATE_LONG} onChange={set('INTEREST_RATE_LONG')} disabled={saving} suffix="%" />
         </Field>
-        <Field label="Eligibility Threshold (months)">
-          <input type="number" min={1} step={1} value={fields.ELIGIBILITY_MONTHS} onChange={set('ELIGIBILITY_MONTHS')} disabled={saving} className={inputCls} />
+        <Field label="Eligibility Threshold" helper="Months of contributions required before a staff member can apply for a loan." required>
+          <Input type="number" min={1} step={1} value={fields.ELIGIBILITY_MONTHS} onChange={set('ELIGIBILITY_MONTHS')} disabled={saving} suffix="months" />
         </Field>
-        <Field label="Maximum Loan Tenure (months)">
-          <input type="number" min={1} step={1} value={fields.LOAN_MAX_TENURE} onChange={set('LOAN_MAX_TENURE')} disabled={saving} className={inputCls} />
+        <Field label="Maximum Loan Tenure" required>
+          <Input type="number" min={1} step={1} value={fields.LOAN_MAX_TENURE} onChange={set('LOAN_MAX_TENURE')} disabled={saving} suffix="months" />
         </Field>
       </div>
     </SectionCard>
@@ -315,19 +274,8 @@ function GuarantorsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; o
 
   return (
     <SectionCard title="Guarantors" meta={meta} onSave={save} saving={saving} dirty={dirty}>
-      <Field
-        label="Max Active Loans Per Guarantor"
-        helper="Set to 0 for unlimited (no restriction enforced)."
-      >
-        <input
-          type="number"
-          min={0}
-          step={1}
-          value={max}
-          onChange={(e) => setMax(e.target.value)}
-          disabled={saving}
-          className={inputCls}
-        />
+      <Field label="Max Active Loans Per Guarantor" helper="Set to 0 for unlimited (no restriction enforced).">
+        <Input type="number" min={0} step={1} value={max} onChange={(e) => setMax(e.target.value)} disabled={saving} />
       </Field>
     </SectionCard>
   );
@@ -346,8 +294,8 @@ type PaymentFields = {
 function initPayment(cfg: ConfigMap): PaymentFields {
   return {
     PAYMENT_DEADLINE_DAY: cfg['PAYMENT_DEADLINE_DAY']?.value ?? '',
-    PENALTY_TYPE: cfg['PENALTY_TYPE']?.value ?? 'Fixed',
-    PENALTY_VALUE: cfg['PENALTY_VALUE']?.value ?? '',
+    PENALTY_TYPE:         cfg['PENALTY_TYPE']?.value ?? 'Fixed',
+    PENALTY_VALUE:        cfg['PENALTY_VALUE']?.value ?? '',
   };
 }
 
@@ -361,9 +309,11 @@ function PaymentsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onU
 
   useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
 
-  function set(k: keyof PaymentFields) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-      setFields((prev) => ({ ...prev, [k]: e.target.value }));
+  function setInput(k: keyof PaymentFields) {
+    return (e: React.ChangeEvent<HTMLInputElement>) => setFields((prev) => ({ ...prev, [k]: e.target.value }));
+  }
+  function setSelect(k: keyof PaymentFields) {
+    return (e: React.ChangeEvent<HTMLSelectElement>) => setFields((prev) => ({ ...prev, [k]: e.target.value }));
   }
 
   async function save() {
@@ -398,38 +348,18 @@ function PaymentsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onU
   return (
     <SectionCard title="Payments" meta={meta} onSave={save} saving={saving} dirty={dirty}>
       <Field label="Deadline Day of Month">
-        <input
-          type="number"
-          min={1}
-          max={28}
-          step={1}
-          value={fields.PAYMENT_DEADLINE_DAY}
-          onChange={set('PAYMENT_DEADLINE_DAY')}
-          disabled={saving}
-          className={inputCls}
-        />
+        <Input type="number" min={1} max={28} step={1} value={fields.PAYMENT_DEADLINE_DAY} onChange={setInput('PAYMENT_DEADLINE_DAY')} disabled={saving} />
       </Field>
       <Field label="Penalty Type">
-        <select
+        <Select
           value={fields.PENALTY_TYPE}
-          onChange={set('PENALTY_TYPE')}
+          onChange={setSelect('PENALTY_TYPE')}
           disabled={saving}
-          className={selectCls}
-        >
-          <option value="Fixed">Fixed</option>
-          <option value="Percentage">Percentage</option>
-        </select>
+          options={[{ value: 'Fixed', label: 'Fixed' }, { value: 'Percentage', label: 'Percentage' }]}
+        />
       </Field>
       <Field label="Penalty Value" helper="Set to 0 to disable penalties.">
-        <input
-          type="number"
-          min={0}
-          step={0.01}
-          value={fields.PENALTY_VALUE}
-          onChange={set('PENALTY_VALUE')}
-          disabled={saving}
-          className={inputCls}
-        />
+        <Input type="number" min={0} step={0.01} value={fields.PENALTY_VALUE} onChange={setInput('PENALTY_VALUE')} disabled={saving} />
       </Field>
     </SectionCard>
   );
@@ -438,16 +368,10 @@ function PaymentsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onU
 // ─── section: Email ─────────────────────────────────────────────────────────
 
 const EMAIL_KEYS = [
-  'EMAIL_PROVIDER',
-  'EMAIL_FROM_NAME',
-  'EMAIL_FROM_ADDRESS',
-  'RESEND_API_KEY',
-  'OUTLOOK_HOST',
-  'OUTLOOK_PORT',
-  'OUTLOOK_USERNAME',
-  'OUTLOOK_PASSWORD',
-  'EMAIL_CONTRIBUTION_STATEMENT_CRON',
-  'EMAIL_LOAN_SCHEDULE_ENABLED',
+  'EMAIL_PROVIDER', 'EMAIL_FROM_NAME', 'EMAIL_FROM_ADDRESS',
+  'RESEND_API_KEY', 'OUTLOOK_HOST', 'OUTLOOK_PORT',
+  'OUTLOOK_USERNAME', 'OUTLOOK_PASSWORD',
+  'EMAIL_CONTRIBUTION_STATEMENT_CRON', 'EMAIL_LOAN_SCHEDULE_ENABLED',
 ] as const;
 
 type EmailFields = {
@@ -465,17 +389,16 @@ type EmailFields = {
 
 function initEmail(cfg: ConfigMap): EmailFields {
   return {
-    EMAIL_PROVIDER: cfg['EMAIL_PROVIDER']?.value ?? 'resend',
-    EMAIL_FROM_NAME: cfg['EMAIL_FROM_NAME']?.value ?? '',
-    EMAIL_FROM_ADDRESS: cfg['EMAIL_FROM_ADDRESS']?.value ?? '',
-    RESEND_API_KEY: cfg['RESEND_API_KEY']?.value ?? '',
-    OUTLOOK_HOST: cfg['OUTLOOK_HOST']?.value ?? '',
-    OUTLOOK_PORT: cfg['OUTLOOK_PORT']?.value ?? '',
-    OUTLOOK_USERNAME: cfg['OUTLOOK_USERNAME']?.value ?? '',
-    OUTLOOK_PASSWORD: cfg['OUTLOOK_PASSWORD']?.value ?? '',
-    EMAIL_CONTRIBUTION_STATEMENT_CRON:
-      cfg['EMAIL_CONTRIBUTION_STATEMENT_CRON']?.value ?? CRON_PRESETS[0].value,
-    EMAIL_LOAN_SCHEDULE_ENABLED: cfg['EMAIL_LOAN_SCHEDULE_ENABLED']?.value ?? 'false',
+    EMAIL_PROVIDER:                    cfg['EMAIL_PROVIDER']?.value ?? 'resend',
+    EMAIL_FROM_NAME:                   cfg['EMAIL_FROM_NAME']?.value ?? '',
+    EMAIL_FROM_ADDRESS:                cfg['EMAIL_FROM_ADDRESS']?.value ?? '',
+    RESEND_API_KEY:                    cfg['RESEND_API_KEY']?.value ?? '',
+    OUTLOOK_HOST:                      cfg['OUTLOOK_HOST']?.value ?? '',
+    OUTLOOK_PORT:                      cfg['OUTLOOK_PORT']?.value ?? '',
+    OUTLOOK_USERNAME:                  cfg['OUTLOOK_USERNAME']?.value ?? '',
+    OUTLOOK_PASSWORD:                  cfg['OUTLOOK_PASSWORD']?.value ?? '',
+    EMAIL_CONTRIBUTION_STATEMENT_CRON: cfg['EMAIL_CONTRIBUTION_STATEMENT_CRON']?.value ?? CRON_PRESETS[0].value,
+    EMAIL_LOAN_SCHEDULE_ENABLED:       cfg['EMAIL_LOAN_SCHEDULE_ENABLED']?.value ?? 'false',
   };
 }
 
@@ -492,11 +415,12 @@ function EmailSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
 
   useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
 
-  function setField(k: keyof EmailFields) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-      setFields((prev) => ({ ...prev, [k]: e.target.value }));
+  function setInput(k: keyof EmailFields) {
+    return (e: React.ChangeEvent<HTMLInputElement>) => setFields((prev) => ({ ...prev, [k]: e.target.value }));
   }
-
+  function setSelectField(k: keyof EmailFields) {
+    return (e: React.ChangeEvent<HTMLSelectElement>) => setFields((prev) => ({ ...prev, [k]: e.target.value }));
+  }
   function toggleLoanSchedule(e: React.ChangeEvent<HTMLInputElement>) {
     setFields((prev) => ({ ...prev, EMAIL_LOAN_SCHEDULE_ENABLED: e.target.checked ? 'true' : 'false' }));
   }
@@ -543,95 +467,90 @@ function EmailSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
     <SectionCard title="Email" meta={meta} onSave={save} saving={saving} dirty={dirty}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="Email Provider">
-          <select value={fields.EMAIL_PROVIDER} onChange={setField('EMAIL_PROVIDER')} disabled={saving} className={selectCls}>
-            <option value="resend">Resend</option>
-            <option value="outlook365">Outlook 365</option>
-          </select>
+          <Select
+            value={fields.EMAIL_PROVIDER}
+            onChange={setSelectField('EMAIL_PROVIDER')}
+            disabled={saving}
+            options={[{ value: 'resend', label: 'Resend' }, { value: 'outlook365', label: 'Outlook 365' }]}
+          />
         </Field>
         <Field label="From Name">
-          <input type="text" value={fields.EMAIL_FROM_NAME} onChange={setField('EMAIL_FROM_NAME')} disabled={saving} className={inputCls} />
+          <Input type="text" value={fields.EMAIL_FROM_NAME} onChange={setInput('EMAIL_FROM_NAME')} disabled={saving} />
         </Field>
         <Field label="From Address">
-          <input type="email" value={fields.EMAIL_FROM_ADDRESS} onChange={setField('EMAIL_FROM_ADDRESS')} disabled={saving} className={inputCls} />
+          <Input type="email" value={fields.EMAIL_FROM_ADDRESS} onChange={setInput('EMAIL_FROM_ADDRESS')} disabled={saving} />
         </Field>
         <Field label="Contribution Statement Schedule">
-          <select value={fields.EMAIL_CONTRIBUTION_STATEMENT_CRON} onChange={setField('EMAIL_CONTRIBUTION_STATEMENT_CRON')} disabled={saving} className={selectCls}>
-            {CRON_PRESETS.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
-            ))}
-          </select>
+          <Select
+            value={fields.EMAIL_CONTRIBUTION_STATEMENT_CRON}
+            onChange={setSelectField('EMAIL_CONTRIBUTION_STATEMENT_CRON')}
+            disabled={saving}
+            options={CRON_PRESETS.map((p) => ({ value: p.value, label: p.label }))}
+          />
         </Field>
       </div>
 
-      {/* Toggle */}
-      <div className="flex items-center gap-3 mt-2">
+      <div className="flex items-center gap-3 pt-1">
         <input
           id="loan-schedule-toggle"
           type="checkbox"
           checked={fields.EMAIL_LOAN_SCHEDULE_ENABLED === 'true'}
           onChange={toggleLoanSchedule}
           disabled={saving}
-          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          className="h-4 w-4 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
         />
-        <label htmlFor="loan-schedule-toggle" className="text-sm font-medium text-gray-700">
+        <label htmlFor="loan-schedule-toggle" className="text-sm font-medium text-neutral-700">
           Enable Loan Schedule Emails
         </label>
       </div>
 
-      {/* Conditional credentials */}
-      <div className="mt-4 border-t pt-4">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Provider Credentials</p>
+      <div className="border-t border-neutral-100 pt-4">
+        <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3">Provider Credentials</p>
         {isResend ? (
           <Field label="API Key">
-            <input type="password" value={fields.RESEND_API_KEY} onChange={setField('RESEND_API_KEY')} disabled={saving} autoComplete="new-password" className={inputCls} />
+            <Input type="password" value={fields.RESEND_API_KEY} onChange={setInput('RESEND_API_KEY')} disabled={saving} autoComplete="new-password" />
           </Field>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="SMTP Host">
-              <input type="text" value={fields.OUTLOOK_HOST} onChange={setField('OUTLOOK_HOST')} disabled={saving} className={inputCls} />
+              <Input type="text" value={fields.OUTLOOK_HOST} onChange={setInput('OUTLOOK_HOST')} disabled={saving} />
             </Field>
             <Field label="SMTP Port">
-              <input type="number" value={fields.OUTLOOK_PORT} onChange={setField('OUTLOOK_PORT')} disabled={saving} className={inputCls} />
+              <Input type="number" value={fields.OUTLOOK_PORT} onChange={setInput('OUTLOOK_PORT')} disabled={saving} />
             </Field>
             <Field label="SMTP Username">
-              <input type="text" value={fields.OUTLOOK_USERNAME} onChange={setField('OUTLOOK_USERNAME')} disabled={saving} autoComplete="username" className={inputCls} />
+              <Input type="text" value={fields.OUTLOOK_USERNAME} onChange={setInput('OUTLOOK_USERNAME')} disabled={saving} autoComplete="username" />
             </Field>
             <Field label="SMTP Password">
-              <input type="password" value={fields.OUTLOOK_PASSWORD} onChange={setField('OUTLOOK_PASSWORD')} disabled={saving} autoComplete="new-password" className={inputCls} />
+              <Input type="password" value={fields.OUTLOOK_PASSWORD} onChange={setInput('OUTLOOK_PASSWORD')} disabled={saving} autoComplete="new-password" />
             </Field>
           </div>
         )}
       </div>
 
-      {/* Test email */}
-      <div className="mt-4 border-t pt-4">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Send Test Email</p>
+      <div className="border-t border-neutral-100 pt-4">
+        <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3">Send Test Email</p>
         <div className="flex items-center gap-3">
-          <input
+          <Input
             type="email"
             placeholder="Recipient email address"
             value={testTo}
             onChange={(e) => setTestTo(e.target.value)}
             disabled={testing}
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
+            className="flex-1"
           />
-          <button
-            type="button"
-            onClick={handleTestEmail}
-            disabled={testing || !testTo}
-            className="px-4 py-2 bg-gray-700 text-white text-sm font-medium rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-          >
-            {testing ? 'Sending…' : 'Send Test Email'}
-          </button>
+          <Button type="button" variant="secondary" onClick={handleTestEmail} disabled={testing || !testTo} loading={testing}>
+            Send Test Email
+          </Button>
         </div>
       </div>
 
-      {/* Bulk annual statement */}
-      <div className="mt-4 border-t pt-4">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Bulk Actions</p>
+      <div className="border-t border-neutral-100 pt-4">
+        <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3">Bulk Actions</p>
         <div className="flex items-center gap-4">
-          <button
+          <Button
             type="button"
+            variant="primary"
             onClick={async () => {
               setRunningBulk(true);
               try {
@@ -644,11 +563,11 @@ function EmailSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
               }
             }}
             disabled={runningBulk}
-            className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+            loading={runningBulk}
           >
-            {runningBulk ? 'Enqueuing…' : 'Run Annual Statement'}
-          </button>
-          <p className="text-xs text-gray-500">
+            Run Annual Statement
+          </Button>
+          <p className="text-xs text-neutral-500">
             Sends contribution statements for the previous year to all active staff with email addresses.
           </p>
         </div>
@@ -682,7 +601,6 @@ export function SettingsClient() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Unsaved changes warning — only fires when at least one section is dirty.
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (!anyDirty) return;
@@ -696,23 +614,21 @@ export function SettingsClient() {
   if (loading) {
     return (
       <div className="space-y-6">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <SkeletonCard key={i} />
-        ))}
+        {[1, 2, 3, 4, 5].map((i) => <SkeletonCard key={i} />)}
       </div>
     );
   }
 
   if (!cfg) {
     return (
-      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
+      <div className="bg-danger-50 border border-danger-200 text-danger-700 px-4 py-3 rounded-sm text-sm">
         Failed to load settings. Please refresh the page.
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-3xl">
       <ContributionsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('contributions')} />
       <LoansSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('loans')} />
       <GuarantorsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('guarantors')} />

@@ -1,11 +1,11 @@
 import { ReportsClient } from './reports-client';
 
-export const metadata = { title: 'Reports — Welfare' };
+export const metadata = { title: 'Reports — NCC Welfare' };
 
 export default function ReportsPage() {
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6">Reports</h1>
+    <div className="space-y-5">
+      <h1 className="text-xl font-bold text-neutral-900">Reports</h1>
       <ReportsClient />
     </div>
   );

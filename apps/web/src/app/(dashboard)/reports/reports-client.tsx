@@ -8,6 +8,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
+import { Download } from 'lucide-react';
 import {
   getMonthlyContributions,
   getArrears,
@@ -31,6 +32,10 @@ import type {
   IBadDebtRow,
   IExitClearanceRow,
 } from '@welfare/shared';
+import { Card, CardHeader, CardBody } from '@/components/ui/card';
+import { Field, Input, Select } from '@/components/ui/field';
+import { Button } from '@/components/ui/button';
+import { fmtGHS, fmtDate } from '@/lib/format';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -44,9 +49,9 @@ const colContrib = createColumnHelper<IMonthlyContributionRow>();
 const COLS_CONTRIB = [
   colContrib.accessor('staffName', { header: 'Staff Name' }),
   colContrib.accessor('staffNo', { header: 'Staff No' }),
-  colContrib.accessor('expectedAmount', { header: 'Expected (GHS)', cell: i => i.getValue().toLocaleString() }),
-  colContrib.accessor('paidAmount', { header: 'Paid (GHS)', cell: i => i.getValue().toLocaleString() }),
-  colContrib.accessor('surplusCarriedForward', { header: 'Surplus C/F', cell: i => i.getValue().toLocaleString() }),
+  colContrib.accessor('expectedAmount', { header: 'Expected', cell: i => fmtGHS(i.getValue()) }),
+  colContrib.accessor('paidAmount', { header: 'Paid', cell: i => fmtGHS(i.getValue()) }),
+  colContrib.accessor('surplusCarriedForward', { header: 'Surplus C/F', cell: i => fmtGHS(i.getValue()) }),
   colContrib.accessor('status', { header: 'Status' }),
 ];
 
@@ -56,9 +61,9 @@ const COLS_ARREARS = [
   colArrear.accessor('staffNo', { header: 'Staff No' }),
   colArrear.accessor('month', { header: 'Month', cell: i => MONTHS[i.getValue() - 1] }),
   colArrear.accessor('year', { header: 'Year' }),
-  colArrear.accessor('expectedAmount', { header: 'Expected (GHS)', cell: i => i.getValue().toLocaleString() }),
-  colArrear.accessor('paidAmount', { header: 'Paid (GHS)', cell: i => i.getValue().toLocaleString() }),
-  colArrear.accessor('shortfall', { header: 'Shortfall (GHS)', cell: i => i.getValue().toLocaleString() }),
+  colArrear.accessor('expectedAmount', { header: 'Expected', cell: i => fmtGHS(i.getValue()) }),
+  colArrear.accessor('paidAmount', { header: 'Paid', cell: i => fmtGHS(i.getValue()) }),
+  colArrear.accessor('shortfall', { header: 'Shortfall', cell: i => fmtGHS(i.getValue()) }),
   colArrear.accessor('status', { header: 'Status' }),
 ];
 
@@ -67,8 +72,8 @@ const COLS_OFFSETS = [
   colOffset.accessor('guarantorName', { header: 'Guarantor' }),
   colOffset.accessor('borrowerName', { header: 'Borrower' }),
   colOffset.accessor('instalmentNumber', { header: 'Instalment #' }),
-  colOffset.accessor('offsetAmount', { header: 'Offset (GHS)', cell: i => i.getValue().toLocaleString() }),
-  colOffset.accessor('offsetDate', { header: 'Date', cell: i => new Date(i.getValue()).toLocaleDateString() }),
+  colOffset.accessor('offsetAmount', { header: 'Offset', cell: i => fmtGHS(i.getValue()) }),
+  colOffset.accessor('offsetDate', { header: 'Date', cell: i => fmtDate(new Date(i.getValue())) }),
 ];
 
 const colActive = createColumnHelper<IActiveLoanRow>();
@@ -76,29 +81,29 @@ const COLS_ACTIVE = [
   colActive.accessor('staffName', { header: 'Staff Name' }),
   colActive.accessor('staffNo', { header: 'Staff No' }),
   colActive.accessor('guarantorName', { header: 'Guarantor' }),
-  colActive.accessor('principalAmount', { header: 'Principal (GHS)', cell: i => i.getValue().toLocaleString() }),
-  colActive.accessor('outstandingBalance', { header: 'Outstanding (GHS)', cell: i => i.getValue().toLocaleString() }),
-  colActive.accessor('disbursedDate', { header: 'Disbursed', cell: i => new Date(i.getValue()).toLocaleDateString() }),
+  colActive.accessor('principalAmount', { header: 'Principal', cell: i => fmtGHS(i.getValue()) }),
+  colActive.accessor('outstandingBalance', { header: 'Outstanding', cell: i => fmtGHS(i.getValue()) }),
+  colActive.accessor('disbursedDate', { header: 'Disbursed', cell: i => fmtDate(new Date(i.getValue())) }),
 ];
 
 const colOverdue = createColumnHelper<IOverdueLoanRow>();
 const COLS_OVERDUE = [
   colOverdue.accessor('staffName', { header: 'Staff Name' }),
   colOverdue.accessor('instalmentNumber', { header: 'Instalment #' }),
-  colOverdue.accessor('dueDate', { header: 'Due Date', cell: i => new Date(i.getValue()).toLocaleDateString() }),
-  colOverdue.accessor('dueAmount', { header: 'Due (GHS)', cell: i => i.getValue().toLocaleString() }),
-  colOverdue.accessor('paidAmount', { header: 'Paid (GHS)', cell: i => i.getValue().toLocaleString() }),
-  colOverdue.accessor('penaltyAmount', { header: 'Penalty (GHS)', cell: i => i.getValue().toLocaleString() }),
+  colOverdue.accessor('dueDate', { header: 'Due Date', cell: i => fmtDate(new Date(i.getValue())) }),
+  colOverdue.accessor('dueAmount', { header: 'Due', cell: i => fmtGHS(i.getValue()) }),
+  colOverdue.accessor('paidAmount', { header: 'Paid', cell: i => fmtGHS(i.getValue()) }),
+  colOverdue.accessor('penaltyAmount', { header: 'Penalty', cell: i => fmtGHS(i.getValue()) }),
   colOverdue.accessor('daysOverdue', { header: 'Days Overdue' }),
 ];
 
 const colRepaid = createColumnHelper<IRepaidLoanRow>();
 const COLS_REPAID = [
   colRepaid.accessor('staffName', { header: 'Staff Name' }),
-  colRepaid.accessor('principalAmount', { header: 'Principal (GHS)', cell: i => i.getValue().toLocaleString() }),
-  colRepaid.accessor('totalRepayable', { header: 'Total Repaid (GHS)', cell: i => i.getValue().toLocaleString() }),
-  colRepaid.accessor('disbursedDate', { header: 'Disbursed', cell: i => new Date(i.getValue()).toLocaleDateString() }),
-  colRepaid.accessor('settledAt', { header: 'Settled', cell: i => new Date(i.getValue()).toLocaleDateString() }),
+  colRepaid.accessor('principalAmount', { header: 'Principal', cell: i => fmtGHS(i.getValue()) }),
+  colRepaid.accessor('totalRepayable', { header: 'Total Repaid', cell: i => fmtGHS(i.getValue()) }),
+  colRepaid.accessor('disbursedDate', { header: 'Disbursed', cell: i => fmtDate(new Date(i.getValue())) }),
+  colRepaid.accessor('settledAt', { header: 'Settled', cell: i => fmtDate(new Date(i.getValue())) }),
   colRepaid.accessor('tenureMonths', { header: 'Tenure (mo)' }),
 ];
 
@@ -107,18 +112,18 @@ const COLS_EXPOSURE = [
   colExposure.accessor('guarantorName', { header: 'Guarantor' }),
   colExposure.accessor('guarantorStaffNo', { header: 'Staff No' }),
   colExposure.accessor('activeLoansCount', { header: 'Active Loans' }),
-  colExposure.accessor('totalOutstanding', { header: 'Total Outstanding (GHS)', cell: i => (i.getValue() as number).toLocaleString() }),
-  colExposure.accessor('totalOffsetAmount', { header: 'Offset Paid (GHS)', cell: i => (i.getValue() as number).toLocaleString() }),
+  colExposure.accessor('totalOutstanding', { header: 'Total Outstanding', cell: i => fmtGHS(i.getValue() as number) }),
+  colExposure.accessor('totalOffsetAmount', { header: 'Offset Paid', cell: i => fmtGHS(i.getValue() as number) }),
 ];
 
 const colBad = createColumnHelper<IBadDebtRow>();
 const COLS_BAD = [
   colBad.accessor('staffName', { header: 'Staff Name' }),
-  colBad.accessor('principalAmount', { header: 'Principal (GHS)', cell: i => i.getValue().toLocaleString() }),
-  colBad.accessor('exitDeductionAmount', { header: 'Exit Deduction (GHS)', cell: i => i.getValue().toLocaleString() }),
-  colBad.accessor('guarantorOffsetAmount', { header: 'Guarantor Offset (GHS)', cell: i => i.getValue().toLocaleString() }),
-  colBad.accessor('badDebtAmount', { header: 'Bad Debt (GHS)', cell: i => i.getValue().toLocaleString() }),
-  colBad.accessor('settledAt', { header: 'Settled At', cell: i => new Date(i.getValue()).toLocaleDateString() }),
+  colBad.accessor('principalAmount', { header: 'Principal', cell: i => fmtGHS(i.getValue()) }),
+  colBad.accessor('exitDeductionAmount', { header: 'Exit Deduction', cell: i => fmtGHS(i.getValue()) }),
+  colBad.accessor('guarantorOffsetAmount', { header: 'Guarantor Offset', cell: i => fmtGHS(i.getValue()) }),
+  colBad.accessor('badDebtAmount', { header: 'Bad Debt', cell: i => fmtGHS(i.getValue()) }),
+  colBad.accessor('settledAt', { header: 'Settled At', cell: i => fmtDate(new Date(i.getValue())) }),
 ];
 
 const colExit = createColumnHelper<IExitClearanceRow>();
@@ -126,40 +131,41 @@ const COLS_EXIT = [
   colExit.accessor('staffName', { header: 'Staff Name' }),
   colExit.accessor('staffNo', { header: 'Staff No' }),
   colExit.accessor('status', { header: 'Status' }),
-  colExit.accessor('outstandingLoanBalance', { header: 'Outstanding Loans (GHS)', cell: i => i.getValue().toLocaleString() }),
+  colExit.accessor('outstandingLoanBalance', { header: 'Outstanding Loans', cell: i => fmtGHS(i.getValue()) }),
   colExit.accessor('missedContributionsCount', { header: 'Missed Contributions' }),
 ];
 
 // ── Generic table ─────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function ReportTable<T>({ columns, data }: { columns: any[]; data: T[] }) {
   const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel() });
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full text-xs">
+      <table className="w-full text-xs border-collapse">
         <thead>
           {table.getHeaderGroups().map(hg => (
-            <tr key={hg.id} className="bg-gray-50 border-b">
+            <tr key={hg.id} className="border-b border-neutral-200 bg-neutral-50">
               {hg.headers.map(h => (
-                <th key={h.id} className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">
+                <th key={h.id} className="px-3 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide whitespace-nowrap">
                   {flexRender(h.column.columnDef.header, h.getContext())}
                 </th>
               ))}
             </tr>
           ))}
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-neutral-100">
           {table.getRowModel().rows.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className="px-3 py-6 text-center text-gray-400">
+              <td colSpan={columns.length} className="px-3 py-6 text-center text-neutral-400">
                 No data
               </td>
             </tr>
           ) : (
             table.getRowModel().rows.map(row => (
-              <tr key={row.id} className="border-b hover:bg-gray-50">
+              <tr key={row.id} className="hover:bg-neutral-50">
                 {row.getVisibleCells().map(cell => (
-                  <td key={cell.id} className="px-3 py-2 whitespace-nowrap">
+                  <td key={cell.id} className="px-3 py-2 whitespace-nowrap text-neutral-700">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}
@@ -183,9 +189,10 @@ function DownloadBtn({ path, formats }: { path: string; formats: ('csv' | 'pdf')
           href={buildDownloadUrl(path, fmt)}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-100 font-medium uppercase"
         >
-          {fmt}
+          <Button variant="secondary" size="sm" Icon={Download}>
+            {fmt.toUpperCase()}
+          </Button>
         </a>
       ))}
     </div>
@@ -205,35 +212,29 @@ function MonthlyContribPanel() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 items-end">
-        <label className="flex flex-col gap-1 text-xs">
-          Month
-          <select
-            className="border rounded px-2 py-1.5 text-sm"
-            value={month}
+        <Field label="Month">
+          <Select
+            value={String(month)}
             onChange={e => setMonth(+e.target.value)}
-          >
-            {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs">
-          Year
-          <input
-            type="number"
-            className="border rounded px-2 py-1.5 text-sm w-24"
-            value={year}
-            onChange={e => setYear(+e.target.value)}
+            options={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))}
+            style={{ width: 120 }}
           />
-        </label>
-        <DownloadBtn path={`contributions/monthly?month=${month}&year=${year}`} formats={['csv', 'pdf']} />
+        </Field>
+        <Field label="Year">
+          <Input type="number" value={year} onChange={e => setYear(+e.target.value)} style={{ width: 100 }} />
+        </Field>
+        <div className="self-end">
+          <DownloadBtn path={`contributions/monthly?month=${month}&year=${year}`} formats={['csv', 'pdf']} />
+        </div>
       </div>
       {data && (
-        <div className="flex gap-6 text-sm text-gray-600">
-          <span>Expected: <strong>GHS {data.totalExpected.toLocaleString()}</strong></span>
-          <span>Collected: <strong>GHS {data.totalPaid.toLocaleString()}</strong></span>
-          <span>Surplus: <strong>GHS {data.totalSurplus.toLocaleString()}</strong></span>
+        <div className="flex gap-6 text-sm text-neutral-600 bg-primary-50 border border-primary-100 rounded-sm px-4 py-2">
+          <span>Expected: <strong className="font-mono tabular text-neutral-900">{fmtGHS(data.totalExpected)}</strong></span>
+          <span>Collected: <strong className="font-mono tabular text-neutral-900">{fmtGHS(data.totalPaid)}</strong></span>
+          <span>Surplus: <strong className="font-mono tabular text-neutral-900">{fmtGHS(data.totalSurplus)}</strong></span>
         </div>
       )}
-      {isLoading ? <p className="text-xs text-gray-400">Loading…</p> : <ReportTable columns={COLS_CONTRIB} data={data?.rows ?? []} />}
+      {isLoading ? <p className="text-xs text-neutral-400">Loading…</p> : <ReportTable columns={COLS_CONTRIB} data={data?.rows ?? []} />}
     </div>
   );
 }
@@ -247,32 +248,30 @@ function ArrearsPanel() {
     queryKey: ['report-arrears', fromMonth, fromYear, toMonth, toYear],
     queryFn: () => getArrears({ fromMonth, fromYear, toMonth, toYear }),
   });
+  const monthOptions = MONTHS.map((m, i) => ({ value: String(i + 1), label: m }));
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 items-end">
-        {[
-          ['From Month', fromMonth, setFromMonth, 'month'],
-          ['From Year', fromYear, setFromYear, 'year'],
-          ['To Month', toMonth, setToMonth, 'month'],
-          ['To Year', toYear, setToYear, 'year'],
-        ].map(([label, val, setter, type]) => (
-          <label key={label as string} className="flex flex-col gap-1 text-xs">
-            {label as string}
-            {type === 'month' ? (
-              <select className="border rounded px-2 py-1.5 text-sm" value={val as number} onChange={e => (setter as any)(+e.target.value)}>
-                {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-              </select>
-            ) : (
-              <input type="number" className="border rounded px-2 py-1.5 text-sm w-24" value={val as number} onChange={e => (setter as any)(+e.target.value)} />
-            )}
-          </label>
-        ))}
-        <DownloadBtn
-          path={`contributions/arrears?fromMonth=${fromMonth}&fromYear=${fromYear}&toMonth=${toMonth}&toYear=${toYear}`}
-          formats={['csv', 'pdf']}
-        />
+        <Field label="From Month">
+          <Select value={String(fromMonth)} onChange={e => setFromMonth(+e.target.value)} options={monthOptions} style={{ width: 120 }} />
+        </Field>
+        <Field label="From Year">
+          <Input type="number" value={fromYear} onChange={e => setFromYear(+e.target.value)} style={{ width: 100 }} />
+        </Field>
+        <Field label="To Month">
+          <Select value={String(toMonth)} onChange={e => setToMonth(+e.target.value)} options={monthOptions} style={{ width: 120 }} />
+        </Field>
+        <Field label="To Year">
+          <Input type="number" value={toYear} onChange={e => setToYear(+e.target.value)} style={{ width: 100 }} />
+        </Field>
+        <div className="self-end">
+          <DownloadBtn
+            path={`contributions/arrears?fromMonth=${fromMonth}&fromYear=${fromYear}&toMonth=${toMonth}&toYear=${toYear}`}
+            formats={['csv', 'pdf']}
+          />
+        </div>
       </div>
-      {isLoading ? <p className="text-xs text-gray-400">Loading…</p> : <ReportTable columns={COLS_ARREARS} data={data} />}
+      {isLoading ? <p className="text-xs text-neutral-400">Loading…</p> : <ReportTable columns={COLS_ARREARS} data={data} />}
     </div>
   );
 }
@@ -286,6 +285,7 @@ function SimplePanel<T>({
 }: {
   queryKey: string;
   queryFn: () => Promise<T[]>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   columns: any[];
   downloadPath: string;
   formats?: ('csv' | 'pdf')[];
@@ -296,7 +296,7 @@ function SimplePanel<T>({
       <div className="flex justify-end">
         <DownloadBtn path={downloadPath} formats={formats} />
       </div>
-      {isLoading ? <p className="text-xs text-gray-400">Loading…</p> : <ReportTable columns={columns} data={data as T[]} />}
+      {isLoading ? <p className="text-xs text-neutral-400">Loading…</p> : <ReportTable columns={columns} data={data as T[]} />}
     </div>
   );
 }
@@ -319,9 +319,10 @@ const SECTIONS = [
 
 export function ReportsClient() {
   const [active, setActive] = useState('monthly-contrib');
+  const activeSection = SECTIONS.find(s => s.id === active);
 
   return (
-    <div className="flex gap-6">
+    <div className="flex gap-5">
       {/* Sidebar */}
       <nav className="w-52 shrink-0">
         <ul className="space-y-0.5">
@@ -329,11 +330,12 @@ export function ReportsClient() {
             <li key={s.id}>
               <button
                 onClick={() => setActive(s.id)}
-                className={`w-full text-left px-3 py-2 rounded text-sm ${
+                className={[
+                  'w-full text-left px-3 py-2 rounded-sm text-sm transition-colors duration-fast',
                   active === s.id
-                    ? 'bg-blue-600 text-white font-medium'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
+                    ? 'bg-primary-600 text-white font-medium'
+                    : 'text-neutral-700 hover:bg-neutral-100',
+                ].join(' ')}
               >
                 {s.label}
               </button>
@@ -343,71 +345,72 @@ export function ReportsClient() {
       </nav>
 
       {/* Panel */}
-      <div className="flex-1 bg-white rounded-xl border border-gray-200 p-5 min-h-[400px]">
-        <h2 className="text-base font-semibold text-gray-800 mb-4">
-          {SECTIONS.find(s => s.id === active)?.label}
-        </h2>
-
-        {active === 'monthly-contrib' && <MonthlyContribPanel />}
-        {active === 'arrears' && <ArrearsPanel />}
-        {active === 'guarantor-offsets' && (
-          <SimplePanel
-            queryKey="report-guarantor-offsets"
-            queryFn={getGuarantorOffsets}
-            columns={COLS_OFFSETS}
-            downloadPath="contributions/guarantor-offsets"
-          />
-        )}
-        {active === 'active-loans' && (
-          <SimplePanel
-            queryKey="report-active-loans"
-            queryFn={getActiveLoans}
-            columns={COLS_ACTIVE}
-            downloadPath="loans/active"
-            formats={['csv', 'pdf']}
-          />
-        )}
-        {active === 'overdue-loans' && (
-          <SimplePanel
-            queryKey="report-overdue-loans"
-            queryFn={getOverdueLoans}
-            columns={COLS_OVERDUE}
-            downloadPath="loans/overdue"
-          />
-        )}
-        {active === 'repaid-loans' && (
-          <SimplePanel
-            queryKey="report-repaid-loans"
-            queryFn={getRepaidLoans}
-            columns={COLS_REPAID}
-            downloadPath="loans/repaid"
-          />
-        )}
-        {active === 'guarantor-exposure' && (
-          <SimplePanel
-            queryKey="report-guarantor-exposure"
-            queryFn={getGuarantorExposure}
-            columns={COLS_EXPOSURE}
-            downloadPath="loans/guarantor-exposure"
-          />
-        )}
-        {active === 'bad-debt' && (
-          <SimplePanel
-            queryKey="report-bad-debt"
-            queryFn={getBadDebt}
-            columns={COLS_BAD}
-            downloadPath="loans/bad-debt"
-          />
-        )}
-        {active === 'exit-clearance' && (
-          <SimplePanel
-            queryKey="report-exit-clearance"
-            queryFn={getExitClearance}
-            columns={COLS_EXIT}
-            downloadPath="staff/exit"
-            formats={['csv', 'pdf']}
-          />
-        )}
+      <div className="flex-1 min-w-0">
+        <Card className="min-h-[400px]">
+          <CardHeader title={activeSection?.label ?? ''} />
+          <CardBody>
+            {active === 'monthly-contrib' && <MonthlyContribPanel />}
+            {active === 'arrears' && <ArrearsPanel />}
+            {active === 'guarantor-offsets' && (
+              <SimplePanel
+                queryKey="report-guarantor-offsets"
+                queryFn={getGuarantorOffsets}
+                columns={COLS_OFFSETS}
+                downloadPath="contributions/guarantor-offsets"
+              />
+            )}
+            {active === 'active-loans' && (
+              <SimplePanel
+                queryKey="report-active-loans"
+                queryFn={getActiveLoans}
+                columns={COLS_ACTIVE}
+                downloadPath="loans/active"
+                formats={['csv', 'pdf']}
+              />
+            )}
+            {active === 'overdue-loans' && (
+              <SimplePanel
+                queryKey="report-overdue-loans"
+                queryFn={getOverdueLoans}
+                columns={COLS_OVERDUE}
+                downloadPath="loans/overdue"
+              />
+            )}
+            {active === 'repaid-loans' && (
+              <SimplePanel
+                queryKey="report-repaid-loans"
+                queryFn={getRepaidLoans}
+                columns={COLS_REPAID}
+                downloadPath="loans/repaid"
+              />
+            )}
+            {active === 'guarantor-exposure' && (
+              <SimplePanel
+                queryKey="report-guarantor-exposure"
+                queryFn={getGuarantorExposure}
+                columns={COLS_EXPOSURE}
+                downloadPath="loans/guarantor-exposure"
+              />
+            )}
+            {active === 'bad-debt' && (
+              <SimplePanel
+                queryKey="report-bad-debt"
+                queryFn={getBadDebt}
+                columns={COLS_BAD}
+                downloadPath="loans/bad-debt"
+              />
+            )}
+            {active === 'exit-clearance' && (
+              <SimplePanel
+                queryKey="report-exit-clearance"
+                queryFn={getExitClearance}
+                columns={COLS_EXIT}
+                downloadPath="staff/exit"
+                formats={['csv', 'pdf']}
+              />
+            )}
+          </CardBody>
+        </Card>
       </div>
     </div>
   );

@@ -33,7 +33,7 @@ export function Field({ label, helper, error, required, children, className }: F
   );
 }
 
-interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'prefix' | 'suffix'> {
   prefix?: ReactNode;
   suffix?: ReactNode;
   mono?: boolean;
