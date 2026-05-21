@@ -142,6 +142,7 @@ function ContributionsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap
 const LOAN_KEYS = [
   'LOAN_MIN_AMOUNT', 'LOAN_MAX_AMOUNT', 'INTEREST_RATE_SHORT',
   'INTEREST_RATE_LONG', 'ELIGIBILITY_MONTHS', 'LOAN_MAX_TENURE',
+  'MAX_LOANS_PER_STAFF',
 ] as const;
 
 type LoanFields = {
@@ -151,6 +152,7 @@ type LoanFields = {
   INTEREST_RATE_LONG: string;
   ELIGIBILITY_MONTHS: string;
   LOAN_MAX_TENURE: string;
+  MAX_LOANS_PER_STAFF: string;
 };
 
 function initLoan(cfg: ConfigMap): LoanFields {
@@ -161,6 +163,7 @@ function initLoan(cfg: ConfigMap): LoanFields {
     INTEREST_RATE_LONG:  cfg['INTEREST_RATE_LONG']?.value ?? '',
     ELIGIBILITY_MONTHS:  cfg['ELIGIBILITY_MONTHS']?.value ?? '',
     LOAN_MAX_TENURE:     cfg['LOAN_MAX_TENURE']?.value ?? '',
+    MAX_LOANS_PER_STAFF: cfg['MAX_LOANS_PER_STAFF']?.value ?? '1',
   };
 }
 
@@ -183,6 +186,7 @@ function LoansSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
     const numericKeys: (keyof LoanFields)[] = [
       'LOAN_MIN_AMOUNT', 'LOAN_MAX_AMOUNT', 'INTEREST_RATE_SHORT',
       'INTEREST_RATE_LONG', 'ELIGIBILITY_MONTHS', 'LOAN_MAX_TENURE',
+      'MAX_LOANS_PER_STAFF',
     ];
     for (const k of numericKeys) {
       if (isNaN(parseFloat(fields[k])) || parseFloat(fields[k]) <= 0) {
@@ -232,6 +236,9 @@ function LoansSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
         </Field>
         <Field label="Maximum Loan Tenure" required>
           <Input type="number" min={1} step={1} value={fields.LOAN_MAX_TENURE} onChange={set('LOAN_MAX_TENURE')} disabled={saving} suffix="months" />
+        </Field>
+        <Field label="Max Active Loans per Staff" helper="Staff at this limit are ineligible for new loans. Default: 1." required>
+          <Input type="number" min={1} step={1} value={fields.MAX_LOANS_PER_STAFF} onChange={set('MAX_LOANS_PER_STAFF')} disabled={saving} />
         </Field>
       </div>
     </SectionCard>
