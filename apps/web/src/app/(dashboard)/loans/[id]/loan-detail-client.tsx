@@ -24,9 +24,11 @@ import { cn } from '@/lib/utils';
 
 const EXIT_STATUSES = new Set<StaffStatus>([StaffStatus.Resigned, StaffStatus.Dismissed, StaffStatus.Deceased]);
 
+const today = () => new Date().toISOString().split('T')[0];
+
 const paymentSchema = z.object({
   amount:   z.coerce.number().min(0.01, 'Required'),
-  paidDate: z.string().min(1, 'Required'),
+  paidDate: z.string().min(1, 'Required').refine((d) => d <= today(), 'Payment date cannot be in the future'),
   notes:    z.string().optional(),
 });
 type PaymentForm = z.infer<typeof paymentSchema>;
@@ -163,6 +165,10 @@ export function LoanDetailClient({ id }: { id: string }) {
             <p className="text-sm text-neutral-500 mt-0.5">
               Guarantor: <span className="font-medium text-neutral-900">{guarantor?.fullName ?? '—'}</span>
               &nbsp;<span className="text-neutral-400">({activeGuaranteeCount} active guarantee{activeGuaranteeCount !== 1 ? 's' : ''})</span>
+            </p>
+            <p className="text-sm text-neutral-500 mt-0.5">
+              Cheque No.: <span className="font-medium text-neutral-900 font-mono">{loan.chequeNo ?? '—'}</span>
+              &nbsp;·&nbsp;PV No.: <span className="font-medium text-neutral-900 font-mono">{loan.pvNo ?? '—'}</span>
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -374,6 +380,46 @@ export function LoanDetailClient({ id }: { id: string }) {
         </Card>
       )}
 
+      {/* Default Recovery Summary */}
+      {(loan.status === LoanStatus.Defaulted || loan.recoveryRanAt) && (
+        <Card>
+          <CardHeader title="Default Recovery" />
+          <CardBody>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {loan.defaulterContributionDebited != null && (
+                <div>
+                  <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">Defaulter Deducted</p>
+                  <p className="text-lg font-bold font-mono tabular mt-0.5 text-neutral-900">{fmtGHS(loan.defaulterContributionDebited)}</p>
+                </div>
+              )}
+              {loan.guarantorRestitutionOwed != null && (
+                <div>
+                  <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">Guarantor Offset</p>
+                  <p className="text-lg font-bold font-mono tabular mt-0.5 text-neutral-900">{fmtGHS(loan.guarantorRestitutionOwed)}</p>
+                </div>
+              )}
+              {loan.guarantorRestitutionPaid != null && (
+                <div>
+                  <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">Guarantor Repaid</p>
+                  <p className="text-lg font-bold font-mono tabular mt-0.5 text-neutral-900">{fmtGHS(loan.guarantorRestitutionPaid)}</p>
+                </div>
+              )}
+              {(loan.badDebtAmount ?? 0) > 0 && (
+                <div>
+                  <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">Bad Debt</p>
+                  <p className="text-lg font-bold font-mono tabular mt-0.5 text-danger-600">{fmtGHS(loan.badDebtAmount ?? 0)}</p>
+                </div>
+              )}
+            </div>
+            <div className="mt-3 space-y-0.5 text-xs text-neutral-400">
+              {loan.defaultedAt && <p>Defaulted on {fmtDate(loan.defaultedAt)}</p>}
+              {loan.endOfTenureGraceExpiry && <p>Grace period expires {fmtDate(loan.endOfTenureGraceExpiry)}</p>}
+              {loan.recoveryRanAt && <p>Recovery ran on {fmtDate(loan.recoveryRanAt)}</p>}
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
       {/* Write Off Modal */}
       {showWriteOffModal && (
         <Modal
@@ -448,7 +494,7 @@ export function LoanDetailClient({ id }: { id: string }) {
               <Input {...paymentForm.register('amount')} type="number" min="0.01" step="0.01" error={!!paymentForm.formState.errors.amount} />
             </Field>
             <Field label="Payment Date" required error={paymentForm.formState.errors.paidDate?.message}>
-              <Input {...paymentForm.register('paidDate')} type="date" error={!!paymentForm.formState.errors.paidDate} />
+              <Input {...paymentForm.register('paidDate')} type="date" max={today()} error={!!paymentForm.formState.errors.paidDate} />
             </Field>
             <Field label="Notes">
               <textarea {...paymentForm.register('notes')} rows={2} className="w-full border border-neutral-200 rounded-sm px-3 py-2 text-base focus:outline-none focus:border-primary-500 focus:shadow-focus resize-none" />
