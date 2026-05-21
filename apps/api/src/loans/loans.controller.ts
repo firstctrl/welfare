@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Post,
   Query,
@@ -99,6 +102,15 @@ export class LoansController {
     @CurrentUser() user: { sub: string; displayName: string },
   ) {
     return this.loansService.exitSettle(id, dto, user.sub, user.displayName);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteLoan(
+    @Param('id') id: string,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.loansService.deleteLoan(id, user.sub, user.displayName);
   }
 
   @Post('import')

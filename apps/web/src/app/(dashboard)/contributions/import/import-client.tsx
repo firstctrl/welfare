@@ -98,7 +98,7 @@ export default function ImportClient() {
 
   async function handleStaffSearch(q: string) {
     setStaffSearch(q);
-    if (q.length < 2) { setStaffOptions([]); return; }
+    if (q.length < 1) { setStaffOptions([]); return; }
     const res = await searchStaff(q);
     setStaffOptions(res.data.map((s) => ({ _id: s._id, fullName: s.fullName, staffId: s.staffId })));
   }
@@ -247,7 +247,9 @@ export default function ImportClient() {
                   {batchHistory.data.map((batch) => (
                     <tr key={batch._id} className="hover:bg-neutral-50">
                       <td className="px-4 py-2 text-neutral-700 truncate max-w-xs">{batch.fileName}</td>
-                      <td className="px-4 py-2 text-neutral-600">{batch.month}/{batch.year}</td>
+                      <td className="px-4 py-2 text-neutral-600">
+                        {batch.month === 0 || batch.year === 0 ? 'Multiple' : `${batch.month}/${batch.year}`}
+                      </td>
                       <td className="px-4 py-2 text-success-700 font-medium">{batch.matchedRows}</td>
                       <td className="px-4 py-2 text-warning-700 font-medium">{batch.flaggedRows}</td>
                       <td className="px-4 py-2"><Badge kind={statusKind[batch.status]}>{batch.status}</Badge></td>

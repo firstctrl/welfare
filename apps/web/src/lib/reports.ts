@@ -76,6 +76,81 @@ export async function getExitClearance(): Promise<IExitClearanceRow[]> {
   return data;
 }
 
+export interface StaffStatementCell {
+  paidAmount: number;
+  expectedAmount: number;
+  status: string;
+}
+
+export interface StaffStatementRow {
+  year: number;
+  cells: Record<number, StaffStatementCell | null>;
+  yearTotal: number;
+}
+
+export interface StaffStatement {
+  staff: { _id: string; fullName: string; staffId: string; email?: string };
+  kpis: { totalPaid: number; totalExpected: number; missedMonths: number; totalSurplus: number; collectionRate: number };
+  years: number[];
+  rows: StaffStatementRow[];
+}
+
+export async function getStaffStatement(staffMongoId: string): Promise<StaffStatement> {
+  const { data } = await apiClient.get('/reports/contributions/staff-statement', { params: { staffId: staffMongoId } });
+  return data;
+}
+
+export async function sendStaffStatement(staffMongoId: string): Promise<{ sent: boolean; email: string }> {
+  const { data } = await apiClient.post('/reports/contributions/staff-statement/send', { staffId: staffMongoId });
+  return data;
+}
+
+export async function downloadStatementPdf(staffMongoId: string, staffNo: string): Promise<void> {
+  const { data } = await apiClient.get('/reports/contributions/staff-statement/pdf', {
+    params: { staffId: staffMongoId },
+    responseType: 'blob',
+  });
+  const url = URL.createObjectURL(data as Blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `statement-${staffNo}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export interface BulkSendParams {
+  year: number;
+  sendTo: 'all' | 'selected';
+  staffIds?: string[];
+}
+
+export interface BulkSendJob {
+  jobId: string;
+  queued: number;
+}
+
+export interface BulkSendStatus {
+  jobId: string;
+  state: 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'unknown';
+  progress: number;
+  queued: number;
+  result: { sent: number; failed: number; total: number } | null;
+  failedReason: string | null;
+  createdAt: string;
+}
+
+export async function triggerBulkSend(params: BulkSendParams): Promise<BulkSendJob> {
+  const { data } = await apiClient.post('/reports/contributions/bulk-send', params);
+  return data;
+}
+
+export async function getBulkSendStatus(jobId: string): Promise<BulkSendStatus> {
+  const { data } = await apiClient.get('/reports/contributions/bulk-send/status', { params: { jobId } });
+  return data;
+}
+
 export function buildDownloadUrl(path: string, format: 'csv' | 'pdf'): string {
   const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
   return `${base}/reports/${path}?format=${format}`;

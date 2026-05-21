@@ -11,14 +11,14 @@ export interface StaffFilters {
 export interface CreateStaffPayload {
   fullName: string;
   staffId: string;
-  pfNo: string;
+  pfNo?: string;
   dateOfBirth: string;
   phoneNumber: string;
-  email?: string;
+  email: string;
   dateOfEmployment: string;
-  dateOfFirstContribution: string;
-  level: string;
-  point: number;
+  dateOfFirstContribution?: string;
+  level?: string;
+  point?: number;
 }
 
 export interface ChangeStatusPayload {
@@ -41,7 +41,7 @@ export async function searchStaff(
   q: string,
   filters: StaffFilters = {},
 ): Promise<PaginatedResult<IStaff>> {
-  const { data } = await apiClient.get('/search', { params: { q, type: 'staff', ...filters } });
+  const { data } = await apiClient.get('/staff', { params: { q, limit: 10, ...filters } });
   return data;
 }
 

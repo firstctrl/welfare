@@ -1,15 +1,16 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Download, Send, CreditCard } from 'lucide-react';
-import { LoanStatus, LoanRepaymentStatus, RepaymentSource, StaffStatus } from '@welfare/shared';
+import { Download, Send, CreditCard, Trash2 } from 'lucide-react';
+import { LoanStatus, LoanRepaymentStatus, StaffStatus } from '@welfare/shared';
 import type { ILoanRepayment } from '@welfare/shared';
-import { getLoan, getLoanSchedule, getLoanDocumentUrl, recordPayment, exitSettle, getLoansByGuarantor } from '@/lib/loans';
+import { getLoan, getLoanSchedule, getLoanDocumentUrl, recordPayment, exitSettle, getLoansByGuarantor, deleteLoan } from '@/lib/loans';
 import { getStaff } from '@/lib/staff';
 import { sendLoanSchedule } from '@/lib/email';
 import { StatusBadge } from '@/components/ui/badge';
@@ -63,8 +64,10 @@ const repaymentStatusStyle: Record<LoanRepaymentStatus, string> = {
 };
 
 export function LoanDetailClient({ id }: { id: string }) {
+  const router = useRouter();
   const qc = useQueryClient();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [sendingSchedule, setSendingSchedule] = useState(false);
 
   const { data: loan, isLoading: loanLoading } = useQuery({ queryKey: ['loans', id], queryFn: () => getLoan(id) });
@@ -104,6 +107,12 @@ export function LoanDetailClient({ id }: { id: string }) {
     mutationFn: (values: PaymentForm) => recordPayment(id, values),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans', id] }); setShowPaymentModal(false); paymentForm.reset(); toast.success('Payment recorded'); },
     onError: (err: unknown) => { toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Payment failed'); },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteLoan(id),
+    onSuccess: () => { toast.success('Loan deleted'); router.push('/loans'); qc.invalidateQueries({ queryKey: ['loans'] }); },
+    onError: (err: unknown) => { toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Delete failed'); },
   });
 
   const settlementMutation = useMutation({
@@ -169,6 +178,9 @@ export function LoanDetailClient({ id }: { id: string }) {
                 Record Payment
               </Button>
             )}
+            <Button variant="danger" size="sm" Icon={Trash2} onClick={() => setShowDeleteModal(true)}>
+              Delete
+            </Button>
           </div>
         </CardBody>
       </Card>
@@ -220,7 +232,7 @@ export function LoanDetailClient({ id }: { id: string }) {
                 <tbody className="divide-y divide-neutral-100">
                   {schedule.map((row) => {
                     const isOverdue   = row.status === LoanRepaymentStatus.Overdue;
-                    const isGuarantor = row.source  === RepaymentSource.GuarantorOffset;
+                    const isGuarantor = row.source  === 'GuarantorOffset';
                     return (
                       <tr
                         key={row._id}
@@ -323,6 +335,35 @@ export function LoanDetailClient({ id }: { id: string }) {
             )}
           </CardBody>
         </Card>
+      )}
+
+      {/* Delete Confirm Modal */}
+      {showDeleteModal && (
+        <Modal
+          open
+          onClose={() => setShowDeleteModal(false)}
+          title="Delete Loan"
+          size="sm"
+          icon={<Trash2 size={20} strokeWidth={1.75} />}
+          iconKind="danger"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>Cancel</Button>
+              <Button variant="danger" loading={deleteMutation.isPending} onClick={() => deleteMutation.mutate()}>
+                Delete Loan
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm text-neutral-700 mt-2">
+            Permanently delete this loan and all repayment records? This cannot be undone.
+          </p>
+          {loan.status === LoanStatus.Active && (
+            <p className="text-xs text-warning-700 mt-2 bg-warning-50 border border-warning-200 rounded-sm px-3 py-2">
+              Active loans with recorded payments cannot be deleted.
+            </p>
+          )}
+        </Modal>
       )}
 
       {/* Record Payment Modal */}

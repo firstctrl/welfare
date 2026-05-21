@@ -138,19 +138,50 @@ export class ContributionsService {
     return results;
   }
 
-  async findAll(query: ContributionQueryDto): Promise<PaginatedResult<ContributionDocument>> {
+  async findAll(query: ContributionQueryDto): Promise<PaginatedResult<any>> {
     const { page = 1, limit = 20, staffId, month, year, status } = query;
-    const filter: Record<string, unknown> = {};
-    if (staffId) filter.staffId = staffId;
-    if (month) filter.month = month;
-    if (year) filter.year = year;
-    if (status) filter.status = status;
+    const match: Record<string, unknown> = {};
+    if (staffId) match.staffId = staffId;
+    if (month) match.month = month;
+    if (year) match.year = year;
+    if (status) match.status = status;
     const skip = (page - 1) * limit;
     const [data, total] = await Promise.all([
-      this.contributionModel.find(filter).sort({ year: -1, month: -1 }).skip(skip).limit(limit).exec(),
-      this.contributionModel.countDocuments(filter).exec(),
+      this.contributionModel.aggregate([
+        { $match: match },
+        { $sort: { year: -1, month: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        { $addFields: { _staffObjId: { $toObjectId: '$staffId' } } },
+        {
+          $lookup: {
+            from: 'staff',
+            localField: '_staffObjId',
+            foreignField: '_id',
+            as: '_staffArr',
+            pipeline: [{ $project: { staffId: 1, fullName: 1 } }],
+          },
+        },
+        {
+          $addFields: {
+            staffInfo: { $arrayElemAt: ['$_staffArr', 0] },
+          },
+        },
+        { $project: { _staffArr: 0, _staffObjId: 0 } },
+      ]).exec(),
+      this.contributionModel.countDocuments(match).exec(),
     ]);
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  async deleteContribution(id: string, actorId: string, actorName: string): Promise<void> {
+    const contribution = await this.contributionModel.findById(id).exec();
+    if (!contribution) throw new NotFoundException(`Contribution ${id} not found`);
+    await this.contributionModel.findByIdAndDelete(id).exec();
+    this.auditService.log(
+      actorId, actorName, AuditAction.Delete, AuditEntity.Contribution,
+      id, contribution.toObject() as unknown as Record<string, unknown>, undefined,
+    );
   }
 
   async findByStaff(staffId: string): Promise<ContributionDocument[]> {

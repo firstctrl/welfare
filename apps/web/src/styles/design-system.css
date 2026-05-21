@@ -32,7 +32,7 @@
   --border-subtle:  #F0F2F5;
   --border-default: #E4E7EC;
   --border-strong:  #D0D5DD;
-  --border-focus:   #720026;
+  --border-focus:   #bc4680;
 
   /* Text */
   --text-primary:    #101928;
@@ -41,7 +41,7 @@
   --text-disabled:   #D0D5DD;
   --text-inverse:    #FFFFFF;
   --text-on-primary: #FFFFFF;
-  --text-link:       #720026;
+  --text-link:       #bc4680;
   --text-danger:     #9E0A07;
   --text-success:    #036B26;
 
@@ -50,7 +50,7 @@
   --elev-raised:   0 1px 2px 0 rgba(16, 24, 40, 0.06);
   --elev-floating: 0 4px 8px -2px rgba(16, 24, 40, 0.08), 0 2px 4px -2px rgba(16, 24, 40, 0.04);
   --elev-modal:    0 20px 32px -8px rgba(16, 24, 40, 0.16), 0 8px 16px -4px rgba(16, 24, 40, 0.08);
-  --focus-ring:    0 0 0 3px rgba(114, 0, 38, 0.20);
+  --focus-ring:    0 0 0 3px rgba(188, 70, 128, 0.20);
 
   /* Motion */
   --duration-fast:    100ms;
@@ -73,7 +73,7 @@
   --icon-xl: 32px;
 
   /* Chart palette — all AAA on white */
-  --chart-1: #720026;
+  --chart-1: #bc4680;
   --chart-2: #B7791F;
   --chart-3: #0F973D;
   --chart-4: #CB1A14;
@@ -115,20 +115,19 @@
 
 [data-sonner-toast] {
   background: #FFFFFF !important;
-  border: 1px solid var(--border-default) !important;
+  border: none !important;
   box-shadow: var(--elev-floating) !important;
   border-radius: 6px !important;
   font-family: "Nunito", sans-serif !important;
   font-size: 13px !important;
   padding: 14px 16px !important;
-  border-left-width: 4px !important;
 }
 
-[data-sonner-toast][data-type="success"] { border-left-color: #0F973D !important; }
-[data-sonner-toast][data-type="error"]   { border-left-color: #CB1A14 !important; }
-[data-sonner-toast][data-type="warning"] { border-left-color: #D69E2E !important; }
-[data-sonner-toast][data-type="info"]    { border-left-color: #1671D9 !important; }
-[data-sonner-toast]:not([data-type])     { border-left-color: var(--border-default) !important; }
+[data-sonner-toast][data-type="success"] { background: #0F973D !important; }
+[data-sonner-toast][data-type="error"]   { background: #CB1A14 !important; }
+[data-sonner-toast][data-type="warning"] { background: #D69E2E !important; }
+[data-sonner-toast][data-type="info"]    { background: #1671D9 !important; }
+[data-sonner-toast]:not([data-type])     { background: #FFFFFF !important; }
 
 [data-sonner-toast] [data-title] {
   color: var(--text-primary) !important;
@@ -138,4 +137,9 @@
 [data-sonner-toast] [data-description] {
   color: var(--text-secondary) !important;
   font-size: 12px !important;
+}
+
+[data-sonner-toast][data-type] [data-title],
+[data-sonner-toast][data-type] [data-description] {
+  color: #FFFFFF !important;
 }

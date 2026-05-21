@@ -56,7 +56,7 @@ export function Sidebar() {
           />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-bold text-neutral-900 leading-tight truncate">NCC Welfare</p>
+          <p className="text-sm font-bold text-neutral-900 leading-tight truncate">NACOC Welfare</p>
           <p className="text-xs text-neutral-400 leading-tight truncate">Management System</p>
         </div>
       </div>

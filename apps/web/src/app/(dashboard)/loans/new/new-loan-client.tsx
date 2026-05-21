@@ -156,7 +156,8 @@ export function NewLoanClient() {
   const submitDisabled = isSubmitting || mutation.isPending || guarantorAtCap || eligibility?.eligible === false;
 
   return (
-    <div className="max-w-4xl space-y-5">
+    <div className="flex gap-5 items-start">
+      <div className="flex-1 min-w-0">
       <Card>
         <CardHeader title="Loan Details" />
         <CardBody>
@@ -268,36 +269,46 @@ export function NewLoanClient() {
           </form>
         </CardBody>
       </Card>
+      </div>
 
-      {/* Schedule preview */}
-      {schedulePreview.length > 0 && (
-        <Card>
-          <CardHeader title="Repayment Schedule Preview" />
-          <CardBody noPadding>
-            <div className="overflow-x-auto">
+      {/* Schedule preview — right column */}
+      <div className="w-80 flex-shrink-0 sticky top-4">
+        {schedulePreview.length > 0 ? (
+          <Card>
+            <CardHeader title="Schedule Preview" />
+            <CardBody noPadding>
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-b border-neutral-200 bg-neutral-50">
-                    {['#','Due Date','Monthly Instalment','Balance After'].map((h) => (
-                      <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
+                    {['#','Due Date','Instalment'].map((h) => (
+                      <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
                   {schedulePreview.map((row) => (
                     <tr key={row.n} className="hover:bg-neutral-50">
-                      <td className="px-4 py-2 text-neutral-500">{row.n}</td>
-                      <td className="px-4 py-2 font-mono tabular">{fmtDate(row.dueDate)}</td>
-                      <td className="px-4 py-2 font-mono tabular font-medium">{fmtGHS(row.instalment)}</td>
-                      <td className="px-4 py-2 font-mono tabular text-neutral-600">{fmtGHS(row.balanceAfter)}</td>
+                      <td className="px-3 py-2 text-neutral-500">{row.n}</td>
+                      <td className="px-3 py-2 font-mono tabular text-xs">{fmtDate(row.dueDate)}</td>
+                      <td className="px-3 py-2 font-mono tabular font-medium">{fmtGHS(row.instalment)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-          </CardBody>
-        </Card>
-      )}
+              <div className="px-3 py-2 border-t border-neutral-100 bg-neutral-50 text-xs text-neutral-500 flex justify-between">
+                <span>Total repayable</span>
+                <span className="font-semibold font-mono tabular text-neutral-900">{fmtGHS(totalRepayable)}</span>
+              </div>
+            </CardBody>
+          </Card>
+        ) : (
+          <Card>
+            <CardBody>
+              <p className="text-xs text-neutral-400 text-center py-4">Fill in amount, tenure and date to preview schedule</p>
+            </CardBody>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }

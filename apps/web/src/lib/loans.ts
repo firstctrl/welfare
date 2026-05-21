@@ -79,6 +79,10 @@ export async function getLoansByStaff(
   return data;
 }
 
+export async function deleteLoan(id: string): Promise<void> {
+  await apiClient.delete(`/loans/${id}`);
+}
+
 export async function getLoansByGuarantor(
   staffId: string,
   page = 1,

@@ -89,6 +89,30 @@ export class LoansService implements OnModuleInit {
       .catch(() => { /* non-fatal */ });
   }
 
+  async reindexAll(): Promise<{ indexed: number }> {
+    const allLoans = await this.loanModel.find().lean().exec();
+    const staffIds = [...new Set(allLoans.map((l) => l.staffId))];
+    const staffMap = new Map<string, string>();
+    await Promise.all(
+      staffIds.map(async (id) => {
+        const s = await this.staffService.findByStaffId(id);
+        if (s) staffMap.set(id, s.fullName);
+      }),
+    );
+    const docs = allLoans.map((l) => ({
+      id: (l._id as any).toString(),
+      staffId: l.staffId,
+      staffName: staffMap.get(l.staffId) ?? l.staffId,
+      principalAmount: l.principalAmount,
+      status: l.status,
+      disbursedDate: l.disbursedDate,
+    }));
+    if (docs.length > 0) {
+      await this.meiliClient.index('loans').addDocuments(docs, { primaryKey: 'id' });
+    }
+    return { indexed: docs.length };
+  }
+
   private syncLoanToMeilisearch(loan: LoanDocument, staffName: string): void {
     const doc = {
       id: loan._id.toString(),
@@ -100,7 +124,7 @@ export class LoansService implements OnModuleInit {
     };
     this.meiliClient
       .index('loans')
-      .addDocuments([doc])
+      .addDocuments([doc], { primaryKey: 'id' })
       .catch(() => { /* fire-and-forget */ });
   }
 
@@ -180,16 +204,22 @@ export class LoansService implements OnModuleInit {
     this.syncLoanToMeilisearch(loan, staff.fullName);
 
     const loanId = loan._id.toString();
-    const schedule = Array.from({ length: dto.tenureMonths }, (_, i) => ({
-      loanId,
-      staffId: dto.staffId,
-      instalmentNumber: i + 1,
-      dueDate: computeDueDate(disbursedDate, i + 1),
-      dueAmount: monthlyInstalment,
-      paidAmount: 0,
-      penaltyAmount: 0,
-      status: LoanRepaymentStatus.Pending,
-    }));
+    const schedule = Array.from({ length: dto.tenureMonths }, (_, i) => {
+      const isLast = i === dto.tenureMonths - 1;
+      const dueAmount = isLast
+        ? round2(totalRepayable - monthlyInstalment * (dto.tenureMonths - 1))
+        : monthlyInstalment;
+      return {
+        loanId,
+        staffId: dto.staffId,
+        instalmentNumber: i + 1,
+        dueDate: computeDueDate(disbursedDate, i + 1),
+        dueAmount,
+        paidAmount: 0,
+        penaltyAmount: 0,
+        status: LoanRepaymentStatus.Pending,
+      };
+    });
     await this.repaymentModel.insertMany(schedule);
 
     this.auditService.log(
@@ -437,6 +467,22 @@ export class LoansService implements OnModuleInit {
           .catch(() => { /* non-fatal */ });
       }
     }
+  }
+
+  // ───────────────── DELETE LOAN ─────────────────
+
+  async deleteLoan(loanId: string, actorId: string, actorName: string): Promise<void> {
+    const loan = await this.findOne(loanId);
+    if (loan.status === LoanStatus.Active) {
+      const hasPaid = await this.repaymentModel
+        .exists({ loanId, paidAmount: { $gt: 0 } })
+        .exec();
+      if (hasPaid) throw new BadRequestException('Cannot delete an active loan with recorded payments');
+    }
+    await this.repaymentModel.deleteMany({ loanId }).exec();
+    await this.loanModel.findByIdAndDelete(loanId).exec();
+    this.meiliClient.index('loans').deleteDocument(loanId).catch(() => { /* non-fatal */ });
+    this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.Loan, loanId, undefined, { deleted: true });
   }
 
   // ───────────────── EXIT SETTLEMENT ─────────────────

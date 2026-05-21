@@ -134,25 +134,40 @@ export function LoansListClient() {
       <div className="flex flex-wrap gap-3 items-center">
         <Select
           value={status}
-          onChange={(e) => { setStatus(e.target.value as LoanStatus | ''); setPage(1); }}
-          options={[{ value: '', label: 'All Statuses' }, ...Object.values(LoanStatus).map((s) => ({ value: s, label: s }))]}
+          onChange={(e) => {
+            setStatus(e.target.value as LoanStatus | '');
+            setPage(1);
+          }}
+          options={[
+            { value: '', label: 'All Statuses' },
+            ...Object.values(LoanStatus).map((s) => ({ value: s, label: s })),
+          ]}
           style={{ width: 160 }}
         />
         <Select
           value={filterMonth}
           onChange={(e) => setFilterMonth(e.target.value)}
-          options={[{ value: '', label: 'All Months' }, ...MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))]}
+          options={[
+            { value: '', label: 'All Months' },
+            ...MONTHS.map((m, i) => ({ value: String(i + 1), label: m })),
+          ]}
           style={{ width: 130 }}
         />
         <Select
           value={filterYear}
           onChange={(e) => setFilterYear(e.target.value)}
-          options={[{ value: '', label: 'All Years' }, ...yearOptions.map((y) => ({ value: String(y), label: String(y) }))]}
+          options={[
+            { value: '', label: 'All Years' },
+            ...yearOptions.map((y) => ({ value: String(y), label: String(y) })),
+          ]}
           style={{ width: 110 }}
         />
         {(filterMonth || filterYear) && (
           <button
-            onClick={() => { setFilterMonth(''); setFilterYear(''); }}
+            onClick={() => {
+              setFilterMonth('');
+              setFilterYear('');
+            }}
             className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-800"
           >
             <X size={14} strokeWidth={1.75} />
@@ -169,7 +184,11 @@ export function LoansListClient() {
               {table.getHeaderGroups().map((hg) => (
                 <tr key={hg.id} className="border-b border-neutral-200 bg-neutral-50">
                   {hg.headers.map((h) => (
-                    <th key={h.id} className="px-4 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide whitespace-nowrap" style={{ height: 'var(--row-compact)' }}>
+                    <th
+                      key={h.id}
+                      className="px-4 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide whitespace-nowrap"
+                      style={{ height: 'var(--row-default)' }}
+                    >
                       {flexRender(h.column.columnDef.header, h.getContext())}
                     </th>
                   ))}
@@ -178,21 +197,31 @@ export function LoansListClient() {
             </thead>
             <tbody className="divide-y divide-neutral-100">
               {isLoading ? (
-                <tr><td colSpan={columns.length} className="p-0"><TableSkeleton rows={5} cols={columns.length} /></td></tr>
+                <tr>
+                  <td colSpan={columns.length} className="p-0">
+                    <TableSkeleton rows={5} cols={columns.length} />
+                  </td>
+                </tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={columns.length}>
-                  <EmptyState
-                    heading="No loans found"
-                    body={status || filterMonth || filterYear ? 'Try adjusting your filters.' : 'Record the first loan to get started.'}
-                  />
-                </td></tr>
+                <tr>
+                  <td colSpan={columns.length}>
+                    <EmptyState
+                      heading="No loans found"
+                      body={
+                        status || filterMonth || filterYear
+                          ? 'Try adjusting your filters.'
+                          : 'Record the first loan to get started.'
+                      }
+                    />
+                  </td>
+                </tr>
               ) : (
                 table.getRowModel().rows.map((row) => (
                   <tr
                     key={row.id}
                     onClick={() => router.push(`/loans/${row.original._id}`)}
                     className="hover:bg-neutral-50 cursor-pointer transition-colors duration-fast"
-                    style={{ height: 'var(--row-compact)' }}
+                    style={{ height: 'var(--row-default)' }}
                   >
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className="px-4 text-neutral-800">

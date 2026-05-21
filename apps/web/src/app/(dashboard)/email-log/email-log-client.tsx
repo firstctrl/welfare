@@ -52,7 +52,13 @@ export function EmailLogClient() {
           <label className="text-xs font-medium text-neutral-600">Type</label>
           <Select
             value={filters.type ?? ''}
-            onChange={(e) => setFilters((f) => ({ ...f, type: (e.target.value as EmailLogType) || undefined, page: 1 }))}
+            onChange={(e) =>
+              setFilters((f) => ({
+                ...f,
+                type: (e.target.value as EmailLogType) || undefined,
+                page: 1,
+              }))
+            }
             options={[
               { value: '', label: 'All Types' },
               ...Object.values(EmailLogType).map((t) => ({ value: t, label: t })),
@@ -64,7 +70,13 @@ export function EmailLogClient() {
           <label className="text-xs font-medium text-neutral-600">Status</label>
           <Select
             value={filters.status ?? ''}
-            onChange={(e) => setFilters((f) => ({ ...f, status: (e.target.value as EmailLogStatus) || undefined, page: 1 }))}
+            onChange={(e) =>
+              setFilters((f) => ({
+                ...f,
+                status: (e.target.value as EmailLogStatus) || undefined,
+                page: 1,
+              }))
+            }
             options={[
               { value: '', label: 'All Statuses' },
               ...Object.values(EmailLogStatus).map((s) => ({ value: s, label: s })),
@@ -77,7 +89,9 @@ export function EmailLogClient() {
           <Input
             placeholder="Filter by staff ID"
             value={filters.staffId ?? ''}
-            onChange={(e) => setFilters((f) => ({ ...f, staffId: e.target.value || undefined, page: 1 }))}
+            onChange={(e) =>
+              setFilters((f) => ({ ...f, staffId: e.target.value || undefined, page: 1 }))
+            }
             style={{ width: 160 }}
           />
         </div>
@@ -87,7 +101,12 @@ export function EmailLogClient() {
         </Button>
 
         <div className="ml-auto">
-          <Button variant="primary" onClick={handleBulkStatement} disabled={bulkLoading} loading={bulkLoading}>
+          <Button
+            variant="primary"
+            onClick={handleBulkStatement}
+            disabled={bulkLoading}
+            loading={bulkLoading}
+          >
             Run Annual Statement
           </Button>
         </div>
@@ -103,8 +122,19 @@ export function EmailLogClient() {
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-b border-neutral-200 bg-neutral-50">
-                    {['Date', 'Recipient', 'Type', 'Subject', 'Status', 'Triggered By', 'Error'].map((h) => (
-                      <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide whitespace-nowrap">
+                    {[
+                      'Date',
+                      'Recipient',
+                      'Type',
+                      'Subject',
+                      'Status',
+                      'Triggered By',
+                      'Error',
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide whitespace-nowrap"
+                      >
                         {h}
                       </th>
                     ))}
@@ -119,16 +149,25 @@ export function EmailLogClient() {
                     </tr>
                   ) : (
                     data.items.map((log: IEmailLog) => (
-                      <tr key={log._id} className="hover:bg-neutral-50" style={{ height: 'var(--row-compact)' }}>
+                      <tr
+                        key={log._id}
+                        className="hover:bg-neutral-50"
+                        style={{ height: 'var(--row-default)' }}
+                      >
                         <td className="px-4 py-2 whitespace-nowrap text-neutral-500 text-xs font-mono tabular">
                           {fmtDateTime(new Date(log.createdAt))}
                         </td>
                         <td className="px-4 py-2">
-                          <div className="font-medium text-neutral-900">{log.recipient.staffName}</div>
+                          <div className="font-medium text-neutral-900">
+                            {log.recipient.staffName}
+                          </div>
                           <div className="text-xs text-neutral-400">{log.recipient.email}</div>
                         </td>
                         <td className="px-4 py-2 text-neutral-600">{log.type}</td>
-                        <td className="px-4 py-2 max-w-xs truncate text-neutral-700" title={log.subject}>
+                        <td
+                          className="px-4 py-2 max-w-xs truncate text-neutral-700"
+                          title={log.subject}
+                        >
                           {log.subject}
                         </td>
                         <td className="px-4 py-2">
@@ -147,7 +186,9 @@ export function EmailLogClient() {
           </div>
 
           <div className="flex justify-between text-sm text-neutral-500">
-            <span>{data.total} total · page {data.page} of {data.totalPages}</span>
+            <span>
+              {data.total} total · page {data.page} of {data.totalPages}
+            </span>
             <div className="flex gap-2">
               <Button
                 variant="secondary"

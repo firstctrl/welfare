@@ -86,12 +86,12 @@ function SectionCard({ title, meta, children, onSave, saving, dirty }: SectionCa
 // ─── cron presets ───────────────────────────────────────────────────────────
 
 const CRON_PRESETS: { label: string; value: string }[] = [
-  { label: '1st of month, 9am', value: '0 9 1 * *' },
-  { label: '5th of month, 9am', value: '0 9 5 * *' },
-  { label: '10th of month, 9am', value: '0 9 10 * *' },
-  { label: '15th of month, 9am', value: '0 9 15 * *' },
-  { label: 'Last day of month, 9am', value: '0 9 28 * *' },
-  { label: 'Weekly Monday 9am', value: '0 9 * * 1' },
+  { label: 'Quarterly — 1st Jan, Apr, Jul, Oct', value: '0 8 1 1,4,7,10 *' },
+  { label: 'Bi-annual — 1st Jan & Jul', value: '0 8 1 1,7 *' },
+  { label: 'Monthly — 1st of each month', value: '0 8 1 * *' },
+  { label: 'Monthly — 5th of each month', value: '0 8 5 * *' },
+  { label: 'Monthly — 15th of each month', value: '0 8 15 * *' },
+  { label: 'Annual — 1st January', value: '0 8 1 1 *' },
 ];
 
 // ─── section: Contributions ─────────────────────────────────────────────────
@@ -397,7 +397,7 @@ function initEmail(cfg: ConfigMap): EmailFields {
     OUTLOOK_PORT:                      cfg['OUTLOOK_PORT']?.value ?? '',
     OUTLOOK_USERNAME:                  cfg['OUTLOOK_USERNAME']?.value ?? '',
     OUTLOOK_PASSWORD:                  cfg['OUTLOOK_PASSWORD']?.value ?? '',
-    EMAIL_CONTRIBUTION_STATEMENT_CRON: cfg['EMAIL_CONTRIBUTION_STATEMENT_CRON']?.value ?? CRON_PRESETS[0].value,
+    EMAIL_CONTRIBUTION_STATEMENT_CRON: cfg['EMAIL_CONTRIBUTION_STATEMENT_CRON']?.value ?? '0 8 1 1,4,7,10 *',
     EMAIL_LOAN_SCHEDULE_ENABLED:       cfg['EMAIL_LOAN_SCHEDULE_ENABLED']?.value ?? 'false',
   };
 }

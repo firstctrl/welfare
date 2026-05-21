@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { BullModule } from '@nestjs/bullmq';
+import { SystemConfigModule } from '../system-config/system-config.module';
 import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
+import { BulkStatementsProcessor } from './bulk-statements.processor';
+import { BulkStatementsCronService } from './bulk-statements-cron.service';
 import { Contribution, ContributionSchema } from '../contributions/schemas/contribution.schema';
 import { ImportBatch, ImportBatchSchema } from '../contributions/schemas/import-batch.schema';
 import { Loan, LoanSchema } from '../loans/schemas/loan.schema';
@@ -17,8 +21,10 @@ import { Staff, StaffSchema } from '../staff/schemas/staff.schema';
       { name: LoanRepayment.name, schema: LoanRepaymentSchema },
       { name: Staff.name, schema: StaffSchema },
     ]),
+    BullModule.registerQueue({ name: 'bulk-statements' }),
+    SystemConfigModule,
   ],
   controllers: [ReportsController],
-  providers: [ReportsService],
+  providers: [ReportsService, BulkStatementsProcessor, BulkStatementsCronService],
 })
 export class ReportsModule {}

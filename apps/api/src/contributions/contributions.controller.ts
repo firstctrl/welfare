@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Get, Param, Patch, Post, Query,
+  Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query,
   UploadedFile, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -83,5 +83,14 @@ export class ContributionsController {
   @Get()
   findAll(@Query() query: ContributionQueryDto) {
     return this.contributionsService.findAll(query);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  delete(
+    @Param('id') id: string,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.contributionsService.deleteContribution(id, user.sub, user.displayName);
   }
 }

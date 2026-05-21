@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { UserCog, Send, Pencil, Plus } from 'lucide-react';
 import Link from 'next/link';
-import { StaffStatus, ContributionStatus, LoanStatus, RepaymentSource } from '@welfare/shared';
+import { StaffStatus, ContributionStatus, LoanStatus } from '@welfare/shared';
 import type { IStaff, IContribution, ILoan, ILoanRepayment } from '@welfare/shared';
 import { getStaff, updateStaff, changeStaffStatus, uploadStaffPhoto } from '@/lib/staff';
 import { getContributionsByStaff } from '@/lib/contributions';
@@ -105,7 +105,7 @@ export default function StaffDetailClient({ id }: { id: string }) {
     (guaranteeLoans?.data ?? []).forEach((loan: ILoan, i: number) => {
       const schedule = guaranteeScheduleQueries[i]?.data ?? [];
       schedule
-        .filter((r) => r.source === RepaymentSource.GuarantorOffset && r.guarantorStaffId === id)
+        .filter((r) => r.source === 'GuarantorOffset' && r.guarantorStaffId === id)
         .forEach((r) => all.push({ ...r, loanPrincipal: loan.principalAmount }));
     });
     return all.sort((a, b) =>

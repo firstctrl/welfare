@@ -40,13 +40,26 @@ export class ImportService {
     if (rows.length === 0) throw new BadRequestException('Excel file has no data rows');
 
     const firstRow = rows[0];
-    const month = monthOverride ?? Number(firstRow.Month);
-    const year = yearOverride ?? Number(firstRow.Year);
-    if (!month || month < 1 || month > 12) throw new BadRequestException('Invalid or missing Month');
-    if (!year || year < 2000) throw new BadRequestException('Invalid or missing Year');
+    const batchMonth = monthOverride ?? 0;
+    const batchYear  = yearOverride  ?? 0;
+
+    if (monthOverride && (monthOverride < 1 || monthOverride > 12))
+      throw new BadRequestException('Month override must be 1–12');
+    if (yearOverride && yearOverride < 2000)
+      throw new BadRequestException('Year override must be ≥ 2000');
+    if (!monthOverride) {
+      const firstMonth = Number(firstRow.Month);
+      if (!firstMonth || firstMonth < 1 || firstMonth > 12)
+        throw new BadRequestException('Month column missing or invalid in first row');
+    }
+    if (!yearOverride) {
+      const firstYear = Number(firstRow.Year);
+      if (!firstYear || firstYear < 2000)
+        throw new BadRequestException('Year column missing or invalid in first row');
+    }
 
     const batch = await this.batchModel.create({
-      month, year, fileName,
+      month: batchMonth, year: batchYear, fileName,
       uploadedBy: actorName,
       totalRows: rows.length,
       status: ImportBatchStatus.Pending,
@@ -61,8 +74,19 @@ export class ImportService {
       const employeeName = String(row['Employee Name'] ?? '').trim();
       const amount = Number(row.Amount ?? 0);
 
+      const rowMonth = monthOverride ?? Number(row.Month);
+      const rowYear  = yearOverride  ?? Number(row.Year);
+
       if (!rawStaffId) {
         flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Missing Staff ID' });
+        continue;
+      }
+      if (!rowMonth || rowMonth < 1 || rowMonth > 12) {
+        flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Invalid or missing Month' });
+        continue;
+      }
+      if (!rowYear || rowYear < 2000) {
+        flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Invalid or missing Year' });
         continue;
       }
 
@@ -73,7 +97,7 @@ export class ImportService {
       }
 
       await this.contributionsService.processPayment(
-        staff._id.toString(), month, year, amount,
+        staff._id.toString(), rowMonth, rowYear, amount,
         ContributionSource.PayrollImport, actorId, actorName, batchId,
       );
       matched++;

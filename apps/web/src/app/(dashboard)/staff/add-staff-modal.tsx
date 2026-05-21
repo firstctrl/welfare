@@ -26,7 +26,7 @@ export default function AddStaffModal({ onClose, onSuccess }: Props) {
 
   async function onSubmit(values: StaffFormValues) {
     try {
-      await createStaff({ ...values, email: values.email || undefined });
+      await createStaff({ ...values });
       await qc.invalidateQueries({ queryKey: ['staff'] });
       toast.success('Staff member added');
       onSuccess();
@@ -67,17 +67,20 @@ export default function AddStaffModal({ onClose, onSuccess }: Props) {
         <Field label="Staff ID" required error={errors.staffId?.message}>
           <Input {...register('staffId')} error={!!errors.staffId} />
         </Field>
-        <Field label="PF Number" required error={errors.pfNo?.message}>
+        <Field label="Email" required error={errors.email?.message}>
+          <Input {...register('email')} type="email" error={!!errors.email} />
+        </Field>
+        <Field label="Level" error={errors.level?.message}>
+          <Input {...register('level')} placeholder="e.g. GL 10" error={!!errors.level} />
+        </Field>
+        <Field label="Point" error={errors.point?.message}>
+          <Input {...register('point')} type="number" min="0" defaultValue="0" error={!!errors.point} />
+        </Field>
+        <Field label="PF Number" error={errors.pfNo?.message}>
           <Input {...register('pfNo')} error={!!errors.pfNo} />
         </Field>
         <Field label="Phone Number" required error={errors.phoneNumber?.message}>
           <Input {...register('phoneNumber')} error={!!errors.phoneNumber} />
-        </Field>
-        <Field label="Email" error={errors.email?.message}>
-          <Input {...register('email')} type="email" error={!!errors.email} />
-        </Field>
-        <Field label="Level" required error={errors.level?.message}>
-          <Input {...register('level')} placeholder="e.g. GL 10" error={!!errors.level} />
         </Field>
         <Field label="Date of Birth" required error={errors.dateOfBirth?.message}>
           <Input {...register('dateOfBirth')} type="date" error={!!errors.dateOfBirth} />
@@ -85,11 +88,8 @@ export default function AddStaffModal({ onClose, onSuccess }: Props) {
         <Field label="Date of Employment" required error={errors.dateOfEmployment?.message}>
           <Input {...register('dateOfEmployment')} type="date" error={!!errors.dateOfEmployment} />
         </Field>
-        <Field label="Date of First Contribution" required error={errors.dateOfFirstContribution?.message}>
+        <Field label="Date of First Contribution" error={errors.dateOfFirstContribution?.message}>
           <Input {...register('dateOfFirstContribution')} type="date" error={!!errors.dateOfFirstContribution} />
-        </Field>
-        <Field label="Points" error={errors.point?.message}>
-          <Input {...register('point')} type="number" min="0" defaultValue="0" error={!!errors.point} />
         </Field>
       </form>
     </Modal>

@@ -5,7 +5,7 @@ import { LoansListClient } from './loans-list-client';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { Plus } from 'lucide-react';
 
-export const metadata: Metadata = { title: 'Loans — NCC Welfare' };
+export const metadata: Metadata = { title: 'Loans — NACOC Welfare' };
 
 export default function LoansPage() {
   return (

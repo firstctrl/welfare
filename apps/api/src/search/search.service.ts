@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { MeiliSearch } from 'meilisearch';
+import { StaffService } from '../staff/staff.service';
+import { LoansService } from '../loans/loans.service';
 import { MEILISEARCH_CLIENT } from './meilisearch.module';
 
 export interface SearchResultItem {
@@ -14,6 +16,8 @@ export interface SearchResultItem {
 export class SearchService {
   constructor(
     @Inject(MEILISEARCH_CLIENT) private readonly meili: MeiliSearch,
+    private readonly staffService: StaffService,
+    private readonly loansService: LoansService,
   ) {}
 
   async search(q: string): Promise<{ results: SearchResultItem[] }> {
@@ -41,5 +45,13 @@ export class SearchService {
     }));
 
     return { results: [...staffItems, ...loanItems] };
+  }
+
+  async reindex(): Promise<{ staff: number; loans: number }> {
+    const [staff, loans] = await Promise.all([
+      this.staffService.reindexAll(),
+      this.loansService.reindexAll(),
+    ]);
+    return { staff: staff.indexed, loans: loans.indexed };
   }
 }

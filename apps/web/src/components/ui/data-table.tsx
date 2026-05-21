@@ -41,7 +41,7 @@ export function DataTable<TData extends RowData>({
                 <th
                   key={header.id}
                   className="px-4 text-left text-sm font-semibold text-neutral-500 uppercase tracking-wide whitespace-nowrap"
-                  style={{ height: 'var(--row-compact)' }}
+                  style={{ height: 'var(--row-default)' }}
                 >
                   {header.isPlaceholder
                     ? null
@@ -60,7 +60,7 @@ export function DataTable<TData extends RowData>({
                 'transition-colors duration-fast',
                 onRowClick && 'cursor-pointer hover:bg-neutral-50',
               )}
-              style={{ height: 'var(--row-compact)' }}
+              style={{ height: 'var(--row-default)' }}
             >
               {row.getVisibleCells().map((cell) => (
                 <td key={cell.id} className="px-4 text-neutral-800">

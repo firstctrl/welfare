@@ -3,14 +3,14 @@ import { z } from 'zod';
 export const staffSchema = z.object({
   fullName:                z.string().min(1, 'Required'),
   staffId:                 z.string().min(1, 'Required'),
-  pfNo:                    z.string().min(1, 'Required'),
+  email:                   z.string().email('Invalid email'),
   dateOfBirth:             z.string().min(1, 'Required'),
   phoneNumber:             z.string().min(1, 'Required'),
-  email:                   z.string().email('Invalid email').optional().or(z.literal('')),
   dateOfEmployment:        z.string().min(1, 'Required'),
-  dateOfFirstContribution: z.string().min(1, 'Required'),
-  level:                   z.string().min(1, 'Required'),
-  point:                   z.coerce.number().min(0).default(0),
+  level:                   z.string().optional().or(z.literal('')),
+  point:                   z.coerce.number().min(0).optional().default(0),
+  pfNo:                    z.string().optional().or(z.literal('')),
+  dateOfFirstContribution: z.string().optional().or(z.literal('')),
 });
 
 export const loanSchema = z.object({

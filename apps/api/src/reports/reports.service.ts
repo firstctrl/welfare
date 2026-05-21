@@ -515,6 +515,137 @@ export class ReportsService {
     };
   }
 
+  // ─────────────────────────── STAFF STATEMENT ───────────────────────────
+
+  async getStaffContributionStatement(staffMongoId: string): Promise<{
+    staff: { _id: string; fullName: string; staffId: string; email?: string };
+    kpis: { totalPaid: number; totalExpected: number; missedMonths: number; totalSurplus: number; collectionRate: number };
+    years: number[];
+    rows: Array<{ year: number; cells: Record<number, { paidAmount: number; expectedAmount: number; status: string } | null>; yearTotal: number }>;
+  }> {
+    const staff = await this.staffModel.findById(staffMongoId).exec();
+    if (!staff) throw new Error(`Staff ${staffMongoId} not found`);
+
+    const contribs = await this.contribModel
+      .find({ staffId: staffMongoId, isDebit: { $ne: true } })
+      .sort({ year: 1, month: 1 })
+      .exec();
+
+    const years = [...new Set(contribs.map(c => c.year))].sort((a, b) => a - b);
+    const byKey = new Map(contribs.map(c => [`${c.year}-${c.month}`, c]));
+
+    const rows = years.map(year => {
+      const cells: Record<number, { paidAmount: number; expectedAmount: number; status: string } | null> = {};
+      let yearTotal = 0;
+      for (let m = 1; m <= 12; m++) {
+        const c = byKey.get(`${year}-${m}`);
+        if (c) {
+          cells[m] = { paidAmount: c.paidAmount, expectedAmount: c.expectedAmount, status: c.status };
+          yearTotal += c.paidAmount;
+        } else {
+          cells[m] = null;
+        }
+      }
+      return { year, cells, yearTotal };
+    });
+
+    const totalPaid = contribs.reduce((s, c) => s + c.paidAmount, 0);
+    const totalExpected = contribs.reduce((s, c) => s + c.expectedAmount, 0);
+    const totalSurplus = contribs.reduce((s, c) => s + c.surplusCarriedForward, 0);
+    const missedMonths = contribs.filter(c => c.status === ContributionStatus.Missed || c.status === ContributionStatus.Partial).length;
+    const collectionRate = totalExpected > 0 ? Math.round((totalPaid / totalExpected) * 100) : 0;
+
+    return {
+      staff: { _id: staff._id.toString(), fullName: staff.fullName, staffId: staff.staffId, email: staff.email },
+      kpis: { totalPaid, totalExpected, missedMonths, totalSurplus, collectionRate },
+      years,
+      rows,
+    };
+  }
+
+  async generateStatementPdf(staffMongoId: string): Promise<Buffer> {
+    const { staff, kpis, years, rows } = await this.getStaffContributionStatement(staffMongoId);
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const fmt = (n: number) => `GHS ${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const statusColor: Record<string, string> = {
+      Paid: '#dcfce7', Partial: '#fef9c3', Missed: '#fee2e2', CarriedForward: '#dbeafe',
+    };
+
+    const headerCells = MONTHS.map(m => `<th>${m}</th>`).join('') + '<th>Total</th>';
+
+    const bodyRows = rows.map(row => {
+      const cells = Array.from({ length: 12 }, (_, i) => {
+        const c = row.cells[i + 1];
+        if (!c) return `<td class="empty">—</td>`;
+        const bg = statusColor[c.status] ?? '#fff';
+        return `<td style="background:${bg}" title="${c.status}">${fmt(c.paidAmount)}</td>`;
+      }).join('');
+      return `<tr><td class="year-label">${row.year}</td>${cells}<td class="total">${fmt(row.yearTotal)}</td></tr>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/>
+<style>
+  body{font-family:Arial,sans-serif;font-size:11px;margin:0;padding:20px;color:#111}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;border-bottom:2px solid #1e40af;padding-bottom:12px}
+  .org{font-size:18px;font-weight:bold;color:#1e40af}
+  .title{font-size:13px;font-weight:bold;margin-top:4px}
+  .meta{color:#666;font-size:10px;margin-top:2px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+  .kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px}
+  .kpi-label{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em}
+  .kpi-value{font-size:15px;font-weight:bold;color:#1e293b;margin-top:2px}
+  table{width:100%;border-collapse:collapse;font-size:10px}
+  th{background:#1e40af;color:#fff;padding:5px 6px;text-align:center;white-space:nowrap;font-size:10px}
+  th:first-child{text-align:left}
+  td{padding:4px 6px;border:1px solid #e5e7eb;text-align:center;white-space:nowrap}
+  td.year-label{font-weight:bold;background:#f8fafc;text-align:left}
+  td.total{font-weight:bold;background:#eff6ff}
+  td.empty{color:#ccc}
+  .legend{display:flex;gap:12px;margin-top:10px;font-size:9px}
+  .leg-item{display:flex;align-items:center;gap:4px}
+  .leg-dot{width:10px;height:10px;border-radius:2px;border:1px solid #ccc}
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div class="org">NACOC Welfare</div>
+    <div class="title">Contribution Statement — ${staff.fullName}</div>
+    <div class="meta">Staff No: ${staff.staffId} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString('en-GB')}</div>
+  </div>
+</div>
+<div class="kpis">
+  <div class="kpi"><div class="kpi-label">Total Paid</div><div class="kpi-value">${fmt(kpis.totalPaid)}</div></div>
+  <div class="kpi"><div class="kpi-label">Total Expected</div><div class="kpi-value">${fmt(kpis.totalExpected)}</div></div>
+  <div class="kpi"><div class="kpi-label">Collection Rate</div><div class="kpi-value">${kpis.collectionRate}%</div></div>
+  <div class="kpi"><div class="kpi-label">Missed / Partial</div><div class="kpi-value">${kpis.missedMonths} months</div></div>
+</div>
+<table>
+  <thead><tr><th>Year</th>${headerCells}</tr></thead>
+  <tbody>${bodyRows.length ? bodyRows : '<tr><td colspan="14" style="text-align:center;padding:20px;color:#999">No contribution records found</td></tr>'}</tbody>
+</table>
+<div class="legend">
+  <div class="leg-item"><div class="leg-dot" style="background:#dcfce7"></div> Paid</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#fef9c3"></div> Partial</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#fee2e2"></div> Missed</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#dbeafe"></div> Carried Forward</div>
+</div>
+</body></html>`;
+
+    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] });
+    try {
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'domcontentloaded' });
+      const pdf = await page.pdf({ format: 'A4', landscape: true, printBackground: true, margin: { top: '12mm', right: '10mm', bottom: '12mm', left: '10mm' } });
+      return Buffer.from(pdf);
+    } finally {
+      await browser.close();
+    }
+  }
+
   // ─────────────────────────── EXPORT HELPERS ───────────────────────────
 
   async generateCsv(data: object[], fields: string[]): Promise<string> {
@@ -562,7 +693,7 @@ export class ReportsService {
 
     const browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     });
     try {
       const page = await browser.newPage();

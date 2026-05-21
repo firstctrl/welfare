@@ -155,7 +155,7 @@ export default function StaffListClient() {
                     <th
                       key={h.id}
                       className="px-4 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide whitespace-nowrap"
-                      style={{ height: 'var(--row-compact)' }}
+                      style={{ height: 'var(--row-default)' }}
                     >
                       {flexRender(h.column.columnDef.header, h.getContext())}
                     </th>
@@ -175,7 +175,11 @@ export default function StaffListClient() {
                   <td colSpan={columns.length}>
                     <EmptyState
                       heading="No staff members found"
-                      body={q || status ? 'Try adjusting your filters.' : 'Add the first staff member to get started.'}
+                      body={
+                        q || status
+                          ? 'Try adjusting your filters.'
+                          : 'Add the first staff member to get started.'
+                      }
                     />
                   </td>
                 </tr>
@@ -184,7 +188,7 @@ export default function StaffListClient() {
                   <tr
                     key={row.id}
                     className="hover:bg-neutral-50 cursor-pointer transition-colors duration-fast"
-                    style={{ height: 'var(--row-compact)' }}
+                    style={{ height: 'var(--row-default)' }}
                     onClick={() => router.push(`/staff/${row.original._id}`)}
                   >
                     {row.getVisibleCells().map((cell) => (
@@ -200,12 +204,7 @@ export default function StaffListClient() {
         </div>
 
         {data && data.total > limit && (
-          <Pagination
-            page={page}
-            total={data.total}
-            limit={limit}
-            onPageChange={setPage}
-          />
+          <Pagination page={page} total={data.total} limit={limit} onPageChange={setPage} />
         )}
       </div>
 

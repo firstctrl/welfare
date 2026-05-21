@@ -97,6 +97,73 @@ export class EmailService {
     }
   }
 
+  async sendWithAttachment(
+    recipient: IEmailRecipient,
+    subject: string,
+    html: string,
+    attachments: Array<{ filename: string; content: Buffer }>,
+    triggeredBy: EmailTriggerSource,
+  ): Promise<void> {
+    const config = await this.configService.getAll();
+    const provider = (config['EMAIL_PROVIDER']?.value ?? 'smtp') as EmailProvider;
+    const fromAddress = config['EMAIL_FROM_ADDRESS']?.value ?? 'noreply@welfare.local';
+    const fromName = config['EMAIL_FROM_NAME']?.value ?? 'Welfare System';
+
+    let errorMessage: string | undefined;
+    let status = EmailLogStatus.Sent;
+
+    try {
+      if (provider === EmailProvider.Resend) {
+        const apiKey = config['RESEND_API_KEY']?.value ?? '';
+        const resend = new Resend(apiKey);
+        const result = await resend.emails.send({
+          from: `${fromName} <${fromAddress}>`,
+          to: recipient.email,
+          subject,
+          html,
+          attachments: attachments.map(a => ({ filename: a.filename, content: a.content })),
+        });
+        if (result.error) throw new Error(result.error.message);
+      } else {
+        const transporter = nodemailer.createTransport({
+          host: config['OUTLOOK_HOST']?.value ?? 'smtp.office365.com',
+          port: parseInt(config['OUTLOOK_PORT']?.value ?? '587', 10),
+          secure: false,
+          auth: {
+            user: config['OUTLOOK_USERNAME']?.value ?? '',
+            pass: config['OUTLOOK_PASSWORD']?.value ?? '',
+          },
+        });
+        await transporter.sendMail({
+          from: `"${fromName}" <${fromAddress}>`,
+          to: recipient.email,
+          subject,
+          html,
+          attachments: attachments.map(a => ({ filename: a.filename, content: a.content })),
+        });
+      }
+    } catch (err) {
+      this.logger.error(`Email send failed to ${recipient.email}: ${(err as Error).message}`);
+      status = EmailLogStatus.Failed;
+      errorMessage = (err as Error).message;
+    }
+
+    try {
+      await this.emailLogModel.create({
+        recipient,
+        type: EmailLogType.ContributionStatement,
+        subject,
+        status,
+        provider,
+        triggeredBy,
+        sentAt: status === EmailLogStatus.Sent ? new Date() : undefined,
+        errorMessage,
+      });
+    } catch (logErr) {
+      this.logger.error(`Failed to write email log: ${(logErr as Error).message}`);
+    }
+  }
+
   async listLogs(filters: {
     staffId?: string;
     type?: EmailLogType;

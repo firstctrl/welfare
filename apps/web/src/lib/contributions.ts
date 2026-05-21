@@ -86,6 +86,10 @@ export async function resolveFlaggedEntry(
   return data;
 }
 
+export async function deleteContribution(id: string): Promise<void> {
+  await apiClient.delete(`/contributions/${id}`);
+}
+
 export async function manualContribution(payload: {
   staffId: string;
   amount: number;

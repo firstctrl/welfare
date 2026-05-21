@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import AuditClient from './audit-client';
 
-export const metadata = { title: 'Audit Log — NCC Welfare' };
+export const metadata = { title: 'Audit Log — NACOC Welfare' };
 
 export default function AuditPage() {
   return (

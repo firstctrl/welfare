@@ -43,7 +43,8 @@ RUN npm run build --workspace=apps/api
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN apk add --no-cache curl && \
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+RUN apk add --no-cache curl chromium nss freetype harfbuzz ca-certificates ttf-freefont && \
     addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nestjs
 COPY --from=api-builder /app/apps/api/dist ./dist

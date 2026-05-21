@@ -17,7 +17,11 @@ export function TableSkeleton({ rows = 5, cols = 5 }: { rows?: number; cols?: nu
   return (
     <div className="divide-y divide-neutral-100">
       {Array.from({ length: rows }).map((_, r) => (
-        <div key={r} className="flex gap-4 px-4 items-center" style={{ height: 'var(--row-compact)' }}>
+        <div
+          key={r}
+          className="flex gap-4 px-4 items-center"
+          style={{ height: 'var(--row-default)' }}
+        >
           {Array.from({ length: cols }).map((_, c) => (
             <Skeleton
               key={c}

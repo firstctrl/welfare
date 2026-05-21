@@ -67,7 +67,7 @@ export class StaffService implements OnModuleInit {
         status: dto.status ?? StaffStatus.Active,
         dateOfBirth: new Date(dto.dateOfBirth),
         dateOfEmployment: new Date(dto.dateOfEmployment),
-        dateOfFirstContribution: new Date(dto.dateOfFirstContribution),
+        dateOfFirstContribution: dto.dateOfFirstContribution ? new Date(dto.dateOfFirstContribution) : undefined,
       });
     } catch (err: any) {
       if (err?.code === 11000) {
@@ -88,7 +88,10 @@ export class StaffService implements OnModuleInit {
     const filter: Record<string, unknown> = {};
     if (status) filter.status = status;
     if (level) filter.level = level;
-    if (q) filter.$text = { $search: q };
+    if (q) {
+      const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      filter.$or = [{ fullName: rx }, { staffId: rx }, { pfNo: rx }];
+    }
     const skip = (page - 1) * limit;
     const [data, total] = await Promise.all([
       this.staffModel.find(filter).sort({ fullName: 1 }).skip(skip).limit(limit).exec(),
@@ -200,6 +203,23 @@ export class StaffService implements OnModuleInit {
     return this.minioClient.presignedGetObject(PHOTO_BUCKET, staff.photoKey, PHOTO_PRESIGN_TTL);
   }
 
+  async reindexAll(): Promise<{ indexed: number }> {
+    const allStaff = await this.staffModel.find().lean().exec();
+    const docs = allStaff.map((s) => ({
+      id: (s._id as any).toString(),
+      fullName: s.fullName,
+      staffId: s.staffId,
+      pfNo: s.pfNo,
+      phoneNumber: s.phoneNumber,
+      level: s.level,
+      status: s.status,
+    }));
+    if (docs.length > 0) {
+      await this.meiliClient.index('staff').addDocuments(docs, { primaryKey: 'id' });
+    }
+    return { indexed: docs.length };
+  }
+
   private syncToMeilisearch(staff: StaffDocument): void {
     const doc = {
       id: staff._id.toString(),
@@ -212,7 +232,7 @@ export class StaffService implements OnModuleInit {
     };
     this.meiliClient
       .index('staff')
-      .addDocuments([doc])
+      .addDocuments([doc], { primaryKey: 'id' })
       .catch(() => { /* fire-and-forget */ });
   }
 }

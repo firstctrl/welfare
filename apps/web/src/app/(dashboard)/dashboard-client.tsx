@@ -8,11 +8,11 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
-  Legend,
 } from 'recharts';
 import { Coins, Landmark, AlertTriangle, Users } from 'lucide-react';
 import { getDashboardStats } from '@/lib/reports';
@@ -102,7 +102,7 @@ export function DashboardClient() {
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-tertiary)' }} />
                 <YAxis
                   tick={{ fontSize: 11, fill: 'var(--text-tertiary)' }}
-                  tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                  tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
                 />
                 <Tooltip
                   formatter={(v: number) => fmtGHS(v)}
@@ -113,6 +113,7 @@ export function DashboardClient() {
                     fontFamily: 'Nunito, sans-serif',
                   }}
                 />
+                <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Nunito, sans-serif', paddingTop: 8 }} />
                 <Bar dataKey="expected" name="Expected" fill="var(--neutral-200)" radius={[3, 3, 0, 0]} />
                 <Bar dataKey="collected" name="Collected" fill="var(--chart-1)" radius={[3, 3, 0, 0]} />
               </BarChart>

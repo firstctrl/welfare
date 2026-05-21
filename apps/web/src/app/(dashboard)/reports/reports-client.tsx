@@ -1,14 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { Download } from 'lucide-react';
+import { Download, Send, FileText, TrendingUp, AlertCircle, Banknote, BarChart3, Search, Users, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   getMonthlyContributions,
   getArrears,
@@ -19,8 +20,14 @@ import {
   getGuarantorExposure,
   getBadDebt,
   getExitClearance,
+  getStaffStatement,
+  sendStaffStatement,
+  downloadStatementPdf,
+  triggerBulkSend,
+  getBulkSendStatus,
   buildDownloadUrl,
 } from '@/lib/reports';
+import { searchStaff } from '@/lib/staff';
 import type {
   IMonthlyContributionRow,
   IArrearRow,
@@ -33,8 +40,10 @@ import type {
   IExitClearanceRow,
 } from '@welfare/shared';
 import { Card, CardHeader, CardBody } from '@/components/ui/card';
+import { KpiCard } from '@/components/ui/kpi-card';
 import { Field, Input, Select } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { fmtGHS, fmtDate } from '@/lib/format';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -201,40 +210,425 @@ function DownloadBtn({ path, formats }: { path: string; formats: ('csv' | 'pdf')
 
 // ── Report panels ─────────────────────────────────────────────────────────────
 
-function MonthlyContribPanel() {
-  const [month, setMonth] = useState(CUR_MONTH);
-  const [year, setYear] = useState(CUR_YEAR);
+const STATUS_BG: Record<string, string> = {
+  Paid:           'bg-success-50 text-success-700',
+  Partial:        'bg-warning-50 text-warning-700',
+  Missed:         'bg-danger-50 text-danger-700',
+  CarriedForward: 'bg-info-50 text-info-700',
+};
+
+function StaffStatementPanel() {
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [staffInput, setStaffInput]           = useState('');
+  const [staffOptions, setStaffOptions]       = useState<{ _id: string; fullName: string; staffId: string }[]>([]);
+  const [showDropdown, setShowDropdown]       = useState(false);
+  const [selectedStaff, setSelectedStaff]     = useState<{ _id: string; fullName: string; staffId: string } | null>(null);
+
   const { data, isLoading } = useQuery({
-    queryKey: ['report-monthly-contrib', month, year],
-    queryFn: () => getMonthlyContributions({ month, year }),
+    queryKey: ['staff-statement', selectedStaff?._id],
+    queryFn: () => getStaffStatement(selectedStaff!._id),
+    enabled: !!selectedStaff,
   });
 
+  const sendMutation = useMutation({
+    mutationFn: () => sendStaffStatement(selectedStaff!._id),
+    onSuccess: (res) => toast.success(`Statement sent to ${res.email}`),
+    onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Failed to send statement'),
+  });
+
+  const handleSearch = useCallback(async (q: string) => {
+    setStaffInput(q);
+    if (q.length < 1) { setStaffOptions([]); setShowDropdown(false); return; }
+    const res = await searchStaff(q, { limit: 8 } as any);
+    const opts = res.data.map((s: any) => ({ _id: s._id, fullName: s.fullName, staffId: s.staffId }));
+    setStaffOptions(opts);
+    setShowDropdown(opts.length > 0);
+  }, []);
+
+  function selectStaff(s: { _id: string; fullName: string; staffId: string }) {
+    setSelectedStaff(s);
+    setStaffInput(`${s.fullName} (${s.staffId})`);
+    setShowDropdown(false);
+  }
+
+  const { kpis, rows, years } = data ?? {};
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-3 items-end">
-        <Field label="Month">
-          <Select
-            value={String(month)}
-            onChange={e => setMonth(+e.target.value)}
-            options={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))}
+    <div className="space-y-5">
+      {/* Staff picker */}
+      <div className="flex items-end gap-3">
+        <div className="relative w-80" ref={dropdownRef}>
+          <Field label="Select Staff Member">
+            <div className="relative">
+              <input
+                value={staffInput}
+                onChange={e => handleSearch(e.target.value)}
+                onFocus={() => staffOptions.length > 0 && setShowDropdown(true)}
+                placeholder="Search by name or staff ID…"
+                className="w-full px-3 pr-8 h-[var(--row-default)] rounded-sm border border-neutral-200 bg-white text-base outline-none focus:border-primary-500 focus:shadow-focus placeholder:text-neutral-400"
+              />
+              <Search size={14} strokeWidth={1.75} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+            </div>
+          </Field>
+          {showDropdown && (
+            <div className="absolute z-20 w-full mt-1 bg-white border border-neutral-200 rounded-sm shadow-lg overflow-hidden">
+              {staffOptions.map(s => (
+                <button
+                  key={s._id}
+                  onMouseDown={() => selectStaff(s)}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-primary-50 transition-colors"
+                >
+                  <span className="font-medium text-neutral-900">{s.fullName}</span>
+                  <span className="ml-2 font-mono text-xs text-neutral-400">{s.staffId}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {selectedStaff && data && (
+          <div className="flex gap-2 ml-auto">
+            <Button
+              variant="secondary"
+              size="sm"
+              Icon={FileText}
+              onClick={() => downloadStatementPdf(selectedStaff._id, selectedStaff.staffId).catch(err => toast.error('Download failed'))}
+            >
+              Download PDF
+            </Button>
+            {data.staff.email && (
+              <Button
+                variant="primary"
+                size="sm"
+                Icon={Send}
+                loading={sendMutation.isPending}
+                onClick={() => sendMutation.mutate()}
+              >
+                Send Statement
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {!selectedStaff && (
+        <div className="flex items-center justify-center py-16 text-neutral-400 text-sm">
+          Search and select a staff member to view their contribution statement
+        </div>
+      )}
+
+      {selectedStaff && isLoading && (
+        <div className="flex items-center justify-center py-16 text-neutral-400 text-sm">Loading…</div>
+      )}
+
+      {data && kpis && (
+        <>
+          {/* KPI cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <KpiCard
+              label="Total Paid"
+              value={fmtGHS(kpis.totalPaid)}
+              icon={Banknote}
+              iconKind="success"
+            />
+            <KpiCard
+              label="Total Expected"
+              value={fmtGHS(kpis.totalExpected)}
+              icon={TrendingUp}
+              iconKind="primary"
+            />
+            <KpiCard
+              label="Collection Rate"
+              value={`${kpis.collectionRate}%`}
+              icon={BarChart3}
+              iconKind={kpis.collectionRate >= 90 ? 'success' : kpis.collectionRate >= 70 ? 'warning' : 'danger'}
+            />
+            <KpiCard
+              label="Missed / Partial"
+              value={`${kpis.missedMonths} months`}
+              subtext={kpis.totalSurplus > 0 ? `Surplus: ${fmtGHS(kpis.totalSurplus)}` : undefined}
+              icon={AlertCircle}
+              iconKind={kpis.missedMonths === 0 ? 'success' : kpis.missedMonths <= 3 ? 'warning' : 'danger'}
+            />
+          </div>
+
+          {/* Crosstab */}
+          {rows && rows.length > 0 ? (
+            <div className="overflow-x-auto rounded-md border border-neutral-200">
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-primary-600 text-white">
+                    <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap w-16">Year</th>
+                    {MONTHS.map(m => (
+                      <th key={m} className="px-3 py-2.5 text-center font-semibold whitespace-nowrap min-w-[72px]">{m}</th>
+                    ))}
+                    <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {rows.map(row => (
+                    <tr key={row.year} className="hover:bg-neutral-50 group">
+                      <td className="px-4 py-2 font-bold text-neutral-700 bg-neutral-50 group-hover:bg-neutral-100 transition-colors">{row.year}</td>
+                      {Array.from({ length: 12 }, (_, i) => {
+                        const cell = row.cells[i + 1];
+                        return (
+                          <td key={i} className="px-1 py-1 text-center">
+                            {cell ? (
+                              <span
+                                className={cn('inline-block w-full px-1.5 py-1 rounded text-xs font-mono tabular leading-tight', STATUS_BG[cell.status] ?? 'bg-neutral-100 text-neutral-600')}
+                                title={`${cell.status} · Expected: ${fmtGHS(cell.expectedAmount)}`}
+                              >
+                                {fmtGHS(cell.paidAmount)}
+                              </span>
+                            ) : (
+                              <span className="text-neutral-300">—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className="px-4 py-2 text-right font-bold font-mono tabular text-neutral-900">{fmtGHS(row.yearTotal)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-neutral-50 border-t-2 border-neutral-200">
+                    <td className="px-4 py-2 font-bold text-neutral-700 text-xs uppercase tracking-wide">Total</td>
+                    {Array.from({ length: 12 }, (_, i) => {
+                      const monthTotal = (rows ?? []).reduce((s, r) => s + (r.cells[i + 1]?.paidAmount ?? 0), 0);
+                      return (
+                        <td key={i} className="px-1 py-2 text-center font-bold font-mono tabular text-xs text-neutral-700">
+                          {monthTotal > 0 ? fmtGHS(monthTotal) : <span className="text-neutral-300">—</span>}
+                        </td>
+                      );
+                    })}
+                    <td className="px-4 py-2 text-right font-bold font-mono tabular text-neutral-900">{fmtGHS(kpis.totalPaid)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-12 border border-neutral-200 rounded-md text-neutral-400 text-sm">
+              No contribution records found for this staff member
+            </div>
+          )}
+
+          {/* Status legend */}
+          <div className="flex items-center gap-4 text-xs text-neutral-500">
+            <span className="font-medium">Status:</span>
+            {Object.entries(STATUS_BG).map(([status, cls]) => (
+              <span key={status} className={cn('px-2 py-0.5 rounded font-medium', cls)}>{status}</span>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function BulkStatementsPanel() {
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [year, setYear]               = useState(CUR_YEAR);
+  const [sendTo, setSendTo]           = useState<'all' | 'selected'>('all');
+  const [staffInput, setStaffInput]   = useState('');
+  const [staffOptions, setStaffOptions] = useState<{ _id: string; fullName: string; staffId: string }[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selected, setSelected]       = useState<{ _id: string; fullName: string; staffId: string }[]>([]);
+  const [jobId, setJobId]             = useState<string | null>(null);
+  const [polling, setPolling]         = useState(false);
+  const [status, setStatus]           = useState<Awaited<ReturnType<typeof getBulkSendStatus>> | null>(null);
+
+  const handleSearch = useCallback(async (q: string) => {
+    setStaffInput(q);
+    if (q.length < 1) { setStaffOptions([]); setShowDropdown(false); return; }
+    const res = await searchStaff(q, { limit: 8 } as any);
+    const opts = res.data
+      .map((s: any) => ({ _id: s._id, fullName: s.fullName, staffId: s.staffId }))
+      .filter((s: any) => !selected.find(sel => sel._id === s._id));
+    setStaffOptions(opts);
+    setShowDropdown(opts.length > 0);
+  }, [selected]);
+
+  function addStaff(s: { _id: string; fullName: string; staffId: string }) {
+    setSelected(prev => [...prev, s]);
+    setStaffInput('');
+    setStaffOptions([]);
+    setShowDropdown(false);
+  }
+
+  function removeStaff(id: string) {
+    setSelected(prev => prev.filter(s => s._id !== id));
+  }
+
+  useEffect(() => {
+    if (!jobId || !polling) return;
+    const interval = setInterval(async () => {
+      try {
+        const s = await getBulkSendStatus(jobId);
+        setStatus(s);
+        if (s.state === 'completed' || s.state === 'failed') {
+          setPolling(false);
+          clearInterval(interval);
+        }
+      } catch {
+        setPolling(false);
+        clearInterval(interval);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [jobId, polling]);
+
+  const sendMutation = useMutation({
+    mutationFn: () => triggerBulkSend({
+      year,
+      sendTo,
+      staffIds: sendTo === 'selected' ? selected.map(s => s._id) : undefined,
+    }),
+    onSuccess: (res) => {
+      setJobId(res.jobId);
+      setPolling(true);
+      setStatus(null);
+      toast.success(`Bulk send queued — ${res.queued} staff members`);
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Failed to queue bulk send'),
+  });
+
+  const isRunning = status?.state === 'active' || status?.state === 'waiting';
+  const isDone    = status?.state === 'completed';
+  const isFailed  = status?.state === 'failed';
+
+  return (
+    <div className="space-y-5">
+      <p className="text-sm text-neutral-500">
+        Generate and email contribution statements as PDF to staff members. A monthly cron automatically sends statements on the 1st of each month.
+      </p>
+
+      {/* Config */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-4 bg-neutral-50 rounded-md border border-neutral-200">
+        <Field label="Statement Year">
+          <Input
+            type="number"
+            value={year}
+            onChange={e => setYear(+e.target.value)}
             style={{ width: 120 }}
           />
         </Field>
-        <Field label="Year">
-          <Input type="number" value={year} onChange={e => setYear(+e.target.value)} style={{ width: 100 }} />
+
+        <Field label="Send To">
+          <div className="flex gap-4 mt-1">
+            {(['all', 'selected'] as const).map(opt => (
+              <label key={opt} className="flex items-center gap-2 cursor-pointer text-sm">
+                <input
+                  type="radio"
+                  name="sendTo"
+                  value={opt}
+                  checked={sendTo === opt}
+                  onChange={() => setSendTo(opt)}
+                  className="accent-primary-600"
+                />
+                {opt === 'all' ? 'All active staff with email' : 'Selected staff only'}
+              </label>
+            ))}
+          </div>
         </Field>
-        <div className="self-end">
-          <DownloadBtn path={`contributions/monthly?month=${month}&year=${year}`} formats={['csv', 'pdf']} />
-        </div>
       </div>
-      {data && (
-        <div className="flex gap-6 text-sm text-neutral-600 bg-primary-50 border border-primary-100 rounded-sm px-4 py-2">
-          <span>Expected: <strong className="font-mono tabular text-neutral-900">{fmtGHS(data.totalExpected)}</strong></span>
-          <span>Collected: <strong className="font-mono tabular text-neutral-900">{fmtGHS(data.totalPaid)}</strong></span>
-          <span>Surplus: <strong className="font-mono tabular text-neutral-900">{fmtGHS(data.totalSurplus)}</strong></span>
+
+      {/* Staff picker (selected mode) */}
+      {sendTo === 'selected' && (
+        <div className="space-y-3">
+          <div className="relative w-80" ref={dropdownRef}>
+            <Field label="Add Staff">
+              <div className="relative">
+                <input
+                  value={staffInput}
+                  onChange={e => handleSearch(e.target.value)}
+                  onFocus={() => staffOptions.length > 0 && setShowDropdown(true)}
+                  placeholder="Search by name or staff ID…"
+                  className="w-full px-3 pr-8 h-[var(--row-default)] rounded-sm border border-neutral-200 bg-white text-base outline-none focus:border-primary-500 focus:shadow-focus placeholder:text-neutral-400"
+                />
+                <Search size={14} strokeWidth={1.75} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+              </div>
+            </Field>
+            {showDropdown && (
+              <div className="absolute z-20 w-full mt-1 bg-white border border-neutral-200 rounded-sm shadow-lg overflow-hidden">
+                {staffOptions.map(s => (
+                  <button
+                    key={s._id}
+                    onMouseDown={() => addStaff(s)}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-primary-50 transition-colors"
+                  >
+                    <span className="font-medium text-neutral-900">{s.fullName}</span>
+                    <span className="ml-2 font-mono text-xs text-neutral-400">{s.staffId}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {selected.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {selected.map(s => (
+                <span key={s._id} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-primary-50 text-primary-700 rounded-full text-xs font-medium">
+                  {s.fullName}
+                  <button onClick={() => removeStaff(s._id)} className="hover:text-danger-600 transition-colors">×</button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
-      {isLoading ? <p className="text-xs text-neutral-400">Loading…</p> : <ReportTable columns={COLS_CONTRIB} data={data?.rows ?? []} />}
+
+      {/* Send button */}
+      <div className="flex items-center gap-4">
+        <Button
+          variant="primary"
+          size="sm"
+          Icon={sendMutation.isPending || polling ? Loader2 : Send}
+          loading={sendMutation.isPending || polling}
+          disabled={sendTo === 'selected' && selected.length === 0}
+          onClick={() => sendMutation.mutate()}
+        >
+          Send Statements
+        </Button>
+        {sendTo === 'selected' && selected.length > 0 && (
+          <span className="text-xs text-neutral-400">{selected.length} staff selected</span>
+        )}
+      </div>
+
+      {/* Job status */}
+      {status && (
+        <div className="p-4 rounded-md border border-neutral-200 space-y-3">
+          <div className="flex items-center gap-2">
+            {isDone   && <CheckCircle2 size={16} className="text-success-600" />}
+            {isFailed && <XCircle size={16} className="text-danger-600" />}
+            {isRunning && <Loader2 size={16} className="animate-spin text-primary-600" />}
+            <span className="text-sm font-medium text-neutral-800">
+              {isDone   && 'Completed'}
+              {isFailed && 'Failed'}
+              {isRunning && `Processing… ${status.progress}%`}
+            </span>
+            <span className="ml-auto text-xs text-neutral-400 font-mono">Job {status.jobId}</span>
+          </div>
+
+          {/* Progress bar */}
+          <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
+            <div
+              className={cn('h-full rounded-full transition-all duration-300', isDone ? 'bg-success-500' : isFailed ? 'bg-danger-500' : 'bg-primary-500')}
+              style={{ width: `${isDone ? 100 : status.progress}%` }}
+            />
+          </div>
+
+          {status.result && (
+            <div className="flex gap-6 text-sm">
+              <span className="text-success-700 font-medium">✓ {status.result.sent} sent</span>
+              {status.result.failed > 0 && <span className="text-danger-700 font-medium">✗ {status.result.failed} failed</span>}
+              <span className="text-neutral-500">of {status.result.total} total</span>
+            </div>
+          )}
+
+          {isFailed && status.failedReason && (
+            <p className="text-xs text-danger-700 bg-danger-50 px-3 py-2 rounded">{status.failedReason}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -304,7 +698,8 @@ function SimplePanel<T>({
 // ── Sidebar nav ───────────────────────────────────────────────────────────────
 
 const SECTIONS = [
-  { id: 'monthly-contrib', label: 'Monthly Contributions' },
+  { id: 'monthly-contrib', label: 'Contribution Statement' },
+  { id: 'bulk-statements', label: 'Bulk Statements' },
   { id: 'arrears', label: 'Arrears' },
   { id: 'guarantor-offsets', label: 'Guarantor Offsets' },
   { id: 'active-loans', label: 'Active Loans' },
@@ -349,7 +744,8 @@ export function ReportsClient() {
         <Card className="min-h-[400px]">
           <CardHeader title={activeSection?.label ?? ''} />
           <CardBody>
-            {active === 'monthly-contrib' && <MonthlyContribPanel />}
+            {active === 'monthly-contrib' && <StaffStatementPanel />}
+            {active === 'bulk-statements' && <BulkStatementsPanel />}
             {active === 'arrears' && <ArrearsPanel />}
             {active === 'guarantor-offsets' && (
               <SimplePanel

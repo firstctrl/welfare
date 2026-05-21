@@ -14,8 +14,8 @@ class FlaggedEntry {
 
 @Schema({ timestamps: true, collection: 'import_batches' })
 export class ImportBatch {
-  @Prop({ required: true, min: 1, max: 12 }) month!: number;
-  @Prop({ required: true, min: 2000 }) year!: number;
+  @Prop({ required: true, min: 0, max: 12 }) month!: number;
+  @Prop({ required: true, min: 0 }) year!: number;
   @Prop({ required: true }) fileName!: string;
   @Prop({ required: true }) uploadedBy!: string;
   @Prop({ required: true, min: 0 }) totalRows!: number;

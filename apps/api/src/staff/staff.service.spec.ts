@@ -73,7 +73,7 @@ describe('StaffService', () => {
       await expect(
         service.create(
           { fullName: 'Test', staffId: 'STF001', pfNo: 'PF001', dateOfBirth: '1990-01-01',
-            phoneNumber: '08012345678', dateOfEmployment: '2020-01-01',
+            phoneNumber: '08012345678', email: 'test@example.com', dateOfEmployment: '2020-01-01',
             dateOfFirstContribution: '2020-02-01', level: 'GL 10', point: 0 },
           'actor-id', 'Actor Name',
         ),
@@ -84,7 +84,7 @@ describe('StaffService', () => {
       mockStaffModel.create.mockResolvedValue({ ...baseStaff });
       const result = await service.create(
         { fullName: 'Aminu Tijani', staffId: 'STF001', pfNo: 'PF001',
-          dateOfBirth: '1990-01-01', phoneNumber: '08012345678',
+          dateOfBirth: '1990-01-01', phoneNumber: '08012345678', email: 'aminu@example.com',
           dateOfEmployment: '2020-01-01', dateOfFirstContribution: '2020-02-01',
           level: 'GL 10', point: 0 },
         'actor-id', 'Actor Name',
