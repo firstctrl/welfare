@@ -493,6 +493,86 @@ export class LoansService implements OnModuleInit {
     this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.Loan, loanId, undefined, { deleted: true });
   }
 
+  async deleteRepayment(
+    loanId: string,
+    repaymentId: string,
+    actorId: string,
+    actorName: string,
+  ): Promise<void> {
+    const repayment = await this.repaymentModel.findById(repaymentId).exec();
+    if (!repayment || repayment.loanId !== loanId)
+      throw new NotFoundException('Repayment not found');
+
+    if (repayment.paidAmount === 0)
+      throw new BadRequestException('No payment recorded on this instalment');
+
+    if (
+      repayment.source === RepaymentSource.ExitDeduction ||
+      repayment.source === RepaymentSource.GuarantorOffset
+    ) {
+      throw new BadRequestException(
+        `Cannot reverse a ${repayment.source} payment — reverse the originating settlement instead`,
+      );
+    }
+
+    const before = { paidAmount: repayment.paidAmount, status: repayment.status, paidDate: repayment.paidDate };
+
+    const now = new Date();
+    repayment.paidAmount = 0;
+    repayment.status = repayment.dueDate < now ? LoanRepaymentStatus.Overdue : LoanRepaymentStatus.Pending;
+    repayment.paidDate = undefined;
+    repayment.source = undefined;
+    repayment.guarantorStaffId = undefined;
+    repayment.notes = undefined;
+    await repayment.save();
+
+    // If loan was auto-completed, revert it to Active
+    const loan = await this.findOne(loanId);
+    if (loan.status === LoanStatus.Completed) {
+      await this.loanModel.findByIdAndUpdate(loanId, { $set: { status: LoanStatus.Active } }).exec();
+    }
+
+    this.auditService.log(actorId, actorName, AuditAction.Delete, AuditEntity.Loan, loanId, before, {
+      repaymentId,
+      action: 'repayment_reversed',
+    });
+  }
+
+  // ───────────────── WRITE OFF ─────────────────
+
+  async writeOff(loanId: string, actorId: string, actorName: string): Promise<LoanDocument> {
+    const loan = await this.findOne(loanId);
+    if (loan.status !== LoanStatus.Active)
+      throw new BadRequestException('Only active loans can be written off');
+
+    const unpaid = await this.repaymentModel
+      .find({ loanId, status: { $nin: [LoanRepaymentStatus.Paid, LoanRepaymentStatus.Waived] } })
+      .exec();
+
+    const writtenOffAmount = round2(
+      unpaid.reduce((s, r) => s + r.dueAmount + r.penaltyAmount - r.paidAmount, 0),
+    );
+
+    for (const inst of unpaid) {
+      inst.status = LoanRepaymentStatus.Waived;
+      await inst.save();
+    }
+
+    const updated = await this.loanModel
+      .findByIdAndUpdate(
+        loanId,
+        { $set: { status: LoanStatus.WrittenOff, settledAt: new Date(), badDebtAmount: writtenOffAmount } },
+        { new: true },
+      )
+      .exec();
+
+    this.auditService.log(actorId, actorName, AuditAction.WriteOff, AuditEntity.Loan, loanId, undefined, {
+      writtenOffAmount,
+    });
+
+    return updated!;
+  }
+
   // ───────────────── EXIT SETTLEMENT ─────────────────
 
   async exitSettle(

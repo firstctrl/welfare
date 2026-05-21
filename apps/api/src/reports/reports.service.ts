@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import * as fs from 'fs';
+import * as path from 'path';
 import { parse as toCsv } from 'json2csv';
 import puppeteer from 'puppeteer';
 import {
@@ -568,6 +570,11 @@ export class ReportsService {
     const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const fmt = (n: number) => `GHS ${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+    const logoPath = path.join(__dirname, 'assets', 'ncc-logo.png');
+    const logoBase64 = fs.existsSync(logoPath)
+      ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
+      : '';
+
     const statusColor: Record<string, string> = {
       Paid: '#dcfce7', Partial: '#fef9c3', Missed: '#fee2e2', CarriedForward: '#dbeafe',
     };
@@ -589,8 +596,8 @@ export class ReportsService {
 <head><meta charset="utf-8"/>
 <style>
   body{font-family:Arial,sans-serif;font-size:11px;margin:0;padding:20px;color:#111}
-  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;border-bottom:2px solid #1e40af;padding-bottom:12px}
-  .org{font-size:18px;font-weight:bold;color:#1e40af}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;border-bottom:2px solid #bc4680;padding-bottom:12px}
+  .org{font-size:18px;font-weight:bold;color:#bc4680}
   .title{font-size:13px;font-weight:bold;margin-top:4px}
   .meta{color:#666;font-size:10px;margin-top:2px}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
@@ -598,7 +605,7 @@ export class ReportsService {
   .kpi-label{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em}
   .kpi-value{font-size:15px;font-weight:bold;color:#1e293b;margin-top:2px}
   table{width:100%;border-collapse:collapse;font-size:10px}
-  th{background:#1e40af;color:#fff;padding:5px 6px;text-align:center;white-space:nowrap;font-size:10px}
+  th{background:#bc4680;color:#fff;padding:5px 6px;text-align:center;white-space:nowrap;font-size:10px}
   th:first-child{text-align:left}
   td{padding:4px 6px;border:1px solid #e5e7eb;text-align:center;white-space:nowrap}
   td.year-label{font-weight:bold;background:#f8fafc;text-align:left}
@@ -607,14 +614,16 @@ export class ReportsService {
   .legend{display:flex;gap:12px;margin-top:10px;font-size:9px}
   .leg-item{display:flex;align-items:center;gap:4px}
   .leg-dot{width:10px;height:10px;border-radius:2px;border:1px solid #ccc}
+  .watermark{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-40deg);width:320px;height:320px;background-image:url('${logoBase64}');background-size:contain;background-repeat:no-repeat;background-position:center;opacity:0.05;z-index:0;pointer-events:none}
 </style>
 </head>
 <body>
+${logoBase64 ? '<div class="watermark"></div>' : ''}
 <div class="header">
   <div>
     <div class="org">NACOC Welfare</div>
-    <div class="title">Contribution Statement — ${staff.fullName}</div>
-    <div class="meta">Staff No: ${staff.staffId} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString('en-GB')}</div>
+    <div class="title">Contribution Statement - ${staff.fullName}</div>
+    <div class="meta">Staff ID: ${staff.staffId} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString('en-GB')}</div>
   </div>
 </div>
 <div class="kpis">
@@ -639,7 +648,20 @@ export class ReportsService {
     try {
       const page = await browser.newPage();
       await page.setContent(html, { waitUntil: 'domcontentloaded' });
-      const pdf = await page.pdf({ format: 'A4', landscape: true, printBackground: true, margin: { top: '12mm', right: '10mm', bottom: '12mm', left: '10mm' } });
+      const confidentialBand = `
+        <div style="width:100%;font-size:8px;font-family:Arial,sans-serif;color:#b91c1c;
+                    text-align:center;font-weight:bold;letter-spacing:4px;padding:3px 0;">
+          CONFIDENTIAL
+        </div>`;
+      const pdf = await page.pdf({
+        format: 'A4',
+        landscape: true,
+        printBackground: true,
+        displayHeaderFooter: true,
+        headerTemplate: confidentialBand,
+        footerTemplate: confidentialBand,
+        margin: { top: '16mm', right: '10mm', bottom: '16mm', left: '10mm' },
+      });
       return Buffer.from(pdf);
     } finally {
       await browser.close();
@@ -676,7 +698,7 @@ export class ReportsService {
   h1{font-size:18px;margin-bottom:4px}
   .meta{color:#666;font-size:11px;margin-bottom:16px}
   table{width:100%;border-collapse:collapse}
-  th{background:#1e40af;color:#fff;padding:6px 8px;text-align:left;font-size:11px}
+  th{background:#bc4680;color:#fff;padding:6px 8px;text-align:left;font-size:11px}
   td{padding:5px 8px;border-bottom:1px solid #e5e7eb;font-size:11px}
   tr:nth-child(even) td{background:#f9fafb}
 </style>

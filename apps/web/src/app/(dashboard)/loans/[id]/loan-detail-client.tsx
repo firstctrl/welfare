@@ -7,10 +7,10 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Download, Send, CreditCard, Trash2 } from 'lucide-react';
+import { Download, Send, CreditCard, Trash2, Ban } from 'lucide-react';
 import { LoanStatus, LoanRepaymentStatus, StaffStatus } from '@welfare/shared';
 import type { ILoanRepayment } from '@welfare/shared';
-import { getLoan, getLoanSchedule, getLoanDocumentUrl, recordPayment, exitSettle, getLoansByGuarantor, deleteLoan } from '@/lib/loans';
+import { getLoan, getLoanSchedule, getLoanDocumentUrl, recordPayment, exitSettle, getLoansByGuarantor, deleteLoan, writeOffLoan } from '@/lib/loans';
 import { getStaff } from '@/lib/staff';
 import { sendLoanSchedule } from '@/lib/email';
 import { StatusBadge } from '@/components/ui/badge';
@@ -68,6 +68,7 @@ export function LoanDetailClient({ id }: { id: string }) {
   const qc = useQueryClient();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showWriteOffModal, setShowWriteOffModal] = useState(false);
   const [sendingSchedule, setSendingSchedule] = useState(false);
 
   const { data: loan, isLoading: loanLoading } = useQuery({ queryKey: ['loans', id], queryFn: () => getLoan(id) });
@@ -115,6 +116,12 @@ export function LoanDetailClient({ id }: { id: string }) {
     onError: (err: unknown) => { toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Delete failed'); },
   });
 
+  const writeOffMutation = useMutation({
+    mutationFn: () => writeOffLoan(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans', id] }); qc.invalidateQueries({ queryKey: ['loans', id, 'schedule'] }); setShowWriteOffModal(false); toast.success('Loan written off'); },
+    onError: (err: unknown) => { toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Write-off failed'); },
+  });
+
   const settlementMutation = useMutation({
     mutationFn: (values: SettlementForm) => exitSettle(id, values),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans', id] }); toast.success('Exit settlement recorded'); },
@@ -128,6 +135,9 @@ export function LoanDetailClient({ id }: { id: string }) {
 
   if (loanLoading) return <p className="text-sm text-neutral-400">Loading…</p>;
   if (!loan) return <p className="text-sm text-danger-600">Loan not found.</p>;
+
+  const hasPaidPayments = !!schedule?.some((r) => r.paidAmount > 0);
+  const canDelete = !(loan.status === LoanStatus.Active && hasPaidPayments);
 
   const showExitPanel = !!borrower && EXIT_STATUSES.has(borrower.status) && loan.status === LoanStatus.Active;
   const showSettlementSummary = loan.status !== LoanStatus.Active &&
@@ -178,9 +188,16 @@ export function LoanDetailClient({ id }: { id: string }) {
                 Record Payment
               </Button>
             )}
-            <Button variant="danger" size="sm" Icon={Trash2} onClick={() => setShowDeleteModal(true)}>
-              Delete
-            </Button>
+            {loan.status === LoanStatus.Active && (
+              <Button variant="danger" size="sm" Icon={Ban} onClick={() => setShowWriteOffModal(true)}>
+                Write Off
+              </Button>
+            )}
+            {canDelete && (
+              <Button variant="danger" size="sm" Icon={Trash2} onClick={() => setShowDeleteModal(true)}>
+                Delete
+              </Button>
+            )}
           </div>
         </CardBody>
       </Card>
@@ -357,6 +374,33 @@ export function LoanDetailClient({ id }: { id: string }) {
         </Card>
       )}
 
+      {/* Write Off Modal */}
+      {showWriteOffModal && (
+        <Modal
+          open
+          onClose={() => setShowWriteOffModal(false)}
+          title="Write Off Loan"
+          size="sm"
+          icon={<Ban size={20} strokeWidth={1.75} />}
+          iconKind="danger"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setShowWriteOffModal(false)}>Cancel</Button>
+              <Button variant="danger" loading={writeOffMutation.isPending} onClick={() => writeOffMutation.mutate()}>
+                Confirm Write Off
+              </Button>
+            </>
+          }
+        >
+          <div className="text-sm text-neutral-700 mt-2 space-y-2">
+            <p>Mark this loan as written off? All remaining unpaid instalments will be waived.</p>
+            <div className="bg-warning-50 border border-warning-200 rounded-sm px-3 py-2 text-xs text-warning-700">
+              Outstanding balance: <span className="font-semibold font-mono tabular">{fmtGHS(summary.outstanding)}</span> will be recorded as bad debt.
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* Delete Confirm Modal */}
       {showDeleteModal && (
         <Modal
@@ -378,11 +422,6 @@ export function LoanDetailClient({ id }: { id: string }) {
           <p className="text-sm text-neutral-700 mt-2">
             Permanently delete this loan and all repayment records? This cannot be undone.
           </p>
-          {loan.status === LoanStatus.Active && (
-            <p className="text-xs text-warning-700 mt-2 bg-warning-50 border border-warning-200 rounded-sm px-3 py-2">
-              Active loans with recorded payments cannot be deleted.
-            </p>
-          )}
         </Modal>
       )}
 

@@ -121,6 +121,15 @@ export async function deleteLoan(id: string): Promise<void> {
   await apiClient.delete(`/loans/${id}`);
 }
 
+export async function writeOffLoan(id: string): Promise<ILoan> {
+  const { data } = await apiClient.patch(`/loans/${id}/write-off`);
+  return data;
+}
+
+export async function deleteRepayment(loanId: string, repaymentId: string): Promise<void> {
+  await apiClient.delete(`/loans/${loanId}/repayments/${repaymentId}`);
+}
+
 export async function getLoansByGuarantor(
   staffId: string,
   page = 1,

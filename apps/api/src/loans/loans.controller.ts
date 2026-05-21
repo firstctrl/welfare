@@ -137,6 +137,14 @@ export class LoansController {
     return this.loansService.recordPayment(id, dto, user.sub, user.displayName);
   }
 
+  @Patch(':id/write-off')
+  writeOff(
+    @Param('id') id: string,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.loansService.writeOff(id, user.sub, user.displayName);
+  }
+
   @Post(':id/settle-exit')
   exitSettle(
     @Param('id') id: string,
@@ -144,6 +152,16 @@ export class LoansController {
     @CurrentUser() user: { sub: string; displayName: string },
   ) {
     return this.loansService.exitSettle(id, dto, user.sub, user.displayName);
+  }
+
+  @Delete(':id/repayments/:repaymentId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteRepayment(
+    @Param('id') id: string,
+    @Param('repaymentId') repaymentId: string,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.loansService.deleteRepayment(id, repaymentId, user.sub, user.displayName);
   }
 
   @Delete(':id')
