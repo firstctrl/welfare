@@ -204,17 +204,25 @@ export class LoansService implements OnModuleInit {
     this.syncLoanToMeilisearch(loan, staff.fullName);
 
     const loanId = loan._id.toString();
+    const totalInterest = round2(totalRepayable - dto.principalAmount);
+    const baseInterestPerInst = round2(totalInterest / dto.tenureMonths);
     const schedule = Array.from({ length: dto.tenureMonths }, (_, i) => {
       const isLast = i === dto.tenureMonths - 1;
       const dueAmount = isLast
         ? round2(totalRepayable - monthlyInstalment * (dto.tenureMonths - 1))
         : monthlyInstalment;
+      const interestAmount = isLast
+        ? round2(totalInterest - baseInterestPerInst * (dto.tenureMonths - 1))
+        : baseInterestPerInst;
+      const principalAmount = round2(dueAmount - interestAmount);
       return {
         loanId,
         staffId: dto.staffId,
         instalmentNumber: i + 1,
         dueDate: computeDueDate(disbursedDate, i + 1),
         dueAmount,
+        principalAmount,
+        interestAmount,
         paidAmount: 0,
         penaltyAmount: 0,
         status: LoanRepaymentStatus.Pending,

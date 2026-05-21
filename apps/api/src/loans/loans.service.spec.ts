@@ -135,9 +135,15 @@ describe('LoansService', () => {
       );
       expect(repaymentModel.insertMany).toHaveBeenCalledWith(
         expect.arrayContaining([
-          expect.objectContaining({ instalmentNumber: 1, dueAmount: 3500, status: LoanRepaymentStatus.Pending }),
-          expect.objectContaining({ instalmentNumber: 2 }),
-          expect.objectContaining({ instalmentNumber: 3 }),
+          expect.objectContaining({
+            instalmentNumber: 1,
+            dueAmount: 3500,
+            principalAmount: 3333.33,
+            interestAmount: 166.67,
+            status: LoanRepaymentStatus.Pending,
+          }),
+          expect.objectContaining({ instalmentNumber: 2, principalAmount: 3333.33, interestAmount: 166.67 }),
+          expect.objectContaining({ instalmentNumber: 3, principalAmount: 3333.34, interestAmount: 166.66 }),
         ]),
       );
       const [firstInstalment] = (repaymentModel.insertMany.mock.calls[0] as any[][])[0];
