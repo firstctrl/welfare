@@ -7,6 +7,8 @@ export interface CreateLoanDto {
   tenureMonths: number;
   interestRate: 10 | 15;
   disbursedDate: string;
+  chequeNo: string;
+  pvNo: string;
   approvalDocumentKey?: string;
 }
 
@@ -36,6 +38,12 @@ export interface LoanResponseDto {
   settledAt?: string;
   approvalDocumentKey?: string;
   recordedBy: string;
+  defaultedAt?: string;
+  endOfTenureGraceExpiry?: string;
+  defaulterContributionDebited?: number;
+  guarantorRestitutionOwed?: number;
+  guarantorRestitutionPaid?: number;
+  recoveryRanAt?: string;
   createdAt: string;
   updatedAt: string;
 }
