@@ -8,6 +8,7 @@ import { SystemConfigService } from '../system-config/system-config.service';
 import { MINIO_CLIENT } from '../storage/minio.module';
 import { MEILISEARCH_CLIENT } from '../search/meilisearch.module';
 import { StaffStatus } from '@welfare/shared';
+import { Loan } from '../loans/schemas/loan.schema';
 
 const baseStaff = {
   _id: { toString: () => 'staff-id-1' },
@@ -34,9 +35,13 @@ const mockStaffModel = {
   countDocuments: jest.fn(),
 };
 
+const mockLoanModel = { countDocuments: jest.fn() };
 const mockAuditService = { log: jest.fn() };
 const mockConfigService = {
-  getAll: jest.fn().mockResolvedValue({ ELIGIBILITY_MONTHS: { value: '6' } }),
+  getAll: jest.fn().mockResolvedValue({
+    ELIGIBILITY_MONTHS: { value: '6' },
+    MAX_LOANS_PER_STAFF: { value: '1' },
+  }),
 };
 const mockAddDocuments = jest.fn().mockResolvedValue({});
 const mockMeiliIndex = jest.fn(() => ({ addDocuments: mockAddDocuments, updateSettings: jest.fn().mockResolvedValue({}) }));
@@ -54,6 +59,7 @@ describe('StaffService', () => {
       providers: [
         StaffService,
         { provide: getModelToken(Staff.name), useValue: mockStaffModel },
+        { provide: getModelToken(Loan.name), useValue: mockLoanModel },
         { provide: AuditService, useValue: mockAuditService },
         { provide: SystemConfigService, useValue: mockConfigService },
         { provide: MEILISEARCH_CLIENT, useValue: mockMeilisearchClient },
@@ -118,6 +124,7 @@ describe('StaffService', () => {
 
     it('returns true for long-serving active staff', async () => {
       mockStaffModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(baseStaff) });
+      mockLoanModel.countDocuments.mockReturnValue({ exec: jest.fn().mockResolvedValue(0) });
       const result = await service.isLoanEligible('staff-id-1');
       expect(result.eligible).toBe(true);
     });
@@ -127,6 +134,21 @@ describe('StaffService', () => {
       mockStaffModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(resigned) });
       const result = await service.isLoanEligible('staff-id-1');
       expect(result.eligible).toBe(false);
+    });
+
+    it('returns false when staff has reached max active loans', async () => {
+      mockStaffModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(baseStaff) });
+      mockLoanModel.countDocuments.mockReturnValue({ exec: jest.fn().mockResolvedValue(1) });
+      const result = await service.isLoanEligible('staff-id-1');
+      expect(result.eligible).toBe(false);
+      expect(result.reason).toMatch(/active loan/i);
+    });
+
+    it('returns true when staff has fewer active loans than max', async () => {
+      mockStaffModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(baseStaff) });
+      mockLoanModel.countDocuments.mockReturnValue({ exec: jest.fn().mockResolvedValue(0) });
+      const result = await service.isLoanEligible('staff-id-1');
+      expect(result.eligible).toBe(true);
     });
   });
 

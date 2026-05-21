@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SearchService } from './search.service';
 import { MEILISEARCH_CLIENT } from './meilisearch.module';
+import { StaffService } from '../staff/staff.service';
+import { LoansService } from '../loans/loans.service';
 
 const mockStaffIndex = {
   search: jest.fn(),
@@ -20,6 +22,8 @@ describe('SearchService', () => {
       providers: [
         SearchService,
         { provide: MEILISEARCH_CLIENT, useValue: mockMeili },
+        { provide: StaffService, useValue: { reindexAll: jest.fn() } },
+        { provide: LoansService, useValue: { reindexAll: jest.fn() } },
       ],
     }).compile();
     service = module.get<SearchService>(SearchService);

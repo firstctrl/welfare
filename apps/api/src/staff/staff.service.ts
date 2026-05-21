@@ -10,8 +10,9 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Client as MinioClient } from 'minio';
 import { MeiliSearch } from 'meilisearch';
-import { AuditAction, AuditEntity, PaginatedResult, StaffStatus } from '@welfare/shared';
+import { AuditAction, AuditEntity, LoanStatus, PaginatedResult, StaffStatus } from '@welfare/shared';
 import { Staff, StaffDocument } from './schemas/staff.schema';
+import { Loan, LoanDocument } from '../loans/schemas/loan.schema';
 import { AuditService } from '../audit/audit.service';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { MINIO_CLIENT } from '../storage/minio.module';
@@ -37,6 +38,7 @@ const PHOTO_PRESIGN_TTL = 15 * 60;
 export class StaffService implements OnModuleInit {
   constructor(
     @InjectModel(Staff.name) private readonly staffModel: Model<StaffDocument>,
+    @InjectModel(Loan.name) private readonly loanModel: Model<LoanDocument>,
     private readonly auditService: AuditService,
     private readonly configService: SystemConfigService,
     @Inject(MINIO_CLIENT) private readonly minioClient: MinioClient,
@@ -177,6 +179,13 @@ export class StaffService implements OnModuleInit {
         eligible: false,
         reason: `Eligibility requires ${threshold} months of employment`,
       };
+    }
+    const maxActiveLoans = parseInt((config as any)['MAX_LOANS_PER_STAFF']?.value ?? '1', 10);
+    const activeCount = await this.loanModel
+      .countDocuments({ staffId: id, status: LoanStatus.Active })
+      .exec();
+    if (activeCount >= maxActiveLoans) {
+      return { eligible: false, reason: 'Staff already has an active loan' };
     }
     return { eligible: true };
   }
