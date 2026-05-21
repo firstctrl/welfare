@@ -12,6 +12,7 @@ export enum ConfigKey {
   MaxLoansPerGuarantor = 'MAX_LOANS_PER_GUARANTOR',
   MaxLoansPerStaff = 'MAX_LOANS_PER_STAFF',
   GracePeriodDays = 'GRACE_PERIOD_DAYS',
+  EndOfTenureGracePeriodMonths = 'END_OF_TENURE_GRACE_PERIOD_MONTHS',
   EmailProvider = 'EMAIL_PROVIDER',
   EmailFromAddress = 'EMAIL_FROM_ADDRESS',
   EmailFromName = 'EMAIL_FROM_NAME',

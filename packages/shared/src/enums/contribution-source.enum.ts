@@ -3,4 +3,6 @@ export enum ContributionSource {
   ManualEntry = 'ManualEntry',
   LumpSum = 'LumpSum',
   GuarantorOffset = 'GuarantorOffset',
+  DefaulterDeduction = 'DefaulterDeduction',
+  DefaulterRestitution = 'DefaulterRestitution',
 }
