@@ -20,11 +20,20 @@ export class Loan {
   @Prop({ min: 0, default: 0 }) guarantorOffsetAmount?: number;
   @Prop({ min: 0, default: 0 }) badDebtAmount?: number;
   @Prop() settledAt?: Date;
+  @Prop() chequeNo?: string;
+  @Prop() pvNo?: string;
   @Prop() notes?: string;
   @Prop({ required: true }) recordedBy!: string;
+  @Prop() defaultedAt?: Date;
+  @Prop() endOfTenureGraceExpiry?: Date;
+  @Prop({ min: 0, default: 0 }) defaulterContributionDebited!: number;
+  @Prop({ min: 0, default: 0 }) guarantorRestitutionOwed!: number;
+  @Prop({ min: 0, default: 0 }) guarantorRestitutionPaid!: number;
+  @Prop() recoveryRanAt?: Date;
 }
 
 export const LoanSchema = SchemaFactory.createForClass(Loan);
 LoanSchema.index({ staffId: 1, status: 1 });
 LoanSchema.index({ guarantorId: 1 });
 LoanSchema.index({ status: 1 });
+LoanSchema.index({ status: 1, endOfTenureGraceExpiry: 1 });
