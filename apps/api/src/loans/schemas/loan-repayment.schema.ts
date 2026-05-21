@@ -11,6 +11,8 @@ export class LoanRepayment {
   @Prop({ required: true, min: 1 }) instalmentNumber!: number;
   @Prop({ required: true }) dueDate!: Date;
   @Prop({ required: true, min: 0 }) dueAmount!: number;
+  @Prop({ min: 0 }) principalAmount?: number;
+  @Prop({ min: 0 }) interestAmount?: number;
   @Prop({ required: true, min: 0, default: 0 }) paidAmount!: number;
   @Prop({ required: true, min: 0, default: 0 }) penaltyAmount!: number;
   @Prop({ required: true, enum: LoanRepaymentStatus, default: LoanRepaymentStatus.Pending })
