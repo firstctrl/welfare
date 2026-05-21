@@ -224,8 +224,18 @@ export function LoanDetailClient({ id }: { id: string }) {
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-b border-neutral-200 bg-neutral-50">
-                    {['#','Due Date','Due','Paid','Penalty','Status','Source'].map((h) => (
-                      <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
+                    {([
+                      { label: '#',             align: 'left'  },
+                      { label: 'Due Date',      align: 'left'  },
+                      { label: 'Principal',     align: 'right' },
+                      { label: 'Interest',      align: 'right' },
+                      { label: 'Paid (Int.)',   align: 'right' },
+                      { label: 'Paid (Prin.)',  align: 'right' },
+                      { label: 'Penalty',       align: 'right' },
+                      { label: 'Status',        align: 'left'  },
+                      { label: 'Source',        align: 'left'  },
+                    ] as { label: string; align: 'left' | 'right' }[]).map((h) => (
+                      <th key={h.label} className={`px-4 py-2 text-${h.align} text-xs font-semibold text-neutral-500 uppercase tracking-wide`}>{h.label}</th>
                     ))}
                   </tr>
                 </thead>
@@ -244,8 +254,18 @@ export function LoanDetailClient({ id }: { id: string }) {
                       >
                         <td className="px-4 py-2 text-neutral-500">{row.instalmentNumber}</td>
                         <td className="px-4 py-2 font-mono tabular">{fmtDate(row.dueDate)}</td>
-                        <td className="px-4 py-2 text-right font-mono tabular">{fmtGHS(row.dueAmount)}</td>
-                        <td className="px-4 py-2 text-right font-mono tabular">{fmtGHS(row.paidAmount)}</td>
+                        <td className="px-4 py-2 text-right font-mono tabular">
+                          {row.principalAmount != null ? fmtGHS(row.principalAmount) : '—'}
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono tabular">
+                          {row.interestAmount != null ? fmtGHS(row.interestAmount) : '—'}
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono tabular">
+                          {row.interestAmount != null ? fmtGHS(Math.min(row.paidAmount, row.interestAmount)) : '—'}
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono tabular">
+                          {row.interestAmount != null ? fmtGHS(Math.max(0, row.paidAmount - row.interestAmount)) : '—'}
+                        </td>
                         <td className="px-4 py-2 text-right font-mono tabular">
                           {row.penaltyAmount > 0 ? <span className="text-danger-600">{fmtGHS(row.penaltyAmount)}</span> : '—'}
                         </td>
