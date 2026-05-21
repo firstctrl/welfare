@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
 import { ContributionsService } from './contributions.service';
 import { Contribution } from './schemas/contribution.schema';
+import { Loan } from '../loans/schemas/loan.schema';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { AuditService } from '../audit/audit.service';
 import { ContributionStatus, ContributionSource } from '@welfare/shared';
@@ -11,6 +12,7 @@ const mockFindOneAndUpdate = jest.fn();
 const mockFind = jest.fn();
 const mockCountDocuments = jest.fn();
 const mockAggregate = jest.fn();
+const mockCreate = jest.fn();
 
 const mockContributionModel = {
   findOne: mockFindOne,
@@ -18,6 +20,14 @@ const mockContributionModel = {
   find: mockFind,
   countDocuments: mockCountDocuments,
   aggregate: mockAggregate,
+  create: mockCreate,
+};
+
+const mockLoanFindOne = jest.fn();
+const mockLoanFindByIdAndUpdate = jest.fn();
+const mockLoanModel = {
+  findOne: mockLoanFindOne,
+  findByIdAndUpdate: mockLoanFindByIdAndUpdate,
 };
 
 const mockConfigService = {
@@ -38,12 +48,16 @@ describe('ContributionsService', () => {
       providers: [
         ContributionsService,
         { provide: getModelToken(Contribution.name), useValue: mockContributionModel },
+        { provide: getModelToken(Loan.name), useValue: mockLoanModel },
         { provide: SystemConfigService, useValue: mockConfigService },
         { provide: AuditService, useValue: mockAuditService },
       ],
     }).compile();
     service = module.get<ContributionsService>(ContributionsService);
     jest.clearAllMocks();
+    mockCreate.mockResolvedValue(undefined);
+    mockLoanFindOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+    mockLoanFindByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
     mockConfigService.getAll.mockResolvedValue({
       MONTHLY_CONTRIBUTION_AMOUNT: { value: '3000' },
       PENALTY_TYPE: { value: 'Percentage' },
@@ -154,6 +168,108 @@ describe('ContributionsService', () => {
       const results = await service.processLumpSum('s1', 6000, 1, 2025, 'uid', 'U');
       expect(results).toHaveLength(2);
       expect(mockFindOneAndUpdate).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('debitDefaulterContribution', () => {
+    it('debits full amount when balance is sufficient', async () => {
+      mockAggregate
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([{ total: 10000 }]) }) // credits
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });                 // debits (none)
+
+      const result = await service.debitDefaulterContribution('staff-1', 3000, 'actor-id', 'Actor');
+
+      expect(result).toEqual({ debited: 3000, remaining: 0 });
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          staffId: 'staff-1',
+          paidAmount: 3000,
+          isDebit: true,
+          source: ContributionSource.DefaulterDeduction,
+        }),
+      );
+    });
+
+    it('debits partial amount when balance is insufficient', async () => {
+      mockAggregate
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([{ total: 1000 }]) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
+
+      const result = await service.debitDefaulterContribution('staff-1', 3000, 'actor-id', 'Actor');
+
+      expect(result).toEqual({ debited: 1000, remaining: 2000 });
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ paidAmount: 1000 }),
+      );
+    });
+
+    it('creates no entry and returns debited=0 when balance is zero', async () => {
+      mockAggregate
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) })  // no credits
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) }); // no debits
+
+      const result = await service.debitDefaulterContribution('staff-1', 3000, 'actor-id', 'Actor');
+
+      expect(result).toEqual({ debited: 0, remaining: 3000 });
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleRestitutionRedirect (via processPayment)', () => {
+    const makeRestitutionLoan = (owed: number, paid: number) => ({
+      _id: { toString: () => 'loan-1' },
+      staffId: 'staff-1',
+      guarantorId: 'guarantor-1',
+      status: 'Defaulted',
+      guarantorRestitutionOwed: owed,
+      guarantorRestitutionPaid: paid,
+    });
+
+    beforeEach(() => {
+      mockFindOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+      mockFindOneAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue({ _id: { toString: () => 'c-1' }, toObject: () => ({}) }) });
+      mockLoanFindOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+      mockLoanFindByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+    });
+
+    it('creates debit+credit entries and increments guarantorRestitutionPaid when restitution is active', async () => {
+      mockLoanFindOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(makeRestitutionLoan(5000, 0)),
+      });
+
+      await service.processPayment('staff-1', 1, 2026, 3000, ContributionSource.ManualEntry, 'actor-id', 'Actor');
+
+      expect(mockCreate).toHaveBeenCalledTimes(2);
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ staffId: 'staff-1', isDebit: true, source: ContributionSource.DefaulterRestitution, paidAmount: 3000 }),
+      );
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ staffId: 'guarantor-1', isDebit: false, source: ContributionSource.DefaulterRestitution, paidAmount: 3000 }),
+      );
+      expect(mockLoanFindByIdAndUpdate).toHaveBeenCalledWith(
+        expect.anything(),
+        { $inc: { guarantorRestitutionPaid: 3000 } },
+      );
+    });
+
+    it('caps redirect at remaining restitution owed', async () => {
+      mockLoanFindOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(makeRestitutionLoan(5000, 4500)),
+      });
+
+      await service.processPayment('staff-1', 1, 2026, 3000, ContributionSource.ManualEntry, 'actor-id', 'Actor');
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ paidAmount: 500 }),
+      );
+    });
+
+    it('skips redirect when no active restitution loan', async () => {
+      mockLoanFindOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+
+      await service.processPayment('staff-1', 1, 2026, 3000, ContributionSource.ManualEntry, 'actor-id', 'Actor');
+
+      expect(mockCreate).not.toHaveBeenCalled();
     });
   });
 });

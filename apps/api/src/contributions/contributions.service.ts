@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { AuditAction, AuditEntity, ContributionSource, ContributionStatus, PaginatedResult } from '@welfare/shared';
+import { AuditAction, AuditEntity, ContributionSource, ContributionStatus, LoanStatus, PaginatedResult } from '@welfare/shared';
 import { Contribution, ContributionDocument } from './schemas/contribution.schema';
+import { Loan, LoanDocument } from '../loans/schemas/loan.schema';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { AuditService } from '../audit/audit.service';
 import { ContributionQueryDto } from './dto/contribution-query.dto';
@@ -21,6 +22,7 @@ function getNextMonthYear(month: number, year: number): { month: number; year: n
 export class ContributionsService {
   constructor(
     @InjectModel(Contribution.name) private readonly contributionModel: Model<ContributionDocument>,
+    @InjectModel(Loan.name) private readonly loanModel: Model<LoanDocument>,
     private readonly configService: SystemConfigService,
     private readonly auditService: AuditService,
   ) {}
@@ -81,6 +83,7 @@ export class ContributionsService {
       result._id.toString(), existing?.toObject() as unknown as Record<string, unknown>,
       result.toObject() as unknown as Record<string, unknown>,
     );
+    await this.handleRestitutionRedirect(staffId, newPayment, actorId, actorName);
     return result;
   }
 
@@ -135,6 +138,7 @@ export class ContributionsService {
       remaining -= paidThisMonth;
       prevSurplus = surplusCarriedForward;
     }
+    await this.handleRestitutionRedirect(staffId, amount, actorId, actorName);
     return results;
   }
 
@@ -233,6 +237,35 @@ export class ContributionsService {
     return credits - debits;
   }
 
+  async debitDefaulterContribution(
+    staffId: string,
+    amount: number,
+    actorId: string,
+    actorName: string,
+  ): Promise<{ debited: number; remaining: number }> {
+    const balance = await this.getBalance(staffId);
+    const debited = Math.min(amount, Math.max(0, balance));
+    const remaining = amount - debited;
+
+    if (debited > 0) {
+      const now = new Date();
+      await this.contributionModel.create({
+        staffId,
+        month: now.getMonth() + 1,
+        year: now.getFullYear(),
+        expectedAmount: 0,
+        paidAmount: debited,
+        surplusCarriedForward: 0,
+        isDebit: true,
+        status: ContributionStatus.Paid,
+        source: ContributionSource.DefaulterDeduction,
+        recordedBy: actorName,
+      });
+    }
+
+    return { debited, remaining };
+  }
+
   async debitGuarantorOffset(
     guarantorId: string,
     amount: number,
@@ -261,6 +294,65 @@ export class ContributionsService {
     }
 
     return { debited, remaining };
+  }
+
+  private async handleRestitutionRedirect(
+    staffId: string,
+    newPayment: number,
+    actorId: string,
+    actorName: string,
+  ): Promise<void> {
+    const restitutionLoan = await this.loanModel.findOne({
+      staffId,
+      status: LoanStatus.Defaulted,
+      $expr: { $gt: ['$guarantorRestitutionOwed', '$guarantorRestitutionPaid'] },
+    }).exec();
+
+    if (!restitutionLoan) return;
+
+    const remainingOwed = restitutionLoan.guarantorRestitutionOwed - restitutionLoan.guarantorRestitutionPaid;
+    const redirectAmount = Math.min(newPayment, remainingOwed);
+    if (redirectAmount <= 0) return;
+
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+
+    await this.contributionModel.create({
+      staffId,
+      month,
+      year,
+      expectedAmount: 0,
+      paidAmount: redirectAmount,
+      surplusCarriedForward: 0,
+      isDebit: true,
+      status: ContributionStatus.Paid,
+      source: ContributionSource.DefaulterRestitution,
+      recordedBy: actorName,
+    });
+
+    await this.contributionModel.create({
+      staffId: restitutionLoan.guarantorId,
+      month,
+      year,
+      expectedAmount: 0,
+      paidAmount: redirectAmount,
+      surplusCarriedForward: 0,
+      isDebit: false,
+      status: ContributionStatus.Paid,
+      source: ContributionSource.DefaulterRestitution,
+      recordedBy: actorName,
+    });
+
+    await this.loanModel.findByIdAndUpdate(restitutionLoan._id, {
+      $inc: { guarantorRestitutionPaid: redirectAmount },
+    }).exec();
+
+    this.auditService.log(
+      actorId, actorName, AuditAction.Update, AuditEntity.Loan,
+      restitutionLoan._id.toString(), undefined,
+      { redirectAmount, guarantorId: restitutionLoan.guarantorId, staffId },
+    );
   }
 }
 
