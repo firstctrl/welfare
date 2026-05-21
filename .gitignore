@@ -43,3 +43,6 @@ yarn-error.log*
 packages/shared/src/**/*.js
 packages/shared/src/**/*.d.ts
 .claude/settings.local.json
+
+# Design files
+docs/design-handoff/
