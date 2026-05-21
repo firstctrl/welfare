@@ -8,6 +8,8 @@ export interface ILoanRepayment {
   instalmentNumber: number;
   dueDate: string;
   dueAmount: number;
+  principalAmount?: number;
+  interestAmount?: number;
   paidAmount: number;
   penaltyAmount: number;
   status: LoanRepaymentStatus;
