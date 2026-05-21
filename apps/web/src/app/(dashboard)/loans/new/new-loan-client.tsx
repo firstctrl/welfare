@@ -110,13 +110,20 @@ export function NewLoanClient() {
     if (!watchPrincipal || !watchTenure || !watchDate) return [];
     const d = new Date(watchDate);
     if (isNaN(d.getTime())) return [];
+    const totalInterest = round2(watchPrincipal * derivedRate / 100);
+    const baseInterestPerInst = round2(totalInterest / watchTenure);
     let balance = totalRepayable;
     return Array.from({ length: watchTenure }, (_, i) => {
+      const isLast = i === watchTenure - 1;
       const dueDate = computeDueDate(d, i + 1);
+      const interestAmt = isLast
+        ? round2(totalInterest - baseInterestPerInst * (watchTenure - 1))
+        : baseInterestPerInst;
+      const principalAmt = round2(monthlyInstalment - interestAmt);
       balance = round2(Math.max(0, balance - monthlyInstalment));
-      return { n: i + 1, dueDate, instalment: monthlyInstalment, balanceAfter: balance };
+      return { n: i + 1, dueDate, instalment: monthlyInstalment, principalAmt, interestAmt, balanceAfter: balance };
     });
-  }, [watchPrincipal, watchTenure, watchDate, totalRepayable, monthlyInstalment]);
+  }, [watchPrincipal, watchTenure, watchDate, totalRepayable, monthlyInstalment, derivedRate]);
 
   const { data: eligibility } = useQuery({
     queryKey: ['eligibility', watchStaffId],
@@ -156,8 +163,8 @@ export function NewLoanClient() {
   const submitDisabled = isSubmitting || mutation.isPending || guarantorAtCap || eligibility?.eligible === false;
 
   return (
-    <div className="flex gap-5 items-start">
-      <div className="flex-1 min-w-0">
+    <div className="grid grid-cols-2 gap-6 items-start">
+      <div>
       <Card>
         <CardHeader title="Loan Details" />
         <CardBody>
@@ -272,7 +279,7 @@ export function NewLoanClient() {
       </div>
 
       {/* Schedule preview — right column */}
-      <div className="w-80 flex-shrink-0 sticky top-4">
+      <div className="sticky top-4">
         {schedulePreview.length > 0 ? (
           <Card>
             <CardHeader title="Schedule Preview" />
@@ -280,8 +287,13 @@ export function NewLoanClient() {
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-b border-neutral-200 bg-neutral-50">
-                    {['#','Due Date','Instalment'].map((h) => (
-                      <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
+                    {([
+                      { label: '#',         align: 'left'  },
+                      { label: 'Due Date',  align: 'left'  },
+                      { label: 'Principal', align: 'right' },
+                      { label: 'Interest',  align: 'right' },
+                    ] as { label: string; align: 'left' | 'right' }[]).map((h) => (
+                      <th key={h.label} className={`px-3 py-2 text-${h.align} text-xs font-semibold text-neutral-500 uppercase tracking-wide`}>{h.label}</th>
                     ))}
                   </tr>
                 </thead>
@@ -290,7 +302,8 @@ export function NewLoanClient() {
                     <tr key={row.n} className="hover:bg-neutral-50">
                       <td className="px-3 py-2 text-neutral-500">{row.n}</td>
                       <td className="px-3 py-2 font-mono tabular text-xs">{fmtDate(row.dueDate)}</td>
-                      <td className="px-3 py-2 font-mono tabular font-medium">{fmtGHS(row.instalment)}</td>
+                      <td className="px-3 py-2 font-mono tabular font-medium text-right">{fmtGHS(row.principalAmt)}</td>
+                      <td className="px-3 py-2 font-mono tabular text-neutral-500 text-right">{fmtGHS(row.interestAmt)}</td>
                     </tr>
                   ))}
                 </tbody>
