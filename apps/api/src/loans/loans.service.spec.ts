@@ -53,6 +53,7 @@ describe('LoansService', () => {
       findById: jest.fn(),
       create: jest.fn(),
       findByIdAndUpdate: jest.fn(),
+      findOneAndUpdate: jest.fn(),
       find: jest.fn(),
       countDocuments: jest.fn(),
     };
@@ -85,6 +86,7 @@ describe('LoansService', () => {
 
     service = module.get<LoansService>(LoansService);
     jest.clearAllMocks();
+    loanModel.findOneAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
   });
 
   describe('create', () => {
@@ -94,6 +96,8 @@ describe('LoansService', () => {
       principalAmount: 10000,
       tenureMonths: 3,
       disbursedDate: '2026-03-15',
+      chequeNo: 'CHQ-001',
+      pvNo: 'PV-001',
     };
 
     it('creates loan with correct totalRepayable and schedule', async () => {
@@ -235,7 +239,6 @@ describe('LoansService', () => {
         .mockReturnValueOnce({ sort: () => ({ exec: jest.fn().mockResolvedValue([inst]) }) })
         .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
       configService.getAll.mockResolvedValue(mockConfig());
-      loanModel.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue({}) });
 
       await service.recordPayment(loanId, dto, 'actor', 'Actor');
 
@@ -254,7 +257,6 @@ describe('LoansService', () => {
         .mockReturnValueOnce({ sort: () => ({ exec: jest.fn().mockResolvedValue([inst1, inst2]) }) })
         .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
       configService.getAll.mockResolvedValue(mockConfig());
-      loanModel.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue({}) });
 
       await service.recordPayment(loanId, overpayDto, 'actor', 'Actor');
 
@@ -273,7 +275,6 @@ describe('LoansService', () => {
         .mockReturnValueOnce({ sort: () => ({ exec: jest.fn().mockResolvedValue([overdueInst]) }) })
         .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
       configService.getAll.mockResolvedValue(mockConfig());
-      loanModel.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue({}) });
 
       await service.recordPayment(loanId, latePayDto, 'actor', 'Actor');
 
@@ -284,20 +285,44 @@ describe('LoansService', () => {
 
     it('marks loan Completed when all instalments are Paid', async () => {
       const inst = makeInstalment(1, LoanRepaymentStatus.Pending);
+      const completedLoan = { ...makeLoan(), status: LoanStatus.Completed, staffId: 'staff-123' };
       loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(makeLoan()) });
       repaymentModel.find
         .mockReturnValueOnce({ sort: () => ({ exec: jest.fn().mockResolvedValue([inst]) }) })
         .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
       configService.getAll.mockResolvedValue(mockConfig());
-      loanModel.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue({}) });
+      loanModel.findOneAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(completedLoan) });
 
       await service.recordPayment(loanId, dto, 'actor', 'Actor');
 
-      expect(loanModel.findByIdAndUpdate).toHaveBeenCalledWith(
-        loanId,
+      expect(loanModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: loanId, status: LoanStatus.Active },
         { $set: { status: LoanStatus.Completed } },
         { new: true },
       );
+    });
+
+    it('does not mark Completed when loan is already Defaulted', async () => {
+      const defaultedLoan = { ...makeLoan(), status: LoanStatus.Defaulted };
+      const inst = makeInstalment(1, LoanRepaymentStatus.Overdue);
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(defaultedLoan) });
+      repaymentModel.find
+        .mockReturnValueOnce({ sort: () => ({ exec: jest.fn().mockResolvedValue([inst]) }) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
+      configService.getAll.mockResolvedValue(mockConfig());
+      loanModel.findOneAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+
+      await service.recordPayment(loanId, dto, 'actor', 'Actor');
+
+      expect(loanModel.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: loanId, status: LoanStatus.Active },
+        { $set: { status: LoanStatus.Completed } },
+        { new: true },
+      );
+      const completionAudit = auditService.log.mock.calls.find(
+        (c: any[]) => c[6]?.status === LoanStatus.Completed,
+      );
+      expect(completionAudit).toBeUndefined();
     });
 
     it('throws NotFoundException when loan does not exist', async () => {

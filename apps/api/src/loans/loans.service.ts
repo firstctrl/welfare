@@ -197,6 +197,8 @@ export class LoansService implements OnModuleInit {
       monthlyInstalment,
       tenureMonths: dto.tenureMonths,
       disbursedDate,
+      chequeNo: dto.chequeNo,
+      pvNo: dto.pvNo,
       status: LoanStatus.Active,
       recordedBy: actorName,
     });
@@ -382,6 +384,8 @@ export class LoansService implements OnModuleInit {
 
     const config = await this.configService.getAll();
     const paidDate = new Date(dto.paidDate);
+    if (paidDate > new Date())
+      throw new BadRequestException('Payment date cannot be in the future');
 
     const pendingInstalments = await this.repaymentModel
       .find({
@@ -464,12 +468,12 @@ export class LoansService implements OnModuleInit {
 
     if (remaining.length === 0) {
       const completedLoan = await this.loanModel
-        .findByIdAndUpdate(loanId, { $set: { status: LoanStatus.Completed } }, { new: true })
+        .findOneAndUpdate({ _id: loanId, status: LoanStatus.Active }, { $set: { status: LoanStatus.Completed } }, { new: true })
         .exec();
-      this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.Loan, loanId, undefined, {
-        status: LoanStatus.Completed,
-      });
       if (completedLoan) {
+        this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.Loan, loanId, undefined, {
+          status: LoanStatus.Completed,
+        });
         this.staffService.findById(completedLoan.staffId)
           .then(staff => this.syncLoanToMeilisearch(completedLoan, staff.fullName))
           .catch(() => { /* non-fatal */ });
