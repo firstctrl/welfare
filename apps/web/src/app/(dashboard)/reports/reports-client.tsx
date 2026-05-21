@@ -498,7 +498,8 @@ function BulkStatementsPanel() {
   return (
     <div className="space-y-5">
       <p className="text-sm text-neutral-500">
-        Generate and email contribution statements as PDF to staff members. A monthly cron automatically sends statements on the 1st of each month.
+        Generate and email contribution statements as PDF to staff members. The system automatically
+        sends statements on every quarter.
       </p>
 
       {/* Config */}
@@ -507,14 +508,14 @@ function BulkStatementsPanel() {
           <Input
             type="number"
             value={year}
-            onChange={e => setYear(+e.target.value)}
+            onChange={(e) => setYear(+e.target.value)}
             style={{ width: 120 }}
           />
         </Field>
 
         <Field label="Send To">
           <div className="flex gap-4 mt-1">
-            {(['all', 'selected'] as const).map(opt => (
+            {(['all', 'selected'] as const).map((opt) => (
               <label key={opt} className="flex items-center gap-2 cursor-pointer text-sm">
                 <input
                   type="radio"
@@ -539,17 +540,21 @@ function BulkStatementsPanel() {
               <div className="relative">
                 <input
                   value={staffInput}
-                  onChange={e => handleSearch(e.target.value)}
+                  onChange={(e) => handleSearch(e.target.value)}
                   onFocus={() => staffOptions.length > 0 && setShowDropdown(true)}
                   placeholder="Search by name or staff ID…"
                   className="w-full px-3 pr-8 h-[var(--row-default)] rounded-sm border border-neutral-200 bg-white text-base outline-none focus:border-primary-500 focus:shadow-focus placeholder:text-neutral-400"
                 />
-                <Search size={14} strokeWidth={1.75} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+                <Search
+                  size={14}
+                  strokeWidth={1.75}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none"
+                />
               </div>
             </Field>
             {showDropdown && (
               <div className="absolute z-20 w-full mt-1 bg-white border border-neutral-200 rounded-sm shadow-lg overflow-hidden">
-                {staffOptions.map(s => (
+                {staffOptions.map((s) => (
                   <button
                     key={s._id}
                     onMouseDown={() => addStaff(s)}
@@ -565,10 +570,18 @@ function BulkStatementsPanel() {
 
           {selected.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {selected.map(s => (
-                <span key={s._id} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-primary-50 text-primary-700 rounded-full text-xs font-medium">
+              {selected.map((s) => (
+                <span
+                  key={s._id}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-primary-50 text-primary-700 rounded-full text-xs font-medium"
+                >
                   {s.fullName}
-                  <button onClick={() => removeStaff(s._id)} className="hover:text-danger-600 transition-colors">×</button>
+                  <button
+                    onClick={() => removeStaff(s._id)}
+                    className="hover:text-danger-600 transition-colors"
+                  >
+                    ×
+                  </button>
                 </span>
               ))}
             </div>
@@ -597,11 +610,11 @@ function BulkStatementsPanel() {
       {status && (
         <div className="p-4 rounded-md border border-neutral-200 space-y-3">
           <div className="flex items-center gap-2">
-            {isDone   && <CheckCircle2 size={16} className="text-success-600" />}
+            {isDone && <CheckCircle2 size={16} className="text-success-600" />}
             {isFailed && <XCircle size={16} className="text-danger-600" />}
             {isRunning && <Loader2 size={16} className="animate-spin text-primary-600" />}
             <span className="text-sm font-medium text-neutral-800">
-              {isDone   && 'Completed'}
+              {isDone && 'Completed'}
               {isFailed && 'Failed'}
               {isRunning && `Processing… ${status.progress}%`}
             </span>
@@ -611,7 +624,10 @@ function BulkStatementsPanel() {
           {/* Progress bar */}
           <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
             <div
-              className={cn('h-full rounded-full transition-all duration-300', isDone ? 'bg-success-500' : isFailed ? 'bg-danger-500' : 'bg-primary-500')}
+              className={cn(
+                'h-full rounded-full transition-all duration-300',
+                isDone ? 'bg-success-500' : isFailed ? 'bg-danger-500' : 'bg-primary-500',
+              )}
               style={{ width: `${isDone ? 100 : status.progress}%` }}
             />
           </div>
@@ -619,13 +635,17 @@ function BulkStatementsPanel() {
           {status.result && (
             <div className="flex gap-6 text-sm">
               <span className="text-success-700 font-medium">✓ {status.result.sent} sent</span>
-              {status.result.failed > 0 && <span className="text-danger-700 font-medium">✗ {status.result.failed} failed</span>}
+              {status.result.failed > 0 && (
+                <span className="text-danger-700 font-medium">✗ {status.result.failed} failed</span>
+              )}
               <span className="text-neutral-500">of {status.result.total} total</span>
             </div>
           )}
 
           {isFailed && status.failedReason && (
-            <p className="text-xs text-danger-700 bg-danger-50 px-3 py-2 rounded">{status.failedReason}</p>
+            <p className="text-xs text-danger-700 bg-danger-50 px-3 py-2 rounded">
+              {status.failedReason}
+            </p>
           )}
         </div>
       )}

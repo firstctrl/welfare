@@ -1,5 +1,5 @@
 import { apiClient } from './api-client';
-import type { ILoan, ILoanRepayment, PaginatedResult, LoanStatus } from '@welfare/shared';
+import type { ILoan, ILoanRepayment, ILoanRepaymentImportBatch, PaginatedResult, LoanStatus } from '@welfare/shared';
 
 export interface LoanFilters {
   staffId?: string;
@@ -76,6 +76,44 @@ export async function getLoansByStaff(
   limit = 50,
 ): Promise<PaginatedResult<ILoan>> {
   const { data } = await apiClient.get(`/staff/${staffId}/loans`, { params: { page, limit } });
+  return data;
+}
+
+export interface LoanImportResult {
+  batchId: string;
+  matched: number;
+  flagged: number;
+  total: number;
+}
+
+export async function importLoanRepayments(file: File): Promise<LoanImportResult> {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await apiClient.post('/loans/import', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
+export async function listLoanImportBatches(
+  page = 1,
+  limit = 20,
+): Promise<PaginatedResult<ILoanRepaymentImportBatch>> {
+  const { data } = await apiClient.get('/loans/import', { params: { page, limit } });
+  return data;
+}
+
+export async function getLoanImportBatch(batchId: string): Promise<ILoanRepaymentImportBatch> {
+  const { data } = await apiClient.get(`/loans/import/${batchId}`);
+  return data;
+}
+
+export async function resolveLoanFlaggedEntry(
+  batchId: string,
+  rowNumber: number,
+  resolvedLoanId: string,
+): Promise<ILoanRepaymentImportBatch> {
+  const { data } = await apiClient.patch(`/loans/import/${batchId}/resolve`, { rowNumber, resolvedLoanId });
   return data;
 }
 

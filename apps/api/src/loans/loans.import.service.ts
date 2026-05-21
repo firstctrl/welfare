@@ -1,35 +1,43 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as XLSX from 'xlsx';
-import { AuditAction, AuditEntity, LoanRepaymentStatus, LoanStatus, RepaymentSource } from '@welfare/shared';
-import { LoanRepayment, LoanRepaymentDocument } from './schemas/loan-repayment.schema';
+import {
+  AuditAction,
+  AuditEntity,
+  ImportBatchStatus,
+  LoanStatus,
+  PaginatedResult,
+  RepaymentSource,
+} from '@welfare/shared';
 import { Loan, LoanDocument } from './schemas/loan.schema';
+import { LoanImportBatch, LoanImportBatchDocument } from './schemas/loan-import-batch.schema';
 import { LoansService } from './loans.service';
 import { StaffService } from '../staff/staff.service';
 import { AuditService } from '../audit/audit.service';
 
 interface ImportRow {
-  'Staff Name'?: string;
   'Staff ID'?: string;
+  'Staff Name'?: string;
   'Loan ID'?: string;
   Amount?: number;
-  'Mode of Payment'?: string;
   'Paid Date'?: string;
+  Notes?: string;
 }
 
 export interface ImportRepaymentResult {
+  batchId: string;
+  matched: number;
+  flagged: number;
   total: number;
-  processed: number;
-  failed: { row: number; staffId: string; reason: string }[];
 }
 
 @Injectable()
 export class LoansImportService {
   constructor(
     @InjectModel(Loan.name) private readonly loanModel: Model<LoanDocument>,
-    @InjectModel(LoanRepayment.name)
-    private readonly repaymentModel: Model<LoanRepaymentDocument>,
+    @InjectModel(LoanImportBatch.name)
+    private readonly batchModel: Model<LoanImportBatchDocument>,
     private readonly loansService: LoansService,
     private readonly staffService: StaffService,
     private readonly auditService: AuditService,
@@ -37,6 +45,7 @@ export class LoansImportService {
 
   async processImport(
     buffer: Buffer,
+    fileName: string,
     actorId: string,
     actorName: string,
   ): Promise<ImportRepaymentResult> {
@@ -46,32 +55,36 @@ export class LoansImportService {
 
     if (rows.length === 0) throw new BadRequestException('Excel file has no data rows');
 
-    const failed: ImportRepaymentResult['failed'] = [];
-    let processed = 0;
+    const batch = await this.batchModel.create({
+      fileName,
+      uploadedBy: actorName,
+      totalRows: rows.length,
+      status: ImportBatchStatus.Pending,
+    });
+
+    const flaggedEntries: LoanImportBatchDocument['flaggedEntries'] = [];
+    let matched = 0;
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const rawStaffId = String(row['Staff ID'] ?? '').trim();
-      const amount = Number(row.Amount ?? 0);
-      const paidDateRaw = String(row['Paid Date'] ?? '').trim();
-      const notes = String(row['Mode of Payment'] ?? '').trim() || undefined;
+      const rowNumber = i + 2;
+      const rawStaffId  = String(row['Staff ID']   ?? '').trim();
+      const staffName   = String(row['Staff Name'] ?? '').trim();
+      const rawLoanId   = String(row['Loan ID']    ?? '').trim();
+      const amount      = Number(row.Amount ?? 0);
+      const paidDateRaw = String(row['Paid Date']  ?? '').trim();
+      const notes       = String(row.Notes        ?? '').trim() || undefined;
 
-      if (!rawStaffId) {
-        failed.push({ row: i + 2, staffId: '', reason: 'Missing Staff ID' });
-        continue;
-      }
-      if (!(amount > 0)) {
-        failed.push({ row: i + 2, staffId: rawStaffId, reason: 'Amount must be > 0' });
-        continue;
-      }
+      const flag = (reason: string) =>
+        flaggedEntries.push({ rowNumber, staffId: rawStaffId, staffName, loanId: rawLoanId, amount, paidDate: paidDateRaw, notes, reason });
+
+      if (!rawStaffId) { flag('Missing Staff ID'); continue; }
+      if (!(amount > 0)) { flag('Amount must be > 0'); continue; }
 
       let paidDate: string;
       if (paidDateRaw) {
         const d = new Date(paidDateRaw);
-        if (isNaN(d.getTime())) {
-          failed.push({ row: i + 2, staffId: rawStaffId, reason: 'Invalid Paid Date' });
-          continue;
-        }
+        if (isNaN(d.getTime())) { flag('Invalid Paid Date'); continue; }
         paidDate = d.toISOString();
       } else {
         paidDate = new Date().toISOString();
@@ -79,23 +92,15 @@ export class LoansImportService {
 
       try {
         const staff = await this.staffService.findByStaffId(rawStaffId);
-        if (!staff) {
-          failed.push({ row: i + 2, staffId: rawStaffId, reason: 'Staff ID not found' });
-          continue;
-        }
+        if (!staff) { flag('Staff ID not found'); continue; }
 
-        let loanId: string | undefined = row['Loan ID']
-          ? String(row['Loan ID']).trim()
-          : undefined;
+        let loanId = rawLoanId || undefined;
 
         if (!loanId) {
           const activeLoan = await this.loanModel
             .findOne({ staffId: staff._id.toString(), status: LoanStatus.Active })
             .exec();
-          if (!activeLoan) {
-            failed.push({ row: i + 2, staffId: rawStaffId, reason: 'No active loan found' });
-            continue;
-          }
+          if (!activeLoan) { flag('No active loan found for staff'); continue; }
           loanId = activeLoan._id.toString();
         }
 
@@ -106,23 +111,90 @@ export class LoansImportService {
           actorId,
           actorName,
         );
-        processed++;
+        matched++;
       } catch (err: unknown) {
-        const reason = err instanceof Error ? err.message : 'Processing error';
-        failed.push({ row: i + 2, staffId: rawStaffId, reason });
+        flag(err instanceof Error ? err.message : 'Processing error');
       }
     }
+
+    const flagged = flaggedEntries.length;
+    await this.batchModel.findByIdAndUpdate(batch._id, {
+      $set: {
+        matchedRows: matched,
+        flaggedRows: flagged,
+        flaggedEntries,
+        status: flagged === 0 ? ImportBatchStatus.Completed : ImportBatchStatus.Pending,
+      },
+    }).exec();
 
     this.auditService.log(
       actorId,
       actorName,
       AuditAction.Import,
       AuditEntity.Loan,
-      'bulk-import',
+      batch._id.toString(),
       undefined,
-      { total: rows.length, processed, failed: failed.length },
+      { total: rows.length, matched, flagged },
     );
 
-    return { total: rows.length, processed, failed };
+    return { batchId: batch._id.toString(), matched, flagged, total: rows.length };
+  }
+
+  async listBatches(page = 1, limit = 20): Promise<PaginatedResult<LoanImportBatchDocument>> {
+    const skip = (page - 1) * limit;
+    const [data, total] = await Promise.all([
+      this.batchModel.find().sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      this.batchModel.countDocuments().exec(),
+    ]);
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  async getBatch(batchId: string): Promise<LoanImportBatchDocument> {
+    const batch = await this.batchModel.findById(batchId).exec();
+    if (!batch) throw new NotFoundException(`Import batch ${batchId} not found`);
+    return batch;
+  }
+
+  async resolveFlagged(
+    batchId: string,
+    rowNumber: number,
+    resolvedLoanId: string,
+    actorId: string,
+    actorName: string,
+  ): Promise<LoanImportBatchDocument> {
+    const batch = await this.getBatch(batchId);
+    const entryIdx = batch.flaggedEntries.findIndex((e) => e.rowNumber === rowNumber);
+    if (entryIdx === -1) throw new NotFoundException(`Flagged entry row ${rowNumber} not found`);
+
+    const entry = batch.flaggedEntries[entryIdx];
+    const paidDate = entry.paidDate
+      ? new Date(entry.paidDate).toISOString()
+      : new Date().toISOString();
+
+    await this.loansService.recordPaymentInternal(
+      resolvedLoanId,
+      { amount: entry.amount, paidDate, notes: entry.notes },
+      RepaymentSource.Import,
+      actorId,
+      actorName,
+    );
+
+    batch.flaggedEntries.splice(entryIdx, 1);
+    batch.matchedRows += 1;
+    batch.flaggedRows  -= 1;
+    batch.status = batch.flaggedRows === 0 ? ImportBatchStatus.Resolved : ImportBatchStatus.Pending;
+    await batch.save();
+
+    this.auditService.log(
+      actorId,
+      actorName,
+      AuditAction.Update,
+      AuditEntity.Loan,
+      batchId,
+      undefined,
+      { resolvedRow: rowNumber, resolvedLoanId },
+    );
+
+    return batch;
   }
 }

@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Query,
   UploadedFile,
@@ -61,6 +62,47 @@ export class LoansController {
     return this.loansService.findAll(query);
   }
 
+  // ── import routes must be before :id to avoid param conflict ──
+
+  @Post('import')
+  @UseInterceptors(FileInterceptor('file'))
+  importRepayments(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.importService.processImport(file.buffer, file.originalname, user.sub, user.displayName);
+  }
+
+  @Get('import')
+  listImportBatches(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.importService.listBatches(Number(page ?? 1), Number(limit ?? 20));
+  }
+
+  @Get('import/:batchId')
+  getImportBatch(@Param('batchId') batchId: string) {
+    return this.importService.getBatch(batchId);
+  }
+
+  @Patch('import/:batchId/resolve')
+  resolveFlagged(
+    @Param('batchId') batchId: string,
+    @Body() dto: { rowNumber: number; resolvedLoanId: string },
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.importService.resolveFlagged(
+      batchId,
+      dto.rowNumber,
+      dto.resolvedLoanId,
+      user.sub,
+      user.displayName,
+    );
+  }
+
+  // ── param routes ──
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.loansService.findOne(id);
@@ -111,14 +153,5 @@ export class LoansController {
     @CurrentUser() user: { sub: string; displayName: string },
   ) {
     return this.loansService.deleteLoan(id, user.sub, user.displayName);
-  }
-
-  @Post('import')
-  @UseInterceptors(FileInterceptor('file'))
-  importRepayments(
-    @UploadedFile() file: Express.Multer.File,
-    @CurrentUser() user: { sub: string; displayName: string },
-  ) {
-    return this.importService.processImport(file.buffer, user.sub, user.displayName);
   }
 }

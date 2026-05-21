@@ -20,6 +20,7 @@ export type { IContribution } from './interfaces/contribution.interface';
 export type { ILoan } from './interfaces/loan.interface';
 export type { ILoanRepayment } from './interfaces/loan-repayment.interface';
 export type { IFlaggedEntry, IImportBatch } from './interfaces/import-batch.interface';
+export type { ILoanRepaymentFlaggedEntry, ILoanRepaymentImportBatch } from './interfaces/loan-import-batch.interface';
 export type { IConfig } from './interfaces/config.interface';
 export type { IAuditLog } from './interfaces/audit-log.interface';
 export type { IEmailRecipient, IEmailLog } from './interfaces/email-log.interface';
