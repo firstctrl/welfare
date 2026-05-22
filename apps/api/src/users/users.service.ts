@@ -111,6 +111,17 @@ export class UsersService {
       });
       await user.save();
       this.logger.log('Default admin account seeded. Change password before production use.');
+    } else {
+      // Ensure the seeded admin account always carries the Admin role.
+      const result = await this.userModel
+        .updateOne(
+          { username: 'admin', source: 'local', role: { $ne: UserRole.Admin } },
+          { $set: { role: UserRole.Admin } },
+        )
+        .exec();
+      if (result.modifiedCount > 0) {
+        this.logger.log('Migrated admin account to Admin role.');
+      }
     }
   }
 }
