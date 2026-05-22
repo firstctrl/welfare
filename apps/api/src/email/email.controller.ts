@@ -1,4 +1,6 @@
 import { Controller, Get, Post, Param, Query } from '@nestjs/common';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { AppModule } from '@welfare/shared';
 import { EmailService } from './email.service';
 import { AnnualStatementJob } from './jobs/annual-statement.job';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -14,6 +16,7 @@ export class EmailController {
   ) {}
 
   @Get('logs')
+  @RequirePermission(AppModule.EmailLog, 'readonly')
   getLogs(
     @Query('staffId') staffId?: string,
     @Query('type') type?: EmailLogType,
@@ -31,12 +34,14 @@ export class EmailController {
   }
 
   @Post('contribution-statement/bulk')
+  @RequirePermission(AppModule.EmailLog, 'full')
   async bulkStatement() {
     await this.annualStatementJob.run();
     return { message: 'Annual statement batch enqueued' };
   }
 
   @Post('contribution-statement/:staffId')
+  @RequirePermission(AppModule.EmailLog, 'full')
   async sendContributionStatement(
     @Param('staffId') staffId: string,
     @Query() dto: SendStatementDto,
@@ -50,6 +55,7 @@ export class EmailController {
   }
 
   @Post('loan-schedule/:loanId')
+  @RequirePermission(AppModule.EmailLog, 'full')
   async sendLoanSchedule(@Param('loanId') loanId: string) {
     await this.emailService.sendLoanScheduleById(loanId, EmailTriggerSource.Manual);
     return { message: 'Loan schedule sent' };

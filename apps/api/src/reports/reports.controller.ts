@@ -9,6 +9,8 @@ import { ReportsService } from './reports.service';
 import { ReportQueryDto } from './dto/report-query.dto';
 import { EmailService } from '../email/email.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { AppModule } from '@welfare/shared';
 import { Staff, StaffDocument } from '../staff/schemas/staff.schema';
 
 const CSV_COLUMNS = {
@@ -74,17 +76,20 @@ export class ReportsController {
   ) {}
 
   @Get('dashboard')
+  @RequirePermission(AppModule.Reports, 'readonly')
   getDashboard() {
     return this.reportsService.getDashboardStats();
   }
 
   @Get('contributions/staff-statement')
+  @RequirePermission(AppModule.Reports, 'readonly')
   getStaffStatement(@Query('staffId') staffId: string) {
     if (!staffId) throw new BadRequestException('staffId is required');
     return this.reportsService.getStaffContributionStatement(staffId);
   }
 
   @Get('contributions/staff-statement/pdf')
+  @RequirePermission(AppModule.Reports, 'readonly')
   async getStaffStatementPdf(
     @Query('staffId') staffId: string,
     @Res() res: Response,
@@ -98,6 +103,7 @@ export class ReportsController {
   }
 
   @Post('contributions/staff-statement/send')
+  @RequirePermission(AppModule.Reports, 'full')
   async sendStaffStatement(
     @Body('staffId') staffId: string,
     @CurrentUser() user: { sub: string; displayName: string },
@@ -117,6 +123,7 @@ export class ReportsController {
   }
 
   @Get('contributions/monthly')
+  @RequirePermission(AppModule.Reports, 'readonly')
   async getMonthlyContributions(
     @Query() q: ReportQueryDto,
     @Res({ passthrough: true }) res: Response,
@@ -146,6 +153,7 @@ export class ReportsController {
   }
 
   @Get('contributions/arrears')
+  @RequirePermission(AppModule.Reports, 'readonly')
   async getArrears(@Query() q: ReportQueryDto, @Res({ passthrough: true }) res: Response) {
     const now = new Date();
     const fromMonth = q.fromMonth ?? 1;
@@ -170,6 +178,7 @@ export class ReportsController {
   }
 
   @Get('contributions/guarantor-offsets')
+  @RequirePermission(AppModule.Reports, 'readonly')
   async getGuarantorOffsets(@Query() q: ReportQueryDto, @Res({ passthrough: true }) res: Response) {
     const rows = await this.reportsService.getGuarantorOffsets();
     if (q.format === 'csv') {
@@ -183,6 +192,7 @@ export class ReportsController {
   }
 
   @Get('loans/active')
+  @RequirePermission(AppModule.Reports, 'readonly')
   async getActiveLoans(@Query() q: ReportQueryDto, @Res({ passthrough: true }) res: Response) {
     const rows = await this.reportsService.getActiveLoans();
     if (q.format === 'csv') {
@@ -201,6 +211,7 @@ export class ReportsController {
   }
 
   @Get('loans/overdue')
+  @RequirePermission(AppModule.Reports, 'readonly')
   async getOverdueLoans(@Query() q: ReportQueryDto, @Res({ passthrough: true }) res: Response) {
     const rows = await this.reportsService.getOverdueLoans();
     if (q.format === 'csv') {
@@ -212,6 +223,7 @@ export class ReportsController {
   }
 
   @Get('loans/repaid')
+  @RequirePermission(AppModule.Reports, 'readonly')
   async getRepaidLoans(@Query() q: ReportQueryDto, @Res({ passthrough: true }) res: Response) {
     const rows = await this.reportsService.getRepaidLoans();
     if (q.format === 'csv') {
@@ -225,11 +237,13 @@ export class ReportsController {
   }
 
   @Get('loans/guarantor-exposure')
+  @RequirePermission(AppModule.Reports, 'readonly')
   getGuarantorExposure() {
     return this.reportsService.getGuarantorExposure();
   }
 
   @Get('loans/bad-debt')
+  @RequirePermission(AppModule.Reports, 'readonly')
   async getBadDebt(@Query() q: ReportQueryDto, @Res({ passthrough: true }) res: Response) {
     const rows = await this.reportsService.getBadDebt();
     if (q.format === 'csv') {
@@ -241,6 +255,7 @@ export class ReportsController {
   }
 
   @Post('contributions/bulk-send')
+  @RequirePermission(AppModule.Reports, 'full')
   async triggerBulkSend(
     @Body('year') year: number,
     @Body('sendTo') sendTo: 'all' | 'selected',
@@ -268,6 +283,7 @@ export class ReportsController {
   }
 
   @Get('contributions/bulk-send/status')
+  @RequirePermission(AppModule.Reports, 'readonly')
   async getBulkSendStatus(@Query('jobId') jobId: string) {
     if (!jobId) throw new BadRequestException('jobId is required');
     const job = await this.bulkQueue.getJob(jobId);
@@ -286,6 +302,7 @@ export class ReportsController {
   }
 
   @Get('staff/exit')
+  @RequirePermission(AppModule.Reports, 'readonly')
   async getExitClearance(@Query() q: ReportQueryDto, @Res({ passthrough: true }) res: Response) {
     const rows = await this.reportsService.getExitClearanceReport();
     if (q.format === 'csv') {

@@ -9,6 +9,8 @@ import { ManualEntryDto } from './dto/manual-entry.dto';
 import { ResolveFlaggedDto } from './dto/resolve-flagged.dto';
 import { ContributionQueryDto } from './dto/contribution-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { AppModule } from '@welfare/shared';
 
 @Controller('contributions')
 export class ContributionsController {
@@ -18,6 +20,7 @@ export class ContributionsController {
   ) {}
 
   @Post('import')
+  @RequirePermission(AppModule.Contributions, 'full')
   @UseInterceptors(FileInterceptor('file'))
   async importExcel(
     @UploadedFile() file: Express.Multer.File,
@@ -37,6 +40,7 @@ export class ContributionsController {
   }
 
   @Get('import')
+  @RequirePermission(AppModule.Contributions, 'readonly')
   listBatches(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -45,11 +49,13 @@ export class ContributionsController {
   }
 
   @Get('import/:batchId')
+  @RequirePermission(AppModule.Contributions, 'readonly')
   getBatch(@Param('batchId') batchId: string) {
     return this.importService.getBatch(batchId);
   }
 
   @Patch('import/:batchId/resolve')
+  @RequirePermission(AppModule.Contributions, 'full')
   resolveFlagged(
     @Param('batchId') batchId: string,
     @Body() dto: ResolveFlaggedDto,
@@ -61,6 +67,7 @@ export class ContributionsController {
   }
 
   @Post('manual')
+  @RequirePermission(AppModule.Contributions, 'full')
   manualEntry(
     @Body() dto: ManualEntryDto,
     @CurrentUser() user: { sub: string; displayName: string },
@@ -71,21 +78,25 @@ export class ContributionsController {
   }
 
   @Get('summary')
+  @RequirePermission(AppModule.Contributions, 'readonly')
   getSummary(@Query('month') month: string, @Query('year') year: string) {
     return this.contributionsService.getSummary(parseInt(month, 10), parseInt(year, 10));
   }
 
   @Get('staff/:staffId')
+  @RequirePermission(AppModule.Contributions, 'readonly')
   getByStaff(@Param('staffId') staffId: string) {
     return this.contributionsService.findByStaff(staffId);
   }
 
   @Get()
+  @RequirePermission(AppModule.Contributions, 'readonly')
   findAll(@Query() query: ContributionQueryDto) {
     return this.contributionsService.findAll(query);
   }
 
   @Delete(':id')
+  @RequirePermission(AppModule.Contributions, 'full')
   @HttpCode(HttpStatus.NO_CONTENT)
   delete(
     @Param('id') id: string,
