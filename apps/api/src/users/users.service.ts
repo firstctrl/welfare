@@ -69,6 +69,24 @@ export class UsersService {
     return user;
   }
 
+  async updateRole(id: string, role: UserRole): Promise<UserDocument> {
+    const user = await this.userModel
+      .findByIdAndUpdate(id, { $set: { role } }, { new: true })
+      .exec();
+    if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
+
+  async resetPassword(id: string, newPassword: string): Promise<void> {
+    const user = await this.userModel.findById(id).select('+passwordHash').exec();
+    if (!user) throw new NotFoundException('User not found');
+    if (user.source === 'ldap') {
+      throw new BadRequestException('Cannot reset password for an Active Directory account');
+    }
+    user.passwordHash = await bcrypt.hash(newPassword, 12);
+    await user.save();
+  }
+
   async validatePassword(user: UserDocument, password: string): Promise<boolean> {
     if (!user.passwordHash) return false;
     return bcrypt.compare(password, user.passwordHash);
