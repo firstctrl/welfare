@@ -8,6 +8,7 @@ import { UsersService } from '../../users/users.service';
 export interface JwtPayload {
   sub: string;
   username: string;
+  displayName: string;
   role: string;
 }
 

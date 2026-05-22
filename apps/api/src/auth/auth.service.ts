@@ -26,6 +26,7 @@ export class AuthService {
     const payload: JwtPayload = {
       sub: user._id.toString(),
       username: user.username,
+      displayName: user.displayName,
       role: user.role,
     };
     const accessToken = this.jwtService.sign(payload);
@@ -67,6 +68,7 @@ export class AuthService {
     const payload: JwtPayload = {
       sub: user._id.toString(),
       username: user.username,
+      displayName: user.displayName,
       role: user.role,
     };
     return {

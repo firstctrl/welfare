@@ -149,16 +149,20 @@ function CreateUserModal({ open, onClose, currentUserRole }: CreateModalProps) {
   );
 }
 
-interface EditRoleModalProps {
+interface EditUserModalProps {
   user: UserRecord;
   open: boolean;
   onClose: () => void;
   currentUserRole: string;
 }
 
-function EditRoleModal({ user, open, onClose, currentUserRole }: EditRoleModalProps) {
+function EditUserModal({ user, open, onClose, currentUserRole }: EditUserModalProps) {
   const qc = useQueryClient();
   const isAdmin = currentUserRole === UserRole.Admin;
+  const canChangeRole = currentUserRole === UserRole.Admin || currentUserRole === UserRole.WelfareManager;
+
+  const [displayName, setDisplayName] = useState(user.displayName);
+  const [email, setEmail] = useState(user.email ?? '');
   const [role, setRole] = useState<UserRole>(user.role);
 
   const roleOptions = [
@@ -170,36 +174,77 @@ function EditRoleModal({ user, open, onClose, currentUserRole }: EditRoleModalPr
     ] : []),
   ];
 
-  const mutation = useMutation({
+  const profileMutation = useMutation({
+    mutationFn: () => updateUser(user._id, {
+      displayName: displayName.trim(),
+      email: email.trim() || undefined,
+    }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+    onError: (e: Error) => toast.error(e.message || 'Failed to update profile'),
+  });
+
+  const roleMutation = useMutation({
     mutationFn: () => updateUserRole(user._id, role),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['users'] });
-      toast.success('Role updated');
-      onClose();
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
     onError: (e: Error) => toast.error(e.message || 'Failed to update role'),
   });
 
+  async function handleSave() {
+    const profileDirty = displayName.trim() !== user.displayName || (email.trim() || undefined) !== (user.email || undefined);
+    const roleDirty = role !== user.role;
+    if (!profileDirty && !roleDirty) { onClose(); return; }
+
+    const ops: Promise<unknown>[] = [];
+    if (profileDirty) ops.push(profileMutation.mutateAsync());
+    if (roleDirty && canChangeRole) ops.push(roleMutation.mutateAsync());
+
+    try {
+      await Promise.all(ops);
+      toast.success('User updated');
+      onClose();
+    } catch {
+      // individual mutations show their own errors
+    }
+  }
+
+  const isPending = profileMutation.isPending || roleMutation.isPending;
+
   return (
-    <Modal open={open} onClose={onClose} title="Edit Role" size="sm"
+    <Modal open={open} onClose={onClose} title="Edit User" size="sm"
       footer={
         <>
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={mutation.isPending} onClick={() => mutation.mutate()}>Save</Button>
+          <Button variant="secondary" onClick={onClose} disabled={isPending}>Cancel</Button>
+          <Button variant="primary" loading={isPending} onClick={handleSave}>Save</Button>
         </>
       }
     >
       <div className="mt-1 space-y-4">
-        <p className="text-sm text-neutral-600">
-          Changing role for <span className="font-medium text-neutral-900">{user.displayName}</span>
-        </p>
-        <Field label="Role" required>
-          <Select
-            value={role}
-            onChange={(e) => setRole(e.target.value as UserRole)}
-            options={roleOptions}
+        <Field label="Username">
+          <Input value={user.username} disabled className="text-neutral-400" />
+        </Field>
+        <Field label="Display Name" required>
+          <Input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            required
           />
         </Field>
+        <Field label="Email">
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </Field>
+        {canChangeRole && (
+          <Field label="Role" required>
+            <Select
+              value={role}
+              onChange={(e) => setRole(e.target.value as UserRole)}
+              options={roleOptions}
+            />
+          </Field>
+        )}
       </div>
     </Modal>
   );
@@ -323,7 +368,7 @@ function ToggleActiveModal({ user, open, onClose }: ToggleActiveModalProps) {
 
 type ActiveModal =
   | { type: 'create' }
-  | { type: 'editRole'; user: UserRecord }
+  | { type: 'editUser'; user: UserRecord }
   | { type: 'resetPassword'; user: UserRecord }
   | { type: 'toggleActive'; user: UserRecord }
   | null;
@@ -407,8 +452,8 @@ export function UsersListClient() {
                         {canManageRoles && (
                           <IconButton
                             icon={Pencil}
-                            label="Edit role"
-                            onClick={() => setModal({ type: 'editRole', user: u })}
+                            label="Edit user"
+                            onClick={() => setModal({ type: 'editUser', user: u })}
                           />
                         )}
                         {canManageRoles && u.source === 'local' && (
@@ -441,8 +486,8 @@ export function UsersListClient() {
         currentUserRole={currentRole}
       />
 
-      {modal?.type === 'editRole' && (
-        <EditRoleModal
+      {modal?.type === 'editUser' && (
+        <EditUserModal
           user={modal.user}
           open
           onClose={() => setModal(null)}

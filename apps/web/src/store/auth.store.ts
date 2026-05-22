@@ -3,7 +3,8 @@ import { persist } from 'zustand/middleware';
 
 interface AuthUser {
   id: string;      // MongoDB _id
-  name: string;
+  username: string;
+  displayName: string;
   role: string;
 }
 
@@ -30,11 +31,12 @@ export const useAuthStore = create<AuthState>()(
           const payload = JSON.parse(atob(parts[1])) as {
             sub: string;
             username: string;
+            displayName: string;
             role: string;
           };
           set({
             token,
-            user: { id: payload.sub, name: payload.username, role: payload.role },
+            user: { id: payload.sub, username: payload.username, displayName: payload.displayName ?? payload.username, role: payload.role },
           });
         } catch {
           throw new Error('Invalid token received from server');
