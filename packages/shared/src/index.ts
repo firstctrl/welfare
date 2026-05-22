@@ -1,4 +1,8 @@
 // Enums
+export { UserRole } from './enums/user-role.enum';
+export { AppModule } from './enums/app-module.enum';
+export type { AccessLevel, PermissionMatrix } from './constants/permissions.constants';
+export { PERMISSIONS } from './constants/permissions.constants';
 export { StaffStatus } from './enums/staff-status.enum';
 export { ContributionStatus } from './enums/contribution-status.enum';
 export { ContributionSource } from './enums/contribution-source.enum';

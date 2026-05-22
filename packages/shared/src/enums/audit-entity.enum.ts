@@ -6,4 +6,5 @@ export enum AuditEntity {
   ImportBatch = 'ImportBatch',
   Config = 'Config',
   EmailLog = 'EmailLog',
+  User = 'User',
 }
