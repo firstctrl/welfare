@@ -3,11 +3,16 @@
 import { Suspense, useState, FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
+import Image from 'next/image';
 import { login } from '../../../lib/auth';
+import { cn } from '@/lib/utils';
+
+type AuthMode = 'ad' | 'local';
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [mode, setMode] = useState<AuthMode>('ad');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,7 +23,7 @@ function LoginForm() {
     setError('');
     setLoading(true);
     try {
-      await login({ username, password });
+      await login({ username, password, mode });
       const raw = searchParams.get('from') || '/';
       const from = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
       router.push(from);
@@ -34,6 +39,25 @@ function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Mode toggle */}
+      <div className="flex rounded-md border border-neutral-200 p-0.5 bg-neutral-50 gap-0.5">
+        {(['ad', 'local'] as AuthMode[]).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMode(m)}
+            className={cn(
+              'flex-1 py-1.5 text-sm font-medium rounded transition-colors',
+              mode === m
+                ? 'bg-white text-neutral-900 shadow-sm'
+                : 'text-neutral-500 hover:text-neutral-700',
+            )}
+          >
+            {m === 'ad' ? 'Active Directory' : 'Local Account'}
+          </button>
+        ))}
+      </div>
+
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
           {error}
@@ -86,9 +110,14 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Welfare System</h1>
-        <p className="text-sm text-gray-500 mt-1">Sign in to your account</p>
+      <div className="mb-6 flex items-center gap-3">
+        <div className="relative w-10 h-10 shrink-0">
+          <Image src="/assets/ncc-logo.png" alt="NCC" fill className="object-contain" priority />
+        </div>
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">NACOC Welfare</h1>
+          <p className="text-sm text-gray-500">Sign in to your account</p>
+        </div>
       </div>
 
       <Suspense fallback={null}>

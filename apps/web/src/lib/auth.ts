@@ -3,13 +3,15 @@ import { useAuthStore } from '../store/auth.store';
 interface LoginCredentials {
   username: string;
   password: string;
+  mode?: 'ad' | 'local';
 }
 
 export async function login(credentials: LoginCredentials): Promise<void> {
-  const res = await fetch('/api/auth/login', {
+  const endpoint = credentials.mode === 'local' ? '/api/auth/login' : '/api/auth/login/ldap';
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({ username: credentials.username, password: credentials.password }),
   });
 
   if (!res.ok) {
@@ -18,13 +20,9 @@ export async function login(credentials: LoginCredentials): Promise<void> {
   }
 
   const data = await res.json() as { accessToken: string };
-
-  // Parse JWT and store access token + user info in memory (Zustand)
   useAuthStore.getState().setTokenAndUser(data.accessToken);
-  // Store userId for refresh calls (non-sensitive)
   const store = useAuthStore.getState();
   if (store.user?.id) localStorage.setItem('welfare_user_id', store.user.id);
-  // httpOnly cookies (access + refresh) are set by the route handler — middleware reads them
 }
 
 export async function logout(): Promise<void> {
@@ -42,7 +40,6 @@ export async function refreshAccessToken(): Promise<string | null> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId }),
-    // welfare_refresh_token cookie is sent automatically
   });
 
   if (!res.ok) {
