@@ -1,9 +1,9 @@
-import { Injectable, ConflictException, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from './schemas/user.schema';
-import { UserRole } from './enums/user-role.enum';
+import { UserRole } from '@welfare/shared';
 
 @Injectable()
 export class UsersService {
@@ -82,12 +82,16 @@ export class UsersService {
     const count = await this.userModel.countDocuments().exec();
     if (count === 0) {
       const password = process.env.SEED_ADMIN_PASSWORD || 'Admin@123';
-      await this.createLocal({
+      const passwordHash = await bcrypt.hash(password, 12);
+      const user = new this.userModel({
         username: 'admin',
         displayName: 'System Administrator',
-        password,
+        role: UserRole.Admin,
+        source: 'local',
+        passwordHash,
+        isActive: true,
       });
-      // Don't log credentials — check console for "Default admin seeded" to confirm
+      await user.save();
       this.logger.log('Default admin account seeded. Change password before production use.');
     }
   }
