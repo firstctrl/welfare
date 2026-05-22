@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import {
@@ -9,9 +10,10 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { X } from 'lucide-react';
-import { LoanStatus } from '@welfare/shared';
+import { X, Plus, Upload } from 'lucide-react';
+import { LoanStatus, AppModule } from '@welfare/shared';
 import type { ILoan } from '@welfare/shared';
+import { usePermission } from '@/hooks/use-permission';
 import { listLoans, getLoanSchedule } from '@/lib/loans';
 import { listStaff } from '@/lib/staff';
 import { TableSkeleton } from '@/components/ui/skeleton';
@@ -26,6 +28,7 @@ const col = createColumnHelper<ILoan>();
 
 export function LoansListClient() {
   const router = useRouter();
+  const permission = usePermission(AppModule.Loans);
   const [page, setPage]               = useState(1);
   const [status, setStatus]           = useState<LoanStatus | ''>('');
   const [filterMonth, setFilterMonth] = useState('');
@@ -130,6 +133,24 @@ export function LoansListClient() {
 
   return (
     <div className="space-y-4">
+      {permission === 'full' && (
+        <div className="flex gap-2 justify-end">
+          <Link
+            href="/loans/import"
+            className="inline-flex items-center gap-1.5 h-[var(--row-default)] px-4 bg-white border border-neutral-200 text-neutral-700 text-sm font-semibold rounded-sm hover:bg-neutral-50 transition-colors duration-fast"
+          >
+            <Upload size={16} strokeWidth={1.75} />
+            Import Repayments
+          </Link>
+          <Link
+            href="/loans/new"
+            className="inline-flex items-center gap-1.5 h-[var(--row-default)] px-4 bg-primary-600 text-white text-sm font-semibold rounded-sm hover:bg-primary-700 transition-colors duration-fast"
+          >
+            <Plus size={16} strokeWidth={1.75} />
+            Record New Loan
+          </Link>
+        </div>
+      )}
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
         <Select

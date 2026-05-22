@@ -11,7 +11,8 @@ import {
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { IContribution } from '@welfare/shared';
-import { ContributionStatus } from '@welfare/shared';
+import { ContributionStatus, AppModule } from '@welfare/shared';
+import { usePermission } from '@/hooks/use-permission';
 import { listContributions, deleteContribution } from '@/lib/contributions';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -39,6 +40,7 @@ const LIMIT = 20;
 
 export default function ContributionsListClient() {
   const qc = useQueryClient();
+  const permission = usePermission(AppModule.Contributions);
   const [page, setPage]       = useState(1);
   const [status, setStatus]   = useState<ContributionStatus | ''>('');
   const [month, setMonth]     = useState('');
@@ -98,7 +100,7 @@ export default function ContributionsListClient() {
       header: 'Status',
       cell: (i) => <Badge kind={statusKind[i.getValue()]}>{i.getValue()}</Badge>,
     }),
-    col.display({
+    ...(permission === 'full' ? [col.display({
       id: 'actions',
       header: '',
       cell: (i) => (
@@ -110,7 +112,7 @@ export default function ContributionsListClient() {
           <Trash2 size={14} strokeWidth={1.75} />
         </button>
       ),
-    }),
+    })] : []),
   ];
 
   const table = useReactTable({

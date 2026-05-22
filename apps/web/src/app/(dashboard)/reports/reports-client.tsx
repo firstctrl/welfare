@@ -10,6 +10,8 @@ import {
 } from '@tanstack/react-table';
 import { Download, Send, FileText, TrendingUp, AlertCircle, Banknote, BarChart3, Search, Users, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { AppModule } from '@welfare/shared';
+import { usePermission } from '@/hooks/use-permission';
 import {
   getMonthlyContributions,
   getArrears,
@@ -217,7 +219,7 @@ const STATUS_BG: Record<string, string> = {
   CarriedForward: 'bg-info-50 text-info-700',
 };
 
-function StaffStatementPanel() {
+function StaffStatementPanel({ canSend }: { canSend: boolean }) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [staffInput, setStaffInput]           = useState('');
   const [staffOptions, setStaffOptions]       = useState<{ _id: string; fullName: string; staffId: string }[]>([]);
@@ -295,7 +297,7 @@ function StaffStatementPanel() {
             >
               Download PDF
             </Button>
-            {data.staff.email && (
+            {canSend && data.staff.email && (
               <Button
                 variant="primary"
                 size="sm"
@@ -424,7 +426,7 @@ function StaffStatementPanel() {
   );
 }
 
-function BulkStatementsPanel() {
+function BulkStatementsPanel({ canSend }: { canSend: boolean }) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [year, setYear]               = useState(CUR_YEAR);
   const [sendTo, setSendTo]           = useState<'all' | 'selected'>('all');
@@ -591,16 +593,18 @@ function BulkStatementsPanel() {
 
       {/* Send button */}
       <div className="flex items-center gap-4">
-        <Button
-          variant="primary"
-          size="sm"
-          Icon={sendMutation.isPending || polling ? Loader2 : Send}
-          loading={sendMutation.isPending || polling}
-          disabled={sendTo === 'selected' && selected.length === 0}
-          onClick={() => sendMutation.mutate()}
-        >
-          Send Statements
-        </Button>
+        {canSend && (
+          <Button
+            variant="primary"
+            size="sm"
+            Icon={sendMutation.isPending || polling ? Loader2 : Send}
+            loading={sendMutation.isPending || polling}
+            disabled={sendTo === 'selected' && selected.length === 0}
+            onClick={() => sendMutation.mutate()}
+          >
+            Send Statements
+          </Button>
+        )}
         {sendTo === 'selected' && selected.length > 0 && (
           <span className="text-xs text-neutral-400">{selected.length} staff selected</span>
         )}
@@ -733,6 +737,8 @@ const SECTIONS = [
 // ── Root component ────────────────────────────────────────────────────────────
 
 export function ReportsClient() {
+  const permission = usePermission(AppModule.Reports);
+  const canSend = permission === 'full';
   const [active, setActive] = useState('monthly-contrib');
   const activeSection = SECTIONS.find(s => s.id === active);
 
@@ -764,8 +770,8 @@ export function ReportsClient() {
         <Card className="min-h-[400px]">
           <CardHeader title={activeSection?.label ?? ''} />
           <CardBody>
-            {active === 'monthly-contrib' && <StaffStatementPanel />}
-            {active === 'bulk-statements' && <BulkStatementsPanel />}
+            {active === 'monthly-contrib' && <StaffStatementPanel canSend={canSend} />}
+            {active === 'bulk-statements' && <BulkStatementsPanel canSend={canSend} />}
             {active === 'arrears' && <ArrearsPanel />}
             {active === 'guarantor-offsets' && (
               <SimplePanel

@@ -12,7 +12,8 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Search, UserPlus } from 'lucide-react';
 import type { IStaff } from '@welfare/shared';
-import { StaffStatus } from '@welfare/shared';
+import { StaffStatus, AppModule } from '@welfare/shared';
+import { usePermission } from '@/hooks/use-permission';
 import { listStaff, searchStaff } from '@/lib/staff';
 import AddStaffModal from './add-staff-modal';
 import { TableSkeleton } from '@/components/ui/skeleton';
@@ -47,6 +48,7 @@ const columns = [
 
 export default function StaffListClient() {
   const router = useRouter();
+  const permission = usePermission(AppModule.Staff);
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<StaffStatus | ''>('');
   const [level, setLevel] = useState('');
@@ -137,11 +139,13 @@ export default function StaffListClient() {
             <Search size={16} strokeWidth={1.75} />
           </button>
         </span>
-        <div className="ml-auto">
-          <Button variant="primary" Icon={UserPlus} onClick={() => setShowAddModal(true)}>
-            Add Staff
-          </Button>
-        </div>
+        {permission === 'full' && (
+          <div className="ml-auto">
+            <Button variant="primary" Icon={UserPlus} onClick={() => setShowAddModal(true)}>
+              Add Staff
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Table */}

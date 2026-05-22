@@ -614,7 +614,7 @@ export class ReportsService {
   .legend{display:flex;gap:12px;margin-top:10px;font-size:9px}
   .leg-item{display:flex;align-items:center;gap:4px}
   .leg-dot{width:10px;height:10px;border-radius:2px;border:1px solid #ccc}
-  .watermark{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-40deg);width:320px;height:320px;background-image:url('${logoBase64}');background-size:contain;background-repeat:no-repeat;background-position:center;opacity:0.05;z-index:0;pointer-events:none}
+  .watermark{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;height:320px;background-image:url('${logoBase64}');background-size:contain;background-repeat:no-repeat;background-position:center;opacity:0.05;z-index:0;pointer-events:none}
 </style>
 </head>
 <body>

@@ -14,11 +14,13 @@ export const staffSchema = z.object({
 });
 
 export const loanSchema = z.object({
-  staffId:         z.string().min(1, 'Select a staff member'),
-  guarantorId:     z.string().min(1, 'Select a guarantor'),
+  staffId: z.string().min(1, 'Select a staff member'),
+  guarantorId: z.string().min(1, 'Select a guarantor'),
   principalAmount: z.coerce.number().min(1, 'Required'),
-  tenureMonths:    z.coerce.number().min(1).max(12),
-  disbursedDate:   z.string().min(1, 'Required'),
+  tenureMonths: z.coerce.number().min(1).max(12),
+  disbursedDate: z.string().min(1, 'Required'),
+  chequeNo: z.string().min(5, 'Required'),
+  pvNo: z.string().min(5, 'Required'),
 });
 
 export const contributionSchema = z.object({

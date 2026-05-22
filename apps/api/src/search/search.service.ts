@@ -39,7 +39,7 @@ export class SearchService {
     const loanItems: SearchResultItem[] = (loansRes.hits as any[]).map((h) => ({
       type: 'loan' as const,
       id: h.id,
-      title: `${h.staffName} — ₦${Number(h.principalAmount).toLocaleString()}`,
+      title: `${h.staffName} - ₵${Number(h.principalAmount).toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       subtitle: `${h.status} · ${new Date(h.disbursedDate).toLocaleDateString('en-GB')}`,
       url: `/loans/${h.id}`,
     }));

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { getConfig, updateConfig, testEmail, type ConfigMap } from '../../../lib/config';
 import { runBulkAnnualStatement } from '../../../lib/email';
+import { AppModule } from '@welfare/shared';
+import { usePermission } from '@/hooks/use-permission';
 import { Card, CardHeader, CardBody } from '@/components/ui/card';
 import { Field, Input, Select } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
@@ -57,25 +59,28 @@ interface SectionCardProps {
   onSave: () => void;
   saving: boolean;
   dirty: boolean;
+  canEdit: boolean;
 }
 
-function SectionCard({ title, meta, children, onSave, saving, dirty }: SectionCardProps) {
+function SectionCard({ title, meta, children, onSave, saving, dirty, canEdit }: SectionCardProps) {
   return (
     <Card>
       <CardHeader
         title={title}
         subtitle={meta ? `Last updated by ${meta.updatedBy} on ${fmt(meta.updatedAt)}` : undefined}
         action={
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            onClick={onSave}
-            disabled={saving || !dirty}
-            loading={saving}
-          >
-            Save
-          </Button>
+          canEdit ? (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={onSave}
+              disabled={saving || !dirty}
+              loading={saving}
+            >
+              Save
+            </Button>
+          ) : undefined
         }
       />
       <CardBody className="space-y-4">{children}</CardBody>
@@ -98,7 +103,7 @@ const CRON_PRESETS: { label: string; value: string }[] = [
 
 const CONTRIBUTION_KEYS = ['MONTHLY_CONTRIBUTION_AMOUNT'] as const;
 
-function ContributionsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void }) {
+function ContributionsSection({ cfg, onUpdate, onDirtyChange, canEdit }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void; canEdit: boolean }) {
   const [amount, setAmount] = useState(cfg['MONTHLY_CONTRIBUTION_AMOUNT']?.value ?? '');
   const [saving, setSaving] = useState(false);
 
@@ -129,7 +134,7 @@ function ContributionsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap
   }
 
   return (
-    <SectionCard title="Contributions" meta={meta} onSave={save} saving={saving} dirty={dirty}>
+    <SectionCard title="Contributions" meta={meta} onSave={save} saving={saving} dirty={dirty} canEdit={canEdit}>
       <Field label="Monthly Contribution Amount" required>
         <Input type="number" min={1} step={0.01} value={amount} onChange={(e) => setAmount(e.target.value)} disabled={saving} prefix="₵" />
       </Field>
@@ -167,7 +172,7 @@ function initLoan(cfg: ConfigMap): LoanFields {
   };
 }
 
-function LoansSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void }) {
+function LoansSection({ cfg, onUpdate, onDirtyChange, canEdit }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void; canEdit: boolean }) {
   const [fields, setFields] = useState<LoanFields>(() => initLoan(cfg));
   const [saving, setSaving] = useState(false);
 
@@ -217,7 +222,7 @@ function LoansSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
   }
 
   return (
-    <SectionCard title="Loans" meta={meta} onSave={save} saving={saving} dirty={dirty}>
+    <SectionCard title="Loans" meta={meta} onSave={save} saving={saving} dirty={dirty} canEdit={canEdit}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="Minimum Loan Amount" required>
           <Input type="number" min={1} value={fields.LOAN_MIN_AMOUNT} onChange={set('LOAN_MIN_AMOUNT')} disabled={saving} prefix="₵" />
@@ -249,7 +254,7 @@ function LoansSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
 
 const GUARANTOR_KEYS = ['MAX_LOANS_PER_GUARANTOR'] as const;
 
-function GuarantorsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void }) {
+function GuarantorsSection({ cfg, onUpdate, onDirtyChange, canEdit }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void; canEdit: boolean }) {
   const [max, setMax] = useState(cfg['MAX_LOANS_PER_GUARANTOR']?.value ?? '');
   const [saving, setSaving] = useState(false);
 
@@ -280,7 +285,7 @@ function GuarantorsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; o
   }
 
   return (
-    <SectionCard title="Guarantors" meta={meta} onSave={save} saving={saving} dirty={dirty}>
+    <SectionCard title="Guarantors" meta={meta} onSave={save} saving={saving} dirty={dirty} canEdit={canEdit}>
       <Field label="Max Active Loans Per Guarantor" helper="Set to 0 for unlimited (no restriction enforced).">
         <Input type="number" min={0} step={1} value={max} onChange={(e) => setMax(e.target.value)} disabled={saving} />
       </Field>
@@ -306,7 +311,7 @@ function initPayment(cfg: ConfigMap): PaymentFields {
   };
 }
 
-function PaymentsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void }) {
+function PaymentsSection({ cfg, onUpdate, onDirtyChange, canEdit }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void; canEdit: boolean }) {
   const [fields, setFields] = useState<PaymentFields>(() => initPayment(cfg));
   const [saving, setSaving] = useState(false);
 
@@ -353,7 +358,7 @@ function PaymentsSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onU
   }
 
   return (
-    <SectionCard title="Payments" meta={meta} onSave={save} saving={saving} dirty={dirty}>
+    <SectionCard title="Payments" meta={meta} onSave={save} saving={saving} dirty={dirty} canEdit={canEdit}>
       <Field label="Deadline Day of Month">
         <Input type="number" min={1} max={28} step={1} value={fields.PAYMENT_DEADLINE_DAY} onChange={setInput('PAYMENT_DEADLINE_DAY')} disabled={saving} />
       </Field>
@@ -409,7 +414,7 @@ function initEmail(cfg: ConfigMap): EmailFields {
   };
 }
 
-function EmailSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void }) {
+function EmailSection({ cfg, onUpdate, onDirtyChange, canEdit }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void; canEdit: boolean }) {
   const [fields, setFields] = useState<EmailFields>(() => initEmail(cfg));
   const [saving, setSaving] = useState(false);
   const [testTo, setTestTo] = useState('');
@@ -471,7 +476,7 @@ function EmailSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
   const isResend = fields.EMAIL_PROVIDER === 'resend';
 
   return (
-    <SectionCard title="Email" meta={meta} onSave={save} saving={saving} dirty={dirty}>
+    <SectionCard title="Email" meta={meta} onSave={save} saving={saving} dirty={dirty} canEdit={canEdit}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="Email Provider">
           <Select
@@ -535,50 +540,54 @@ function EmailSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
         )}
       </div>
 
-      <div className="border-t border-neutral-100 pt-4">
-        <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3">Send Test Email</p>
-        <div className="flex items-center gap-3">
-          <Input
-            type="email"
-            placeholder="Recipient email address"
-            value={testTo}
-            onChange={(e) => setTestTo(e.target.value)}
-            disabled={testing}
-            className="flex-1"
-          />
-          <Button type="button" variant="secondary" onClick={handleTestEmail} disabled={testing || !testTo} loading={testing}>
-            Send Test Email
-          </Button>
+      {canEdit && (
+        <div className="border-t border-neutral-100 pt-4">
+          <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3">Send Test Email</p>
+          <div className="flex items-center gap-3">
+            <Input
+              type="email"
+              placeholder="Recipient email address"
+              value={testTo}
+              onChange={(e) => setTestTo(e.target.value)}
+              disabled={testing}
+              className="flex-1"
+            />
+            <Button type="button" variant="secondary" onClick={handleTestEmail} disabled={testing || !testTo} loading={testing}>
+              Send Test Email
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="border-t border-neutral-100 pt-4">
-        <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3">Bulk Actions</p>
-        <div className="flex items-center gap-4">
-          <Button
-            type="button"
-            variant="primary"
-            onClick={async () => {
-              setRunningBulk(true);
-              try {
-                await runBulkAnnualStatement();
-                toast.success('Annual statement batch enqueued');
-              } catch {
-                toast.error('Failed to enqueue annual statement batch');
-              } finally {
-                setRunningBulk(false);
-              }
-            }}
-            disabled={runningBulk}
-            loading={runningBulk}
-          >
-            Run Annual Statement
-          </Button>
-          <p className="text-xs text-neutral-500">
-            Sends contribution statements for the previous year to all active staff with email addresses.
-          </p>
+      {canEdit && (
+        <div className="border-t border-neutral-100 pt-4">
+          <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3">Bulk Actions</p>
+          <div className="flex items-center gap-4">
+            <Button
+              type="button"
+              variant="primary"
+              onClick={async () => {
+                setRunningBulk(true);
+                try {
+                  await runBulkAnnualStatement();
+                  toast.success('Annual statement batch enqueued');
+                } catch {
+                  toast.error('Failed to enqueue annual statement batch');
+                } finally {
+                  setRunningBulk(false);
+                }
+              }}
+              disabled={runningBulk}
+              loading={runningBulk}
+            >
+              Run Annual Statement
+            </Button>
+            <p className="text-xs text-neutral-500">
+              Sends contribution statements for the previous year to all active staff with email addresses.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
     </SectionCard>
   );
 }
@@ -586,6 +595,8 @@ function EmailSection({ cfg, onUpdate, onDirtyChange }: { cfg: ConfigMap; onUpda
 // ─── root client component ───────────────────────────────────────────────────
 
 export function SettingsClient() {
+  const permission = usePermission(AppModule.Settings);
+  const canEdit = permission === 'full';
   const [cfg, setCfg] = useState<ConfigMap | null>(null);
   const [loading, setLoading] = useState(true);
   const [dirtyMap, setDirtyMap] = useState<Record<string, boolean>>({});
@@ -636,11 +647,11 @@ export function SettingsClient() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <ContributionsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('contributions')} />
-      <LoansSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('loans')} />
-      <GuarantorsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('guarantors')} />
-      <PaymentsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('payments')} />
-      <EmailSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('email')} />
+      <ContributionsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('contributions')} canEdit={canEdit} />
+      <LoansSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('loans')} canEdit={canEdit} />
+      <GuarantorsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('guarantors')} canEdit={canEdit} />
+      <PaymentsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('payments')} canEdit={canEdit} />
+      <EmailSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('email')} canEdit={canEdit} />
     </div>
   );
 }

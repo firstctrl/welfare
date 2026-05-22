@@ -36,16 +36,19 @@ function StaffPicker({
   value,
   excludeId,
   onSelect,
+  disabled,
 }: {
   label: string;
   value: string;
   excludeId?: string;
   onSelect: (staff: IStaff) => void;
+  disabled?: boolean;
 }) {
   const [query, setQuery] = useState(value);
   const [options, setOptions] = useState<IStaff[]>([]);
 
   async function handleSearch(q: string) {
+    if (disabled) return;
     setQuery(q);
     if (q.length < 2) { setOptions([]); return; }
     const res = await searchStaff(q);
@@ -58,6 +61,7 @@ function StaffPicker({
         value={query}
         onChange={(e) => handleSearch(e.target.value)}
         placeholder="Search by name or ID…"
+        disabled={disabled}
       />
       {options.length > 0 && (
         <div className="absolute z-10 mt-1 w-full bg-white border border-neutral-200 rounded-sm shadow-floating max-h-48 overflow-y-auto">
@@ -160,7 +164,8 @@ export function NewLoanClient() {
     onError: (err: unknown) => { toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to record loan'); },
   });
 
-  const submitDisabled = isSubmitting || mutation.isPending || guarantorAtCap || eligibility?.eligible === false;
+  const ineligible = !!selectedStaff && eligibility?.eligible === false;
+  const submitDisabled = isSubmitting || mutation.isPending || guarantorAtCap || ineligible;
 
   return (
     <div className="grid grid-cols-2 gap-6 items-start">
@@ -199,6 +204,7 @@ export function NewLoanClient() {
                     value={selectedGuarantor?.fullName ?? ''}
                     excludeId={watchStaffId}
                     onSelect={selectGuarantor}
+                    disabled={ineligible}
                   />
                 </Field>
                 <input type="hidden" {...register('guarantorId')} />
@@ -217,7 +223,7 @@ export function NewLoanClient() {
                 required
                 error={errors.principalAmount?.message}
               >
-                <Input {...register('principalAmount')} type="number" min={minAmount} max={maxAmount} step="0.01" prefix="₵" error={!!errors.principalAmount} />
+                <Input {...register('principalAmount')} type="number" min={minAmount} max={maxAmount} step="0.01" prefix="₵" error={!!errors.principalAmount} disabled={ineligible} />
               </Field>
 
               <div className="space-y-1.5">
@@ -226,6 +232,7 @@ export function NewLoanClient() {
                     {...register('tenureMonths')}
                     options={Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1} month${i > 0 ? 's' : ''}` }))}
                     error={!!errors.tenureMonths}
+                    disabled={ineligible}
                   />
                 </Field>
                 {cfg && (
@@ -234,7 +241,15 @@ export function NewLoanClient() {
               </div>
 
               <Field label="Disbursed Date" required error={errors.disbursedDate?.message}>
-                <Input {...register('disbursedDate')} type="date" error={!!errors.disbursedDate} />
+                <Input {...register('disbursedDate')} type="date" error={!!errors.disbursedDate} disabled={ineligible} />
+              </Field>
+
+              <Field label="Cheque No." required error={errors.chequeNo?.message}>
+                <Input {...register('chequeNo')} placeholder="e.g. CHQ-00123" error={!!errors.chequeNo} disabled={ineligible} />
+              </Field>
+
+              <Field label="PV No." required error={errors.pvNo?.message}>
+                <Input {...register('pvNo')} placeholder="e.g. PV-2024-001" error={!!errors.pvNo} disabled={ineligible} />
               </Field>
 
               <div className="space-y-1.5">
@@ -242,8 +257,9 @@ export function NewLoanClient() {
                 <input
                   type="file"
                   accept=".pdf,image/jpeg,image/png"
+                  disabled={ineligible}
                   onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
-                  className="w-full text-sm text-neutral-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-xs file:border-0 file:text-sm file:bg-neutral-100 file:text-neutral-700 hover:file:bg-neutral-200 file:font-medium"
+                  className="w-full text-sm text-neutral-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-xs file:border-0 file:text-sm file:bg-neutral-100 file:text-neutral-700 hover:file:bg-neutral-200 file:font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 {docFile && <p className="text-xs text-neutral-500">{docFile.name}</p>}
               </div>
@@ -292,6 +308,7 @@ export function NewLoanClient() {
                       { label: 'Due Date',  align: 'left'  },
                       { label: 'Principal', align: 'right' },
                       { label: 'Interest',  align: 'right' },
+                      { label: 'Total',     align: 'right' },
                     ] as { label: string; align: 'left' | 'right' }[]).map((h) => (
                       <th key={h.label} className={`px-3 py-2 text-${h.align} text-xs font-semibold text-neutral-500 uppercase tracking-wide`}>{h.label}</th>
                     ))}
@@ -304,6 +321,7 @@ export function NewLoanClient() {
                       <td className="px-3 py-2 font-mono tabular text-xs">{fmtDate(row.dueDate)}</td>
                       <td className="px-3 py-2 font-mono tabular font-medium text-right">{fmtGHS(row.principalAmt)}</td>
                       <td className="px-3 py-2 font-mono tabular text-neutral-500 text-right">{fmtGHS(row.interestAmt)}</td>
+                      <td className="px-3 py-2 font-mono tabular font-semibold text-right">{fmtGHS(row.instalment)}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -7,4 +7,6 @@ export class CreateLoanDto {
   @IsNumber() @Min(1) @Type(() => Number) principalAmount!: number;
   @IsNumber() @Min(1) @Max(12) @Type(() => Number) tenureMonths!: number;
   @IsDateString() disbursedDate!: string;
+  @IsString() @IsNotEmpty() chequeNo!: string;
+  @IsString() @IsNotEmpty() pvNo!: string;
 }
