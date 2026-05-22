@@ -27,6 +27,7 @@ export default () => ({
     bindDn: process.env.LDAP_BIND_DN || '',
     bindCredentials: process.env.LDAP_BIND_CREDENTIALS || '',
     searchBase: process.env.LDAP_SEARCH_BASE || '',
+    requiredGroup: process.env.LDAP_REQUIRED_GROUP || '',
   },
   email: {
     provider: process.env.EMAIL_PROVIDER || 'resend',
