@@ -243,12 +243,20 @@ const INSTALMENT_STATUS_BG: Record<string, string> = {
 };
 
 function LoanStatementPanel({ canSend }: { canSend: boolean }) {
-  const [selectedBorrower, setSelectedBorrower] = useState<ILoanBorrower | null>(null);
-  const [selectedLoan, setSelectedLoan]         = useState<ILoan | null>(null);
+  const borrowerDropdownRef                         = useRef<HTMLDivElement>(null);
+  const [borrowerInput, setBorrowerInput]           = useState('');
+  const [showBorrowerDropdown, setShowBorrowerDropdown] = useState(false);
+  const [selectedBorrower, setSelectedBorrower]     = useState<ILoanBorrower | null>(null);
+  const [selectedLoan, setSelectedLoan]             = useState<ILoan | null>(null);
 
   const { data: borrowers = [], isLoading: loadingBorrowers } = useQuery({
     queryKey: ['loan-borrowers'],
     queryFn: getLoanBorrowers,
+  });
+
+  const filteredBorrowers = borrowers.filter(b => {
+    const q = borrowerInput.toLowerCase();
+    return b.displayName.toLowerCase().includes(q) || b.staffNo.toLowerCase().includes(q);
   });
 
   const { data: loansPage } = useQuery({
@@ -270,10 +278,18 @@ function LoanStatementPanel({ canSend }: { canSend: boolean }) {
     onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Failed to send statement'),
   });
 
-  function handleBorrowerChange(e: { target: { value: string } }) {
-    const b = borrowers.find(b => b.staffId === e.target.value) ?? null;
+  function selectBorrower(b: ILoanBorrower) {
     setSelectedBorrower(b);
+    setBorrowerInput(`${b.displayName} (${b.staffNo})`);
+    setShowBorrowerDropdown(false);
     setSelectedLoan(null);
+  }
+
+  function handleBorrowerInput(e: React.ChangeEvent<HTMLInputElement>) {
+    setBorrowerInput(e.target.value);
+    setSelectedBorrower(null);
+    setSelectedLoan(null);
+    setShowBorrowerDropdown(true);
   }
 
   function handleLoanChange(e: { target: { value: string } }) {
@@ -287,17 +303,37 @@ function LoanStatementPanel({ canSend }: { canSend: boolean }) {
     <div className="space-y-5">
       {/* Selectors */}
       <div className="flex flex-wrap items-end gap-3">
-        <Field label="Select Borrower">
-          <Select
-            value={selectedBorrower?.staffId ?? ''}
-            onChange={handleBorrowerChange}
-            options={[
-              { value: '', label: loadingBorrowers ? 'Loading…' : 'Select borrower…' },
-              ...borrowers.map(b => ({ value: b.staffId, label: `${b.displayName} (${b.staffNo})` })),
-            ]}
-            style={{ minWidth: 240 }}
-          />
-        </Field>
+        <div className="relative" ref={borrowerDropdownRef}>
+          <Field label="Select Borrower">
+            <div className="relative">
+              <input
+                value={borrowerInput}
+                onChange={handleBorrowerInput}
+                onFocus={() => !selectedBorrower && setShowBorrowerDropdown(true)}
+                onBlur={() => setTimeout(() => setShowBorrowerDropdown(false), 150)}
+                placeholder={loadingBorrowers ? 'Loading…' : 'Search by name or staff no…'}
+                disabled={loadingBorrowers}
+                className="w-full px-3 pr-8 h-[var(--row-default)] rounded-sm border border-neutral-200 bg-white text-base outline-none focus:border-primary-500 focus:shadow-focus placeholder:text-neutral-400 disabled:opacity-50"
+                style={{ minWidth: 240 }}
+              />
+              <Search size={14} strokeWidth={1.75} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+            </div>
+          </Field>
+          {showBorrowerDropdown && filteredBorrowers.length > 0 && (
+            <div className="absolute z-20 w-full mt-1 bg-white border border-neutral-200 rounded-sm shadow-lg overflow-hidden max-h-60 overflow-y-auto">
+              {filteredBorrowers.map(b => (
+                <button
+                  key={b.staffId}
+                  onMouseDown={() => selectBorrower(b)}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-primary-50 transition-colors"
+                >
+                  <span className="font-medium text-neutral-900">{b.displayName}</span>
+                  <span className="ml-2 font-mono text-xs text-neutral-400">{b.staffNo}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {selectedBorrower && (
           <Field label="Select Loan">
