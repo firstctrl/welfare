@@ -10,6 +10,8 @@ import type {
   IBadDebtRow,
   IExitClearanceRow,
   IDashboardStats,
+  ILoanBorrower,
+  ILoanStatement,
 } from '@welfare/shared';
 
 export interface MonthlyContribParams {
@@ -154,4 +156,43 @@ export async function getBulkSendStatus(jobId: string): Promise<BulkSendStatus> 
 export function buildDownloadUrl(path: string, format: 'csv' | 'pdf'): string {
   const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
   return `${base}/reports/${path}?format=${format}`;
+}
+
+export async function getLoanBorrowers(): Promise<ILoanBorrower[]> {
+  const { data } = await apiClient.get('/reports/loans/borrowers');
+  return data;
+}
+
+export async function getLoanStatement(staffId: string, loanId: string): Promise<ILoanStatement> {
+  const { data } = await apiClient.get('/reports/loans/staff-statement', {
+    params: { staffId, loanId },
+  });
+  return data;
+}
+
+export async function downloadLoanStatementPdf(
+  staffId: string,
+  loanId: string,
+  staffNo: string,
+): Promise<void> {
+  const { data } = await apiClient.get('/reports/loans/staff-statement/pdf', {
+    params: { staffId, loanId },
+    responseType: 'blob',
+  });
+  const url = URL.createObjectURL(data as Blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `loan-statement-${staffNo}-${loanId}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export async function sendLoanStatement(
+  staffId: string,
+  loanId: string,
+): Promise<{ sent: boolean; email: string }> {
+  const { data } = await apiClient.post('/reports/loans/staff-statement/send', { staffId, loanId });
+  return data;
 }
