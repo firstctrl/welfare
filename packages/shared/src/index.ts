@@ -42,6 +42,9 @@ export type {
   IBadDebtRow,
   IExitClearanceRow,
   IDashboardStats,
+  ILoanBorrower,
+  ILoanStatement,
+  ILoanStatementInstalment,
 } from './interfaces/report.interface';
 
 // DTOs

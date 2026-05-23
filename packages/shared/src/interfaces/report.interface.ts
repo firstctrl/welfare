@@ -161,3 +161,52 @@ export interface IDashboardStats {
     uploadedAt: string;
   }>;
 }
+
+export interface ILoanBorrower {
+  staffId: string;
+  staffNo: string;
+  displayName: string;
+}
+
+export interface ILoanStatementInstalment {
+  instalmentNumber: number;
+  dueDate: string;
+  dueAmount: number;
+  principalAmount: number;
+  interestAmount: number;
+  paidAmount: number;
+  penaltyAmount: number;
+  paidDate?: string;
+  status: LoanRepaymentStatus;
+  source?: string;
+}
+
+export interface ILoanStatement {
+  staff: {
+    staffNo: string;
+    displayName: string;
+    department: string;
+  };
+  loan: {
+    id: string;
+    principalAmount: number;
+    interestRate: number;
+    totalRepayable: number;
+    tenureMonths: number;
+    disbursedDate: string;
+    status: LoanStatus;
+    chequeNo?: string;
+    pvNo?: string;
+    guarantor: {
+      staffNo: string;
+      displayName: string;
+    };
+  };
+  kpis: {
+    totalPaid: number;
+    outstanding: number;
+    penaltyPaid: number;
+    completionRate: number;
+  };
+  instalments: ILoanStatementInstalment[];
+}
