@@ -28,7 +28,12 @@ import {
   triggerBulkSend,
   getBulkSendStatus,
   buildDownloadUrl,
+  getLoanBorrowers,
+  getLoanStatement,
+  downloadLoanStatementPdf,
+  sendLoanStatement,
 } from '@/lib/reports';
+import { listLoans } from '@/lib/loans';
 import { searchStaff } from '@/lib/staff';
 import type {
   IMonthlyContributionRow,
@@ -40,6 +45,8 @@ import type {
   IGuarantorExposureRow,
   IBadDebtRow,
   IExitClearanceRow,
+  ILoan,
+  ILoanBorrower,
 } from '@welfare/shared';
 import { Card, CardHeader, CardBody } from '@/components/ui/card';
 import { KpiCard } from '@/components/ui/kpi-card';
@@ -218,6 +225,230 @@ const STATUS_BG: Record<string, string> = {
   Missed:         'bg-danger-50 text-danger-700',
   CarriedForward: 'bg-info-50 text-info-700',
 };
+
+const LOAN_STATUS_BADGE: Record<string, string> = {
+  Active:     'bg-info-50 text-info-700',
+  Completed:  'bg-success-50 text-success-700',
+  WrittenOff: 'bg-neutral-100 text-neutral-500',
+  BadDebt:    'bg-danger-50 text-danger-700',
+  Defaulted:  'bg-warning-50 text-warning-700',
+};
+
+const INSTALMENT_STATUS_BG: Record<string, string> = {
+  Paid:    'bg-success-50 text-success-700',
+  Partial: 'bg-warning-50 text-warning-700',
+  Overdue: 'bg-danger-50 text-danger-700',
+  Pending: 'bg-neutral-50 text-neutral-500',
+  Waived:  'bg-neutral-100 text-neutral-400',
+};
+
+function LoanStatementPanel({ canSend }: { canSend: boolean }) {
+  const [selectedBorrower, setSelectedBorrower] = useState<ILoanBorrower | null>(null);
+  const [selectedLoan, setSelectedLoan]         = useState<ILoan | null>(null);
+
+  const { data: borrowers = [], isLoading: loadingBorrowers } = useQuery({
+    queryKey: ['loan-borrowers'],
+    queryFn: getLoanBorrowers,
+  });
+
+  const { data: loansPage } = useQuery({
+    queryKey: ['loans-for-borrower', selectedBorrower?.staffId],
+    queryFn: () => listLoans({ staffId: selectedBorrower!.staffId, limit: 100 }),
+    enabled: !!selectedBorrower,
+  });
+  const loans = loansPage?.data ?? [];
+
+  const { data: stmt, isLoading: loadingStmt } = useQuery({
+    queryKey: ['loan-statement', selectedBorrower?.staffId, selectedLoan?._id],
+    queryFn: () => getLoanStatement(selectedBorrower!.staffId, selectedLoan!._id),
+    enabled: !!selectedBorrower && !!selectedLoan,
+  });
+
+  const sendMutation = useMutation({
+    mutationFn: () => sendLoanStatement(selectedBorrower!.staffId, selectedLoan!._id),
+    onSuccess: (res) => toast.success(`Statement sent to ${res.email}`),
+    onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Failed to send statement'),
+  });
+
+  function handleBorrowerChange(e: { target: { value: string } }) {
+    const b = borrowers.find(b => b.staffId === e.target.value) ?? null;
+    setSelectedBorrower(b);
+    setSelectedLoan(null);
+  }
+
+  function handleLoanChange(e: { target: { value: string } }) {
+    const l = loans.find(l => l._id === e.target.value) ?? null;
+    setSelectedLoan(l);
+  }
+
+  const { kpis, instalments, loan } = stmt ?? {};
+
+  return (
+    <div className="space-y-5">
+      {/* Selectors */}
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="Select Borrower">
+          <Select
+            value={selectedBorrower?.staffId ?? ''}
+            onChange={handleBorrowerChange}
+            options={[
+              { value: '', label: loadingBorrowers ? 'Loading…' : 'Select borrower…' },
+              ...borrowers.map(b => ({ value: b.staffId, label: `${b.displayName} (${b.staffNo})` })),
+            ]}
+            style={{ minWidth: 240 }}
+          />
+        </Field>
+
+        {selectedBorrower && (
+          <Field label="Select Loan">
+            <Select
+              value={selectedLoan?._id ?? ''}
+              onChange={handleLoanChange}
+              options={[
+                { value: '', label: loans.length === 0 ? 'No loans found' : 'Select loan…' },
+                ...loans.map(l => ({
+                  value: l._id,
+                  label: `GHS ${l.principalAmount.toLocaleString()} · ${new Date(l.disbursedDate).toLocaleDateString('en-GB')} · ${l.status}`,
+                })),
+              ]}
+              style={{ minWidth: 300 }}
+            />
+          </Field>
+        )}
+
+        {selectedBorrower && selectedLoan && stmt && (
+          <div className="flex gap-2 ml-auto">
+            <Button
+              variant="secondary"
+              size="sm"
+              Icon={FileText}
+              onClick={() =>
+                downloadLoanStatementPdf(
+                  selectedBorrower.staffId,
+                  selectedLoan._id,
+                  selectedBorrower.staffNo,
+                ).catch(() => toast.error('Download failed'))
+              }
+            >
+              Download PDF
+            </Button>
+            {canSend && (
+              <Button
+                variant="primary"
+                size="sm"
+                Icon={Send}
+                loading={sendMutation.isPending}
+                onClick={() => sendMutation.mutate()}
+              >
+                Send Statement
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {!selectedBorrower && (
+        <div className="flex items-center justify-center py-16 text-neutral-400 text-sm">
+          Select a borrower to view their loan statement
+        </div>
+      )}
+
+      {selectedBorrower && !selectedLoan && (
+        <div className="flex items-center justify-center py-16 text-neutral-400 text-sm">
+          Select a loan to view the statement
+        </div>
+      )}
+
+      {selectedBorrower && selectedLoan && loadingStmt && (
+        <div className="flex items-center justify-center py-16 text-neutral-400 text-sm">Loading…</div>
+      )}
+
+      {stmt && kpis && loan && (
+        <>
+          {/* Loan info block */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 text-xs bg-neutral-50 border border-neutral-200 rounded-md px-4 py-3">
+            <div><span className="text-neutral-400">Disbursed</span><br /><span className="font-medium">{fmtDate(new Date(loan.disbursedDate))}</span></div>
+            <div><span className="text-neutral-400">Tenure</span><br /><span className="font-medium">{loan.tenureMonths} months</span></div>
+            <div><span className="text-neutral-400">Interest Rate</span><br /><span className="font-medium">{loan.interestRate}%</span></div>
+            <div><span className="text-neutral-400">Guarantor</span><br /><span className="font-medium">{loan.guarantor.displayName} ({loan.guarantor.staffNo})</span></div>
+            <div><span className="text-neutral-400">Cheque No</span><br /><span className="font-medium">{loan.chequeNo ?? '—'}</span></div>
+            <div><span className="text-neutral-400">PV No</span><br /><span className="font-medium">{loan.pvNo ?? '—'}</span></div>
+            <div className="col-span-2"><span className="text-neutral-400">Status</span><br />
+              <span className={cn('inline-block px-2 py-0.5 rounded text-xs font-medium mt-0.5', LOAN_STATUS_BADGE[loan.status] ?? 'bg-neutral-100 text-neutral-600')}>{loan.status}</span>
+            </div>
+          </div>
+
+          {/* KPI cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <KpiCard label="Principal" value={fmtGHS(loan.principalAmount)} icon={Banknote} iconKind="primary" />
+            <KpiCard label="Amount Paid" value={fmtGHS(kpis.totalPaid)} icon={TrendingUp} iconKind="success" />
+            <KpiCard
+              label="Outstanding"
+              value={fmtGHS(kpis.outstanding)}
+              icon={AlertCircle}
+              iconKind={kpis.outstanding === 0 ? 'success' : kpis.outstanding > loan.principalAmount / 2 ? 'danger' : 'warning'}
+            />
+            <KpiCard
+              label="Completion"
+              value={`${kpis.completionRate}%`}
+              icon={BarChart3}
+              iconKind={kpis.completionRate === 100 ? 'success' : kpis.completionRate >= 50 ? 'warning' : 'danger'}
+              subtext={kpis.penaltyPaid > 0 ? `Penalty: ${fmtGHS(kpis.penaltyPaid)}` : undefined}
+            />
+          </div>
+
+          {/* Instalment table */}
+          {instalments && instalments.length > 0 ? (
+            <div className="overflow-x-auto rounded-md border border-neutral-200">
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-primary-600 text-white">
+                    <th className="px-3 py-2.5 text-left font-semibold">#</th>
+                    <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">Due Date</th>
+                    <th className="px-3 py-2.5 text-right font-semibold whitespace-nowrap">Due (GHS)</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Principal</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Interest</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Paid (GHS)</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Penalty</th>
+                    <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">Paid Date</th>
+                    <th className="px-3 py-2.5 text-left font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {instalments.map(r => (
+                    <tr key={r.instalmentNumber} className="hover:bg-neutral-50">
+                      <td className="px-3 py-2 text-neutral-500">{r.instalmentNumber}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{fmtDate(new Date(r.dueDate))}</td>
+                      <td className="px-3 py-2 text-right font-mono tabular">{fmtGHS(r.dueAmount)}</td>
+                      <td className="px-3 py-2 text-right font-mono tabular text-neutral-500">{fmtGHS(r.principalAmount)}</td>
+                      <td className="px-3 py-2 text-right font-mono tabular text-neutral-500">{fmtGHS(r.interestAmount)}</td>
+                      <td className="px-3 py-2 text-right font-mono tabular font-medium">{fmtGHS(r.paidAmount)}</td>
+                      <td className="px-3 py-2 text-right font-mono tabular text-danger-600">
+                        {r.penaltyAmount > 0 ? fmtGHS(r.penaltyAmount) : <span className="text-neutral-300">—</span>}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {r.paidDate ? fmtDate(new Date(r.paidDate)) : <span className="text-neutral-300">—</span>}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={cn('inline-block px-2 py-0.5 rounded text-xs font-medium', INSTALMENT_STATUS_BG[r.status] ?? 'bg-neutral-100 text-neutral-600')}>
+                          {r.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-12 border border-neutral-200 rounded-md text-neutral-400 text-sm">
+              No instalment records found
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 function StaffStatementPanel({ canSend }: { canSend: boolean }) {
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -724,6 +955,7 @@ function SimplePanel<T>({
 const SECTIONS = [
   { id: 'monthly-contrib', label: 'Contribution Statement' },
   { id: 'bulk-statements', label: 'Bulk Statements' },
+  { id: 'loan-statement', label: 'Loan Statement' },
   { id: 'arrears', label: 'Arrears' },
   { id: 'guarantor-offsets', label: 'Guarantor Offsets' },
   { id: 'active-loans', label: 'Active Loans' },
@@ -772,6 +1004,7 @@ export function ReportsClient() {
           <CardBody>
             {active === 'monthly-contrib' && <StaffStatementPanel canSend={canSend} />}
             {active === 'bulk-statements' && <BulkStatementsPanel canSend={canSend} />}
+            {active === 'loan-statement' && <LoanStatementPanel canSend={canSend} />}
             {active === 'arrears' && <ArrearsPanel />}
             {active === 'guarantor-offsets' && (
               <SimplePanel
