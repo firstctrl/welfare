@@ -167,6 +167,9 @@ export function LoanDetailClient({ id }: { id: string }) {
               &nbsp;<span className="text-neutral-400">({activeGuaranteeCount} active guarantee{activeGuaranteeCount !== 1 ? 's' : ''})</span>
             </p>
             <p className="text-sm text-neutral-500 mt-0.5">
+              Phone: <span className="font-medium text-neutral-900 font-mono">{borrower?.phoneNumber ?? '—'}</span>
+            </p>
+            <p className="text-sm text-neutral-500 mt-0.5">
               Cheque No.: <span className="font-medium text-neutral-900 font-mono">{loan.chequeNo ?? '—'}</span>
               &nbsp;·&nbsp;PV No.: <span className="font-medium text-neutral-900 font-mono">{loan.pvNo ?? '—'}</span>
             </p>

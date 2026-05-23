@@ -53,13 +53,17 @@ export function DashboardClient() {
   const collectionPct = data.thisMonth.collectionRate.toFixed(1);
   const collectionSentiment = data.thisMonth.collectionRate >= 80 ? 'positive' : 'negative';
   const collectionTrend = data.thisMonth.collectionRate >= 80 ? 'up' : 'down';
+  const collectionMonthLabel = new Date(
+    data.thisMonth.year,
+    data.thisMonth.month - 1,
+  ).toLocaleString('en-GB', { month: 'long', year: 'numeric' });
 
   return (
     <div className="space-y-6">
       {/* KPI row */}
       <div className="grid grid-cols-4 gap-4">
         <KpiCard
-          label="Collected this month"
+          label={`Collected for ${collectionMonthLabel}`}
           value={fmtGHS(data.thisMonth.collected)}
           subtext={`of ${fmtGHS(data.thisMonth.expected)} expected`}
           trend={collectionTrend}
@@ -97,12 +101,17 @@ export function DashboardClient() {
           <CardHeader title="Monthly Contributions" subtitle="Last 12 months" />
           <CardBody>
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={data.monthlyTrend} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+              <BarChart
+                data={data.monthlyTrend}
+                margin={{ top: 0, right: 0, left: -10, bottom: 0 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-tertiary)' }} />
                 <YAxis
                   tick={{ fontSize: 11, fill: 'var(--text-tertiary)' }}
-                  tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+                  tickFormatter={(v: number) =>
+                    v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
+                  }
                 />
                 <Tooltip
                   formatter={(v: number) => fmtGHS(v)}
@@ -113,9 +122,21 @@ export function DashboardClient() {
                     fontFamily: 'Nunito, sans-serif',
                   }}
                 />
-                <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'Nunito, sans-serif', paddingTop: 8 }} />
-                <Bar dataKey="expected" name="Expected" fill="var(--neutral-200)" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="collected" name="Collected" fill="var(--chart-1)" radius={[3, 3, 0, 0]} />
+                <Legend
+                  wrapperStyle={{ fontSize: 11, fontFamily: 'Nunito, sans-serif', paddingTop: 8 }}
+                />
+                <Bar
+                  dataKey="expected"
+                  name="Expected"
+                  fill="var(--neutral-200)"
+                  radius={[3, 3, 0, 0]}
+                />
+                <Bar
+                  dataKey="collected"
+                  name="Collected"
+                  fill="var(--chart-1)"
+                  radius={[3, 3, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           </CardBody>
@@ -140,7 +161,10 @@ export function DashboardClient() {
                     <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                   ))}
                 </Pie>
-                <Legend iconSize={10} wrapperStyle={{ fontSize: 11, fontFamily: 'Nunito, sans-serif' }} />
+                <Legend
+                  iconSize={10}
+                  wrapperStyle={{ fontSize: 11, fontFamily: 'Nunito, sans-serif' }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </CardBody>
@@ -158,10 +182,18 @@ export function DashboardClient() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-neutral-200 bg-neutral-50">
-                    <th className="px-5 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">Staff</th>
-                    <th className="px-5 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">No.</th>
-                    <th className="px-5 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">Due Date</th>
-                    <th className="px-5 py-2 text-right text-xs font-semibold text-neutral-500 uppercase tracking-wide">Amount</th>
+                    <th className="px-5 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">
+                      Staff
+                    </th>
+                    <th className="px-5 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">
+                      No.
+                    </th>
+                    <th className="px-5 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">
+                      Due Date
+                    </th>
+                    <th className="px-5 py-2 text-right text-xs font-semibold text-neutral-500 uppercase tracking-wide">
+                      Amount
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
@@ -169,8 +201,12 @@ export function DashboardClient() {
                     <tr key={i} className="hover:bg-neutral-50">
                       <td className="px-5 py-2 text-neutral-800">{p.staffName}</td>
                       <td className="px-5 py-2 text-neutral-500">#{p.instalmentNumber}</td>
-                      <td className="px-5 py-2 text-neutral-600 font-mono tabular">{fmtDate(p.dueDate)}</td>
-                      <td className="px-5 py-2 text-right font-mono tabular text-neutral-800">{fmtGHS(p.dueAmount)}</td>
+                      <td className="px-5 py-2 text-neutral-600 font-mono tabular">
+                        {fmtDate(p.dueDate)}
+                      </td>
+                      <td className="px-5 py-2 text-right font-mono tabular text-neutral-800">
+                        {fmtGHS(p.dueAmount)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -188,17 +224,29 @@ export function DashboardClient() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-neutral-200 bg-neutral-50">
-                    <th className="px-5 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">File</th>
-                    <th className="px-5 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">Period</th>
-                    <th className="px-5 py-2 text-right text-xs font-semibold text-neutral-500 uppercase tracking-wide">Flagged</th>
+                    <th className="px-5 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">
+                      File
+                    </th>
+                    <th className="px-5 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">
+                      Period
+                    </th>
+                    <th className="px-5 py-2 text-right text-xs font-semibold text-neutral-500 uppercase tracking-wide">
+                      Flagged
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
                   {data.recentFlaggedBatches.map((b, i) => (
                     <tr key={i} className="hover:bg-neutral-50">
-                      <td className="px-5 py-2 text-neutral-800 truncate max-w-[160px]">{b.fileName}</td>
-                      <td className="px-5 py-2 text-neutral-600">{b.month}/{b.year}</td>
-                      <td className="px-5 py-2 text-right font-semibold text-danger-600">{b.flaggedRows}</td>
+                      <td className="px-5 py-2 text-neutral-800 truncate max-w-[160px]">
+                        {b.fileName}
+                      </td>
+                      <td className="px-5 py-2 text-neutral-600">
+                        {b.month}/{b.year}
+                      </td>
+                      <td className="px-5 py-2 text-right font-semibold text-danger-600">
+                        {b.flaggedRows}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

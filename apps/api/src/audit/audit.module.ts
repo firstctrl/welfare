@@ -4,11 +4,15 @@ import { AuditLog, AuditLogSchema } from './audit-log.schema';
 import { AuditService } from './audit.service';
 import { AuditInterceptor } from './audit.interceptor';
 import { AuditController } from './audit.controller';
+import { Staff, StaffSchema } from '../staff/schemas/staff.schema';
 
 @Global()
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: AuditLog.name, schema: AuditLogSchema }]),
+    MongooseModule.forFeature([
+      { name: AuditLog.name, schema: AuditLogSchema },
+      { name: Staff.name, schema: StaffSchema },
+    ]),
   ],
   controllers: [AuditController],
   providers: [AuditService, AuditInterceptor],

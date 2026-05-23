@@ -386,10 +386,12 @@ export class ReportsService {
 
   async getDashboardStats(): Promise<IDashboardStats> {
     const now = new Date();
-    const month = now.getMonth() + 1;
-    const year = now.getFullYear();
+    // Contributions for month N are received in month N+1, so show previous month's collection
+    const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const month = prevDate.getMonth() + 1;
+    const year = prevDate.getFullYear();
 
-    // This month contributions
+    // Previous month contributions
     const contribAgg = await this.contribModel
       .aggregate([
         { $match: { month, year, isDebit: { $ne: true } } },

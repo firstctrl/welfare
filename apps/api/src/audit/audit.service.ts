@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { AuditAction, AuditEntity } from '@welfare/shared';
 import { AuditLog, AuditLogDocument } from './audit-log.schema';
 import { AuditQueryDto } from './dto/audit-query.dto';
+import { Staff } from '../staff/schemas/staff.schema';
 
 @Injectable()
 export class AuditService {
@@ -11,6 +12,7 @@ export class AuditService {
 
   constructor(
     @InjectModel(AuditLog.name) private readonly auditModel: Model<AuditLogDocument>,
+    @InjectModel(Staff.name) private readonly staffModel: Model<typeof Staff>,
   ) {}
 
   async log(
@@ -73,6 +75,40 @@ export class AuditService {
       this.auditModel.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean().exec(),
       this.auditModel.countDocuments(filter).exec(),
     ]);
-    return { data: data as unknown as AuditLogDocument[], total, page, limit };
+
+    // Resolve staffId ObjectId strings → human-readable staff codes
+    const MONGO_ID_RE = /^[a-f0-9]{24}$/i;
+    const staffIdSet = new Set<string>();
+    for (const log of data) {
+      for (const snap of [log.before, log.after]) {
+        const v = snap?.['staffId'];
+        if (typeof v === 'string' && MONGO_ID_RE.test(v)) staffIdSet.add(v);
+      }
+    }
+    let staffCodeMap: Record<string, string> = {};
+    if (staffIdSet.size > 0) {
+      const objectIds = [...staffIdSet].map((id) => new Types.ObjectId(id));
+      const staffDocs = await (this.staffModel as any)
+        .find({ _id: { $in: objectIds } })
+        .select('staffId')
+        .lean()
+        .exec() as Array<{ _id: Types.ObjectId; staffId: string }>;
+      staffCodeMap = Object.fromEntries(staffDocs.map((s) => [s._id.toString(), s.staffId]));
+    }
+
+    const resolved = data.map((log) => {
+      if (!staffIdSet.size) return log;
+      const resolve = (snap?: Record<string, unknown>) => {
+        if (!snap || !('staffId' in snap)) return snap;
+        const v = snap['staffId'];
+        if (typeof v === 'string' && staffCodeMap[v]) {
+          return { ...snap, staffId: staffCodeMap[v] };
+        }
+        return snap;
+      };
+      return { ...log, before: resolve(log.before), after: resolve(log.after) };
+    });
+
+    return { data: resolved as unknown as AuditLogDocument[], total, page, limit };
   }
 }

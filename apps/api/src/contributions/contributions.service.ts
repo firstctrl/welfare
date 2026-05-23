@@ -159,10 +159,11 @@ export class ContributionsService {
     const { page = 1, limit = 20, staffId, month, year, status } = query;
     const match: Record<string, unknown> = {};
     if (staffId) {
-      // staffId query is the employee code (e.g. "SCW001"); resolve to MongoDB _id
-      const staff = await this.staffService.findByStaffId(staffId);
-      if (!staff) return { data: [], total: 0, page, limit, totalPages: 0 };
-      match.staffId = staff._id.toString();
+      // staffId query is the employee code (e.g. "SCW001"); resolve to MongoDB _id(s) via regex
+      const matched = await this.staffService.findManyByStaffIdPattern(staffId);
+      if (!matched.length) return { data: [], total: 0, page, limit, totalPages: 0 };
+      const ids = matched.map((s) => s._id.toString());
+      match.staffId = ids.length === 1 ? ids[0] : { $in: ids };
     }
     if (month) match.month = month;
     if (year) match.year = year;

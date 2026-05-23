@@ -112,6 +112,13 @@ export class StaffService implements OnModuleInit {
     return this.staffModel.findOne({ staffId }).exec();
   }
 
+  async findManyByStaffIdPattern(pattern: string): Promise<StaffDocument[]> {
+    return this.staffModel
+      .find({ staffId: { $regex: pattern, $options: 'i' } })
+      .select('_id staffId')
+      .exec();
+  }
+
   async update(
     id: string,
     dto: UpdateStaffDto,

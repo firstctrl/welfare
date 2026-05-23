@@ -26,7 +26,10 @@ export default function AddStaffModal({ onClose, onSuccess }: Props) {
 
   async function onSubmit(values: StaffFormValues) {
     try {
-      await createStaff({ ...values });
+      await createStaff({
+        ...values,
+        dateOfFirstContribution: values.dateOfFirstContribution || undefined,
+      });
       await qc.invalidateQueries({ queryKey: ['staff'] });
       toast.success('Staff member added');
       onSuccess();
