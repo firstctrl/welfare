@@ -13,6 +13,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import { StaffService } from './staff.service';
+import { StaffImportService } from './staff.import.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
 import { ChangeStatusDto } from './dto/change-status.dto';
@@ -23,7 +24,36 @@ import { AppModule } from '@welfare/shared';
 
 @Controller('staff')
 export class StaffController {
-  constructor(private readonly staffService: StaffService) {}
+  constructor(
+    private readonly staffService: StaffService,
+    private readonly importService: StaffImportService,
+  ) {}
+
+  // ── import routes must be before :id to avoid param conflict ──
+  @Post('import')
+  @RequirePermission(AppModule.Staff, 'full')
+  @UseInterceptors(FileInterceptor('file'))
+  importStaff(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.importService.processImport(file.buffer, file.originalname, user.sub, user.displayName);
+  }
+
+  @Get('import')
+  @RequirePermission(AppModule.Staff, 'readonly')
+  listImportBatches(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.importService.listBatches(Number(page ?? 1), Number(limit ?? 20));
+  }
+
+  @Get('import/:batchId')
+  @RequirePermission(AppModule.Staff, 'readonly')
+  getImportBatch(@Param('batchId') batchId: string) {
+    return this.importService.getBatch(batchId);
+  }
 
   @Post()
   @RequirePermission(AppModule.Staff, 'full')

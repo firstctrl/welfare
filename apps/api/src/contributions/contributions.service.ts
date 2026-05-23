@@ -6,6 +6,7 @@ import { Contribution, ContributionDocument } from './schemas/contribution.schem
 import { Loan, LoanDocument } from '../loans/schemas/loan.schema';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { AuditService } from '../audit/audit.service';
+import { StaffService } from '../staff/staff.service';
 import { ContributionQueryDto } from './dto/contribution-query.dto';
 
 type ConfigMap = Record<string, { value: string }>;
@@ -25,6 +26,7 @@ export class ContributionsService {
     @InjectModel(Loan.name) private readonly loanModel: Model<LoanDocument>,
     private readonly configService: SystemConfigService,
     private readonly auditService: AuditService,
+    private readonly staffService: StaffService,
   ) {}
 
   calculatePaymentResult(
@@ -103,18 +105,27 @@ export class ContributionsService {
       .sort({ year: 1, month: 1 })
       .exec();
 
-    const monthsToProcess: { month: number; year: number; existingPaid: number }[] =
-      unpaidMonths.length > 0
-        ? unpaidMonths.map((c) => ({ month: c.month, year: c.year, existingPaid: c.paidAmount }))
-        : [{ month: startMonth, year: startYear, existingPaid: 0 }];
+    // Start from earliest unpaid month (backfill arrears first) or provided start month
+    const startFrom = unpaidMonths.length > 0
+      ? { month: unpaidMonths[0].month, year: unpaidMonths[0].year }
+      : { month: startMonth, year: startYear };
 
     let remaining = amount;
-    let prevSurplus = await this.getPrevSurplus(staffId, monthsToProcess[0].month, monthsToProcess[0].year);
+    let prevSurplus = await this.getPrevSurplus(staffId, startFrom.month, startFrom.year);
+    let current = { ...startFrom };
     const results: ContributionDocument[] = [];
 
-    for (const target of monthsToProcess) {
-      if (remaining <= 0) break;
+    // Advance month by month until the full amount is allocated (cap at 120 months)
+    for (let i = 0; remaining > 0 && i < 120; i++) {
       const netNeeded = Math.max(0, expectedAmount - prevSurplus);
+
+      if (netNeeded <= 0) {
+        // Surplus already covers this month; carry forward and advance
+        prevSurplus -= expectedAmount;
+        current = getNextMonthYear(current.month, current.year);
+        continue;
+      }
+
       const paidThisMonth = Math.min(remaining, netNeeded);
       const { surplusCarriedForward, status } = this.calculatePaymentResult(
         0, paidThisMonth, prevSurplus, expectedAmount,
@@ -122,7 +133,7 @@ export class ContributionsService {
 
       const result = await this.contributionModel
         .findOneAndUpdate(
-          { staffId, month: target.month, year: target.year },
+          { staffId, month: current.month, year: current.year },
           { $set: { expectedAmount, paidAmount: paidThisMonth, surplusCarriedForward, status, source: ContributionSource.LumpSum, recordedBy: actorName } },
           { new: true, upsert: true, runValidators: true },
         )
@@ -137,7 +148,9 @@ export class ContributionsService {
       }
       remaining -= paidThisMonth;
       prevSurplus = surplusCarriedForward;
+      current = getNextMonthYear(current.month, current.year);
     }
+
     await this.handleRestitutionRedirect(staffId, amount, actorId, actorName);
     return results;
   }
@@ -145,7 +158,12 @@ export class ContributionsService {
   async findAll(query: ContributionQueryDto): Promise<PaginatedResult<any>> {
     const { page = 1, limit = 20, staffId, month, year, status } = query;
     const match: Record<string, unknown> = {};
-    if (staffId) match.staffId = staffId;
+    if (staffId) {
+      // staffId query is the employee code (e.g. "SCW001"); resolve to MongoDB _id
+      const staff = await this.staffService.findByStaffId(staffId);
+      if (!staff) return { data: [], total: 0, page, limit, totalPages: 0 };
+      match.staffId = staff._id.toString();
+    }
     if (month) match.month = month;
     if (year) match.year = year;
     if (status) match.status = status;

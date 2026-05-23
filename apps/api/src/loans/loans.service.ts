@@ -249,6 +249,78 @@ export class LoansService implements OnModuleInit {
     return loan;
   }
 
+  async createForImport(
+    staffMongoId: string,
+    guarantorMongoId: string,
+    dto: { principalAmount: number; tenureMonths: number; disbursedDate: string; chequeNo: string; pvNo: string },
+    actorId: string,
+    actorName: string,
+  ): Promise<LoanDocument> {
+    const config = await this.configService.getAll();
+
+    const interestRate =
+      dto.tenureMonths <= 6
+        ? parseFloat(config[ConfigKey.InterestRateShort]?.value ?? '5')
+        : parseFloat(config[ConfigKey.InterestRateLong]?.value ?? '8');
+
+    const totalRepayable = round2(dto.principalAmount + dto.principalAmount * (interestRate / 100));
+    const monthlyInstalment = round2(totalRepayable / dto.tenureMonths);
+    const disbursedDate = new Date(dto.disbursedDate);
+
+    const loan = await this.loanModel.create({
+      staffId: staffMongoId,
+      guarantorId: guarantorMongoId,
+      principalAmount: dto.principalAmount,
+      interestRate,
+      totalRepayable,
+      monthlyInstalment,
+      tenureMonths: dto.tenureMonths,
+      disbursedDate,
+      chequeNo: dto.chequeNo,
+      pvNo: dto.pvNo,
+      status: LoanStatus.Active,
+      recordedBy: actorName,
+    });
+
+    const loanId = loan._id.toString();
+    const totalInterest = round2(totalRepayable - dto.principalAmount);
+    const baseInterestPerInst = round2(totalInterest / dto.tenureMonths);
+    const schedule = Array.from({ length: dto.tenureMonths }, (_, i) => {
+      const isLast = i === dto.tenureMonths - 1;
+      const dueAmount = isLast
+        ? round2(totalRepayable - monthlyInstalment * (dto.tenureMonths - 1))
+        : monthlyInstalment;
+      const interestAmount = isLast
+        ? round2(totalInterest - baseInterestPerInst * (dto.tenureMonths - 1))
+        : baseInterestPerInst;
+      return {
+        loanId,
+        staffId: staffMongoId,
+        instalmentNumber: i + 1,
+        dueDate: computeDueDate(disbursedDate, i + 1),
+        dueAmount,
+        principalAmount: round2(dueAmount - interestAmount),
+        interestAmount,
+        paidAmount: 0,
+        penaltyAmount: 0,
+        status: LoanRepaymentStatus.Pending,
+      };
+    });
+    await this.repaymentModel.insertMany(schedule);
+
+    this.auditService.log(
+      actorId,
+      actorName,
+      AuditAction.Import,
+      AuditEntity.Loan,
+      loanId,
+      undefined,
+      { principalAmount: dto.principalAmount, tenureMonths: dto.tenureMonths },
+    );
+
+    return loan;
+  }
+
   // ───────────────── QUERIES ─────────────────
 
   async findAll(query: LoanQueryDto): Promise<PaginatedResult<LoanDocument>> {

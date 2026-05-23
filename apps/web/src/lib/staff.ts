@@ -1,5 +1,5 @@
 import { apiClient } from './api-client';
-import type { IStaff, PaginatedResult, StaffStatus } from '@welfare/shared';
+import type { IStaff, IStaffImportBatch, PaginatedResult, StaffStatus } from '@welfare/shared';
 
 export interface StaffFilters {
   page?: number;
@@ -82,6 +82,35 @@ export async function uploadStaffPhoto(id: string, file: File): Promise<IStaff> 
 
 export async function getStaffPhotoUrl(id: string): Promise<string> {
   const { data } = await apiClient.get(`/staff/${id}/photo`);
+  return data;
+}
+
+export interface StaffImportResult {
+  batchId: string;
+  created: number;
+  flagged: number;
+  total: number;
+}
+
+export async function importStaff(file: File): Promise<StaffImportResult> {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await apiClient.post('/staff/import', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
+export async function listStaffImportBatches(
+  page = 1,
+  limit = 20,
+): Promise<PaginatedResult<IStaffImportBatch>> {
+  const { data } = await apiClient.get('/staff/import', { params: { page, limit } });
+  return data;
+}
+
+export async function getStaffImportBatch(batchId: string): Promise<IStaffImportBatch> {
+  const { data } = await apiClient.get(`/staff/import/${batchId}`);
   return data;
 }
 

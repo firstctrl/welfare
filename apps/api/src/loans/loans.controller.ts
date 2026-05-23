@@ -18,6 +18,7 @@ import { RequirePermission } from '../auth/decorators/require-permission.decorat
 import { AppModule } from '@welfare/shared';
 import { LoansService } from './loans.service';
 import { LoansImportService } from './loans.import.service';
+import { LoansRecordsImportService } from './loans.records.import.service';
 import { CreateLoanDto } from './dto/create-loan.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { ExitSettlementDto } from './dto/exit-settlement.dto';
@@ -28,6 +29,7 @@ export class LoansController {
   constructor(
     private readonly loansService: LoansService,
     private readonly importService: LoansImportService,
+    private readonly recordsImportService: LoansRecordsImportService,
   ) {}
 
   @Post()
@@ -109,6 +111,33 @@ export class LoansController {
       user.sub,
       user.displayName,
     );
+  }
+
+  // ── loan records import routes ──
+
+  @Post('records-import')
+  @RequirePermission(AppModule.Loans, 'full')
+  @UseInterceptors(FileInterceptor('file'))
+  importLoanRecords(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.recordsImportService.processImport(file.buffer, file.originalname, user.sub, user.displayName);
+  }
+
+  @Get('records-import')
+  @RequirePermission(AppModule.Loans, 'readonly')
+  listLoanRecordsImportBatches(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.recordsImportService.listBatches(Number(page ?? 1), Number(limit ?? 20));
+  }
+
+  @Get('records-import/:batchId')
+  @RequirePermission(AppModule.Loans, 'readonly')
+  getLoanRecordsImportBatch(@Param('batchId') batchId: string) {
+    return this.recordsImportService.getBatch(batchId);
   }
 
   // ── param routes ──

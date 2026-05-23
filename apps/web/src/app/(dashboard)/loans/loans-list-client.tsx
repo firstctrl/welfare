@@ -136,6 +136,13 @@ export function LoansListClient() {
       {permission === 'full' && (
         <div className="flex gap-2 justify-end">
           <Link
+            href="/loans/records-import"
+            className="inline-flex items-center gap-1.5 h-[var(--row-default)] px-4 bg-white border border-neutral-200 text-neutral-700 text-sm font-semibold rounded-sm hover:bg-neutral-50 transition-colors duration-fast"
+          >
+            <Upload size={16} strokeWidth={1.75} />
+            Import Loans
+          </Link>
+          <Link
             href="/loans/import"
             className="inline-flex items-center gap-1.5 h-[var(--row-default)] px-4 bg-white border border-neutral-200 text-neutral-700 text-sm font-semibold rounded-sm hover:bg-neutral-50 transition-colors duration-fast"
           >

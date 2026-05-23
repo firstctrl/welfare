@@ -1,5 +1,5 @@
 import { apiClient } from './api-client';
-import type { ILoan, ILoanRepayment, ILoanRepaymentImportBatch, PaginatedResult, LoanStatus } from '@welfare/shared';
+import type { ILoan, ILoanRepayment, ILoanRepaymentImportBatch, ILoanRecordsImportBatch, PaginatedResult, LoanStatus } from '@welfare/shared';
 
 export interface LoanFilters {
   staffId?: string;
@@ -114,6 +114,35 @@ export async function resolveLoanFlaggedEntry(
   resolvedLoanId: string,
 ): Promise<ILoanRepaymentImportBatch> {
   const { data } = await apiClient.patch(`/loans/import/${batchId}/resolve`, { rowNumber, resolvedLoanId });
+  return data;
+}
+
+export interface LoanRecordsImportResult {
+  batchId: string;
+  created: number;
+  flagged: number;
+  total: number;
+}
+
+export async function importLoanRecords(file: File): Promise<LoanRecordsImportResult> {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await apiClient.post('/loans/records-import', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
+export async function listLoanRecordsImportBatches(
+  page = 1,
+  limit = 20,
+): Promise<PaginatedResult<ILoanRecordsImportBatch>> {
+  const { data } = await apiClient.get('/loans/records-import', { params: { page, limit } });
+  return data;
+}
+
+export async function getLoanRecordsImportBatch(batchId: string): Promise<ILoanRecordsImportBatch> {
+  const { data } = await apiClient.get(`/loans/records-import/${batchId}`);
   return data;
 }
 

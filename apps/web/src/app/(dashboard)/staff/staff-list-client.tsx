@@ -9,8 +9,9 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { toast } from 'sonner';
-import { Search, UserPlus } from 'lucide-react';
+import { Search, Upload, UserPlus } from 'lucide-react';
 import type { IStaff } from '@welfare/shared';
 import { StaffStatus, AppModule } from '@welfare/shared';
 import { usePermission } from '@/hooks/use-permission';
@@ -140,7 +141,14 @@ export default function StaffListClient() {
           </button>
         </span>
         {permission === 'full' && (
-          <div className="ml-auto">
+          <div className="ml-auto flex gap-2">
+            <Link
+              href="/staff/import"
+              className="inline-flex items-center gap-1.5 h-[var(--row-default)] px-4 bg-white border border-neutral-200 text-neutral-700 text-sm font-semibold rounded-sm hover:bg-neutral-50 transition-colors duration-fast"
+            >
+              <Upload size={16} strokeWidth={1.75} />
+              Import Staff
+            </Link>
             <Button variant="primary" Icon={UserPlus} onClick={() => setShowAddModal(true)}>
               Add Staff
             </Button>

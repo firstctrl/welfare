@@ -25,6 +25,8 @@ export type { ILoan } from './interfaces/loan.interface';
 export type { ILoanRepayment } from './interfaces/loan-repayment.interface';
 export type { IFlaggedEntry, IImportBatch } from './interfaces/import-batch.interface';
 export type { ILoanRepaymentFlaggedEntry, ILoanRepaymentImportBatch } from './interfaces/loan-import-batch.interface';
+export type { IStaffFlaggedEntry, IStaffImportBatch } from './interfaces/staff-import-batch.interface';
+export type { ILoanRecordFlaggedEntry, ILoanRecordsImportBatch } from './interfaces/loan-records-import-batch.interface';
 export type { IConfig } from './interfaces/config.interface';
 export type { IAuditLog } from './interfaces/audit-log.interface';
 export type { IEmailRecipient, IEmailLog } from './interfaces/email-log.interface';
