@@ -180,9 +180,10 @@ export class SystemConfigService implements OnModuleInit {
       });
     } else {
       transporter = nodemailer.createTransport({
-        host: config[ConfigKey.OutlookHost]?.value ?? '',
+        host: config[ConfigKey.OutlookHost]?.value ?? 'smtp.office365.com',
         port: parseInt(config[ConfigKey.OutlookPort]?.value ?? '587', 10),
         secure: false,
+        requireTLS: true,
         auth: {
           user: config[ConfigKey.OutlookUsername]?.value ?? '',
           pass: config[ConfigKey.OutlookPassword]?.value ?? '',

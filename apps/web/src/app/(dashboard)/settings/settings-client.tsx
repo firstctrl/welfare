@@ -466,8 +466,9 @@ function EmailSection({ cfg, onUpdate, onDirtyChange, canEdit }: { cfg: ConfigMa
     try {
       await testEmail(fields.EMAIL_PROVIDER, testTo);
       toast.success('Test email sent successfully');
-    } catch {
-      toast.error('Failed to send test email');
+    } catch (err: unknown) {
+      const msg = (err as any)?.response?.data?.message ?? 'Failed to send test email';
+      toast.error(msg);
     } finally {
       setTesting(false);
     }
