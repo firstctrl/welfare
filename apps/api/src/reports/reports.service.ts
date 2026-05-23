@@ -363,11 +363,8 @@ export class ReportsService {
     const totalPaid = repayments.reduce((s, r) => s + r.paidAmount, 0);
     const outstanding = Math.max(0, Math.round((loan.totalRepayable - totalPaid) * 100) / 100);
     const penaltyPaid = repayments.reduce((s, r) => s + r.penaltyAmount, 0);
-    const paidCount = repayments.filter(
-      r => r.status === LoanRepaymentStatus.Paid || r.status === LoanRepaymentStatus.Waived,
-    ).length;
-    const completionRate = loan.tenureMonths > 0
-      ? Math.round((paidCount / loan.tenureMonths) * 100)
+    const completionRate = loan.totalRepayable > 0
+      ? Math.round((totalPaid / loan.totalRepayable) * 100)
       : 0;
 
     return {
