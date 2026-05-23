@@ -432,7 +432,7 @@ export class ReportsService {
 
     const instalmentRows = stmt.instalments
       .map(
-        r => `
+        (r) => `
         <tr>
           <td>${r.instalmentNumber}</td>
           <td>${new Date(r.dueDate).toLocaleDateString('en-GB')}</td>
@@ -440,8 +440,8 @@ export class ReportsService {
           <td style="text-align:right">${fmt(r.principalAmount)}</td>
           <td style="text-align:right">${fmt(r.interestAmount)}</td>
           <td style="text-align:right">${fmt(r.paidAmount)}</td>
-          <td style="text-align:right">${r.penaltyAmount > 0 ? fmt(r.penaltyAmount) : '—'}</td>
-          <td>${r.paidDate ? new Date(r.paidDate).toLocaleDateString('en-GB') : '—'}</td>
+          <td style="text-align:right">${r.penaltyAmount > 0 ? fmt(r.penaltyAmount) : '-'}</td>
+          <td>${r.paidDate ? new Date(r.paidDate).toLocaleDateString('en-GB') : '-'}</td>
           <td style="background:${statusBg[r.status] ?? '#fff'};font-weight:bold;font-size:10px">${r.status}</td>
         </tr>`,
       )
@@ -476,8 +476,8 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
 <div class="header">
   <div>
     <div class="org">NACOC Welfare</div>
-    <div class="title">Loan Statement — ${stmt.staff.displayName}</div>
-    <div class="meta">Staff No: ${stmt.staff.staffNo} &nbsp;|&nbsp; Dept: ${stmt.staff.department} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString('en-GB')}</div>
+    <div class="title">Loan Statement: ${stmt.staff.displayName}</div>
+    <div class="meta">Staff No: ${stmt.staff.staffNo} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString('en-GB')}</div>
   </div>
 </div>
 <div class="info-grid">
@@ -486,9 +486,9 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   <div class="info-row"><span class="info-label">Interest Rate:</span><span>${stmt.loan.interestRate}%</span></div>
   <div class="info-row"><span class="info-label">Tenure:</span><span>${stmt.loan.tenureMonths} months</span></div>
   <div class="info-row"><span class="info-label">Disbursed:</span><span>${new Date(stmt.loan.disbursedDate).toLocaleDateString('en-GB')}</span></div>
-  <div class="info-row"><span class="info-label">Status:</span><span style="font-weight:bold">${stmt.loan.status}</span></div>
+  <div class="info-row"><span class="info-label">Loan Status:</span><span style="font-weight:bold">${stmt.loan.status}</span></div>
   <div class="info-row"><span class="info-label">Guarantor:</span><span>${stmt.loan.guarantor.displayName} (${stmt.loan.guarantor.staffNo})</span></div>
-  <div class="info-row"><span class="info-label">Cheque / PV:</span><span>${stmt.loan.chequeNo ?? '—'} / ${stmt.loan.pvNo ?? '—'}</span></div>
+  <div class="info-row"><span class="info-label">Cheque:</span><span>${stmt.loan.chequeNo ?? '-'}</span></div>
 </div>
 <div class="kpis">
   <div class="kpi"><div class="kpi-label">Amount Paid</div><div class="kpi-value">${fmt(stmt.kpis.totalPaid)}</div></div>
