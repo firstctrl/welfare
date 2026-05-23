@@ -412,6 +412,130 @@ export class ReportsService {
     };
   }
 
+  async generateLoanStatementPdf(staffId: string, loanId: string): Promise<Buffer> {
+    const stmt = await this.getLoanStatement(staffId, loanId);
+    const fmt = (n: number) =>
+      `GHS ${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const logoPath = path.join(__dirname, 'assets', 'ncc-logo.png');
+    const logoBase64 = fs.existsSync(logoPath)
+      ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
+      : '';
+
+    const statusBg: Record<string, string> = {
+      Paid: '#dcfce7',
+      Partial: '#fef9c3',
+      Overdue: '#fee2e2',
+      Pending: '#f1f5f9',
+      Waived: '#f1f5f9',
+    };
+
+    const instalmentRows = stmt.instalments
+      .map(
+        r => `
+        <tr>
+          <td>${r.instalmentNumber}</td>
+          <td>${new Date(r.dueDate).toLocaleDateString('en-GB')}</td>
+          <td style="text-align:right">${fmt(r.dueAmount)}</td>
+          <td style="text-align:right">${fmt(r.principalAmount)}</td>
+          <td style="text-align:right">${fmt(r.interestAmount)}</td>
+          <td style="text-align:right">${fmt(r.paidAmount)}</td>
+          <td style="text-align:right">${r.penaltyAmount > 0 ? fmt(r.penaltyAmount) : '—'}</td>
+          <td>${r.paidDate ? new Date(r.paidDate).toLocaleDateString('en-GB') : '—'}</td>
+          <td style="background:${statusBg[r.status] ?? '#fff'};font-weight:bold;font-size:10px">${r.status}</td>
+        </tr>`,
+      )
+      .join('');
+
+    const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/>
+<style>
+  body{font-family:Arial,sans-serif;font-size:11px;margin:0;padding:20px;color:#111}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;border-bottom:2px solid #bc4680;padding-bottom:10px}
+  .org{font-size:18px;font-weight:bold;color:#bc4680}
+  .title{font-size:13px;font-weight:bold;margin-top:4px}
+  .meta{color:#666;font-size:10px;margin-top:2px}
+  .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;font-size:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px}
+  .info-row{display:flex;gap:6px}
+  .info-label{color:#64748b;min-width:90px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+  .kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px}
+  .kpi-label{font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.05em}
+  .kpi-value{font-size:14px;font-weight:bold;color:#1e293b;margin-top:2px}
+  table{width:100%;border-collapse:collapse;font-size:10px}
+  th{background:#bc4680;color:#fff;padding:5px 6px;text-align:left;white-space:nowrap;font-size:10px}
+  th:not(:first-child){text-align:right}
+  th:last-child, th:nth-child(8){text-align:left}
+  td{padding:4px 6px;border:1px solid #e5e7eb;white-space:nowrap}
+  .watermark{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;height:320px;background-image:url('${logoBase64}');background-size:contain;background-repeat:no-repeat;background-position:center;opacity:0.05;z-index:0;pointer-events:none}
+</style>
+</head>
+<body>
+${logoBase64 ? '<div class="watermark"></div>' : ''}
+<div class="header">
+  <div>
+    <div class="org">NACOC Welfare</div>
+    <div class="title">Loan Statement — ${stmt.staff.displayName}</div>
+    <div class="meta">Staff No: ${stmt.staff.staffNo} &nbsp;|&nbsp; Dept: ${stmt.staff.department} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString('en-GB')}</div>
+  </div>
+</div>
+<div class="info-grid">
+  <div class="info-row"><span class="info-label">Principal:</span><span>${fmt(stmt.loan.principalAmount)}</span></div>
+  <div class="info-row"><span class="info-label">Total Repayable:</span><span>${fmt(stmt.loan.totalRepayable)}</span></div>
+  <div class="info-row"><span class="info-label">Interest Rate:</span><span>${stmt.loan.interestRate}%</span></div>
+  <div class="info-row"><span class="info-label">Tenure:</span><span>${stmt.loan.tenureMonths} months</span></div>
+  <div class="info-row"><span class="info-label">Disbursed:</span><span>${new Date(stmt.loan.disbursedDate).toLocaleDateString('en-GB')}</span></div>
+  <div class="info-row"><span class="info-label">Status:</span><span style="font-weight:bold">${stmt.loan.status}</span></div>
+  <div class="info-row"><span class="info-label">Guarantor:</span><span>${stmt.loan.guarantor.displayName} (${stmt.loan.guarantor.staffNo})</span></div>
+  <div class="info-row"><span class="info-label">Cheque / PV:</span><span>${stmt.loan.chequeNo ?? '—'} / ${stmt.loan.pvNo ?? '—'}</span></div>
+</div>
+<div class="kpis">
+  <div class="kpi"><div class="kpi-label">Amount Paid</div><div class="kpi-value">${fmt(stmt.kpis.totalPaid)}</div></div>
+  <div class="kpi"><div class="kpi-label">Outstanding</div><div class="kpi-value">${fmt(stmt.kpis.outstanding)}</div></div>
+  <div class="kpi"><div class="kpi-label">Penalty Paid</div><div class="kpi-value">${fmt(stmt.kpis.penaltyPaid)}</div></div>
+  <div class="kpi"><div class="kpi-label">Completion</div><div class="kpi-value">${stmt.kpis.completionRate}%</div></div>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>#</th><th>Due Date</th><th>Due (GHS)</th><th>Principal</th><th>Interest</th>
+      <th>Paid (GHS)</th><th>Penalty</th><th>Paid Date</th><th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${instalmentRows || '<tr><td colspan="9" style="text-align:center;padding:20px;color:#999">No instalment records found</td></tr>'}
+  </tbody>
+</table>
+</body></html>`;
+
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    });
+    try {
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'domcontentloaded' });
+      const confidentialBand = `
+        <div style="width:100%;font-size:8px;font-family:Arial,sans-serif;color:#b91c1c;
+                    text-align:center;font-weight:bold;letter-spacing:4px;padding:3px 0;">
+          CONFIDENTIAL
+        </div>`;
+      const pdf = await page.pdf({
+        format: 'A4',
+        landscape: true,
+        printBackground: true,
+        displayHeaderFooter: true,
+        headerTemplate: confidentialBand,
+        footerTemplate: confidentialBand,
+        margin: { top: '16mm', right: '10mm', bottom: '16mm', left: '10mm' },
+      });
+      return Buffer.from(pdf);
+    } finally {
+      await browser.close();
+    }
+  }
+
   // ─────────────────────────── STAFF ───────────────────────────
 
   async getExitClearanceReport(): Promise<IExitClearanceRow[]> {
