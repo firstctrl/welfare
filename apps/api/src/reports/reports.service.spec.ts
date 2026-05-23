@@ -17,15 +17,18 @@ import {
 const mockContribAggregate = jest.fn();
 const mockLoanFind = jest.fn();
 const mockLoanAggregate = jest.fn();
+const mockLoanDistinct = jest.fn();
+const mockLoanFindById = jest.fn();
 const mockRepaymentFind = jest.fn();
 const mockRepaymentAggregate = jest.fn();
 const mockStaffFind = jest.fn();
+const mockStaffFindById = jest.fn();
 const mockBatchFind = jest.fn();
 
 const mockContribModel = { aggregate: mockContribAggregate };
-const mockLoanModel = { find: mockLoanFind, aggregate: mockLoanAggregate };
+const mockLoanModel = { find: mockLoanFind, aggregate: mockLoanAggregate, distinct: mockLoanDistinct, findById: mockLoanFindById };
 const mockRepaymentModel = { find: mockRepaymentFind, aggregate: mockRepaymentAggregate };
-const mockStaffModel = { find: mockStaffFind };
+const mockStaffModel = { find: mockStaffFind, findById: mockStaffFindById };
 const mockBatchModel = { find: mockBatchFind };
 
 beforeEach(() => jest.clearAllMocks());
@@ -360,6 +363,127 @@ describe('ReportsService', () => {
       expect(csv).toContain('name');
       expect(csv).toContain('Alice');
       expect(csv).toContain('200');
+    });
+  });
+
+  // ─── LOAN STATEMENT ───
+
+  describe('getLoanBorrowers', () => {
+    it('returns borrowers sorted by displayName', async () => {
+      mockLoanDistinct.mockResolvedValue(['staff2', 'staff1']);
+      mockStaffFind.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          lean: jest.fn().mockReturnValue({
+            exec: jest.fn().mockResolvedValue([
+              { _id: { toString: () => 'staff1' }, fullName: 'Alice', staffId: 'GL001' },
+              { _id: { toString: () => 'staff2' }, fullName: 'Bob', staffId: 'GL002' },
+            ]),
+          }),
+        }),
+      });
+
+      const result = await service.getLoanBorrowers();
+
+      expect(result).toEqual([
+        { staffId: 'staff1', staffNo: 'GL001', displayName: 'Alice' },
+        { staffId: 'staff2', staffNo: 'GL002', displayName: 'Bob' },
+      ]);
+    });
+
+    it('returns empty array when no loans exist', async () => {
+      mockLoanDistinct.mockResolvedValue([]);
+      const result = await service.getLoanBorrowers();
+      expect(result).toEqual([]);
+      expect(mockStaffFind).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getLoanStatement', () => {
+    const staffId = 'staff1';
+    const loanId = 'loan1';
+
+    const fakeLoan = {
+      _id: { toString: () => loanId },
+      staffId,
+      guarantorId: 'guar1',
+      principalAmount: 1000,
+      interestRate: 5,
+      totalRepayable: 1050,
+      tenureMonths: 3,
+      disbursedDate: new Date('2025-01-01'),
+      status: 'Active',
+      chequeNo: 'CHQ001',
+      pvNo: 'PV001',
+    };
+
+    const fakeInstalments = [
+      {
+        instalmentNumber: 1,
+        dueDate: new Date('2025-02-05'),
+        dueAmount: 350,
+        principalAmount: 333.33,
+        interestAmount: 16.67,
+        paidAmount: 350,
+        penaltyAmount: 0,
+        paidDate: new Date('2025-02-03'),
+        status: LoanRepaymentStatus.Paid,
+        source: 'DirectPayment',
+      },
+      {
+        instalmentNumber: 2,
+        dueDate: new Date('2025-03-05'),
+        dueAmount: 350,
+        principalAmount: 333.33,
+        interestAmount: 16.67,
+        paidAmount: 0,
+        penaltyAmount: 0,
+        status: LoanRepaymentStatus.Pending,
+      },
+      {
+        instalmentNumber: 3,
+        dueDate: new Date('2025-04-05'),
+        dueAmount: 350,
+        principalAmount: 333.34,
+        interestAmount: 16.66,
+        paidAmount: 0,
+        penaltyAmount: 0,
+        status: LoanRepaymentStatus.Pending,
+      },
+    ];
+
+    beforeEach(() => {
+      mockLoanFindById.mockReturnValue({ exec: jest.fn().mockResolvedValue(fakeLoan) });
+      mockStaffFindById.mockReturnValue({ exec: jest.fn().mockResolvedValue({ fullName: 'Alice', staffId: 'GL001', department: 'IT' }) });
+      mockStaffFind.mockReturnValue({ exec: jest.fn().mockResolvedValue([{ _id: { toString: () => 'guar1' }, fullName: 'Bob', staffId: 'GL002' }]) });
+      mockRepaymentFind.mockReturnValue({ sort: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(fakeInstalments) }) });
+    });
+
+    it('returns shaped statement with correct KPIs', async () => {
+      const result = await service.getLoanStatement(staffId, loanId);
+
+      expect(result.staff).toEqual({ staffNo: 'GL001', displayName: 'Alice', department: 'IT' });
+      expect(result.loan.id).toBe(loanId);
+      expect(result.loan.guarantor).toEqual({ staffNo: 'GL002', displayName: 'Bob' });
+      expect(result.kpis.totalPaid).toBe(350);
+      expect(result.kpis.outstanding).toBe(700);
+      expect(result.kpis.penaltyPaid).toBe(0);
+      expect(result.kpis.completionRate).toBe(33);
+      expect(result.instalments).toHaveLength(3);
+      expect(result.instalments[0].status).toBe(LoanRepaymentStatus.Paid);
+    });
+
+    it('throws BadRequestException when loan does not belong to staff', async () => {
+      mockLoanFindById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ ...fakeLoan, staffId: 'other-staff' }),
+      });
+
+      await expect(service.getLoanStatement(staffId, loanId)).rejects.toThrow('Loan does not belong to this staff member');
+    });
+
+    it('throws NotFoundException when loan not found', async () => {
+      mockLoanFindById.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+
+      await expect(service.getLoanStatement(staffId, loanId)).rejects.toThrow('Loan not found');
     });
   });
 });

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as fs from 'fs';
@@ -21,6 +21,8 @@ import {
   IBadDebtRow,
   IExitClearanceRow,
   IDashboardStats,
+  ILoanBorrower,
+  ILoanStatement,
 } from '@welfare/shared';
 import { Contribution, ContributionDocument } from '../contributions/schemas/contribution.schema';
 import { Loan, LoanDocument } from '../loans/schemas/loan.schema';
@@ -323,6 +325,91 @@ export class ReportsService {
       badDebtAmount: l.badDebtAmount ?? 0,
       settledAt: l.settledAt?.toISOString() ?? '',
     }));
+  }
+
+  // ─────────────────────────── LOAN STATEMENT ───────────────────────────
+
+  async getLoanBorrowers(): Promise<ILoanBorrower[]> {
+    const staffIds = await this.loanModel.distinct('staffId');
+    if (staffIds.length === 0) return [];
+
+    const staffDocs = await this.staffModel
+      .find({ _id: { $in: staffIds } })
+      .select('_id fullName staffId')
+      .lean()
+      .exec();
+
+    return (staffDocs as Array<{ _id: { toString(): string }; fullName: string; staffId: string }>)
+      .map(s => ({ staffId: s._id.toString(), staffNo: s.staffId, displayName: s.fullName }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }
+
+  async getLoanStatement(staffId: string, loanId: string): Promise<ILoanStatement> {
+    const loan = await this.loanModel.findById(loanId).exec();
+    if (!loan) throw new NotFoundException('Loan not found');
+    if (loan.staffId !== staffId) throw new BadRequestException('Loan does not belong to this staff member');
+
+    const [staffDoc, guarantorDocs] = await Promise.all([
+      this.staffModel.findById(staffId).exec(),
+      this.staffModel.find({ _id: { $in: [loan.guarantorId] } }).exec(),
+    ]);
+
+    const guarantor = guarantorDocs[0];
+    const repayments = await this.repaymentModel
+      .find({ loanId })
+      .sort({ instalmentNumber: 1 })
+      .exec();
+
+    const totalPaid = repayments.reduce((s, r) => s + r.paidAmount, 0);
+    const outstanding = Math.max(0, Math.round((loan.totalRepayable - totalPaid) * 100) / 100);
+    const penaltyPaid = repayments.reduce((s, r) => s + r.penaltyAmount, 0);
+    const paidCount = repayments.filter(
+      r => r.status === LoanRepaymentStatus.Paid || r.status === LoanRepaymentStatus.Waived,
+    ).length;
+    const completionRate = loan.tenureMonths > 0
+      ? Math.round((paidCount / loan.tenureMonths) * 100)
+      : 0;
+
+    return {
+      staff: {
+        staffNo: staffDoc?.staffId ?? '',
+        displayName: staffDoc?.fullName ?? 'Unknown',
+        department: (staffDoc as any)?.department ?? '',
+      },
+      loan: {
+        id: loan._id.toString(),
+        principalAmount: loan.principalAmount,
+        interestRate: loan.interestRate,
+        totalRepayable: loan.totalRepayable,
+        tenureMonths: loan.tenureMonths,
+        disbursedDate: loan.disbursedDate.toISOString(),
+        status: loan.status,
+        chequeNo: loan.chequeNo,
+        pvNo: loan.pvNo,
+        guarantor: {
+          staffNo: guarantor?.staffId ?? '',
+          displayName: guarantor?.fullName ?? 'Unknown',
+        },
+      },
+      kpis: {
+        totalPaid: Math.round(totalPaid * 100) / 100,
+        outstanding,
+        penaltyPaid: Math.round(penaltyPaid * 100) / 100,
+        completionRate,
+      },
+      instalments: repayments.map(r => ({
+        instalmentNumber: r.instalmentNumber,
+        dueDate: r.dueDate.toISOString(),
+        dueAmount: r.dueAmount,
+        principalAmount: r.principalAmount ?? 0,
+        interestAmount: r.interestAmount ?? 0,
+        paidAmount: r.paidAmount,
+        penaltyAmount: r.penaltyAmount,
+        paidDate: r.paidDate?.toISOString(),
+        status: r.status,
+        source: r.source,
+      })),
+    };
   }
 
   // ─────────────────────────── STAFF ───────────────────────────
