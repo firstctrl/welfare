@@ -254,6 +254,64 @@ export class ReportsController {
     return rows;
   }
 
+  @Get('loans/borrowers')
+  @RequirePermission(AppModule.Reports, 'readonly')
+  getLoanBorrowers() {
+    return this.reportsService.getLoanBorrowers();
+  }
+
+  @Get('loans/staff-statement')
+  @RequirePermission(AppModule.Reports, 'readonly')
+  getLoanStatement(
+    @Query('staffId') staffId: string,
+    @Query('loanId') loanId: string,
+  ) {
+    if (!staffId) throw new BadRequestException('staffId is required');
+    if (!loanId) throw new BadRequestException('loanId is required');
+    return this.reportsService.getLoanStatement(staffId, loanId);
+  }
+
+  @Get('loans/staff-statement/pdf')
+  @RequirePermission(AppModule.Reports, 'readonly')
+  async getLoanStatementPdf(
+    @Query('staffId') staffId: string,
+    @Query('loanId') loanId: string,
+    @Res() res: Response,
+  ) {
+    if (!staffId) throw new BadRequestException('staffId is required');
+    if (!loanId) throw new BadRequestException('loanId is required');
+    const { staff, loan } = await this.reportsService.getLoanStatement(staffId, loanId);
+    const pdf = await this.reportsService.generateLoanStatementPdf(staffId, loanId);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="loan-statement-${staff.staffNo}-${loan.id}.pdf"`,
+    );
+    res.end(pdf);
+  }
+
+  @Post('loans/staff-statement/send')
+  @RequirePermission(AppModule.Reports, 'full')
+  async sendLoanStatement(
+    @Body('staffId') staffId: string,
+    @Body('loanId') loanId: string,
+  ) {
+    if (!staffId) throw new BadRequestException('staffId is required');
+    if (!loanId) throw new BadRequestException('loanId is required');
+    const stmt = await this.reportsService.getLoanStatement(staffId, loanId);
+    const staffDoc = await this.staffModel.findById(staffId).exec();
+    if (!staffDoc?.email) throw new BadRequestException('Staff has no email address on record');
+    const pdf = await this.reportsService.generateLoanStatementPdf(staffId, loanId);
+    await this.emailService.sendWithAttachment(
+      { staffId, staffName: stmt.staff.displayName, email: staffDoc.email },
+      `Your NACOC Welfare Loan Statement`,
+      `<p>Dear ${stmt.staff.displayName},</p><p>Please find attached your welfare loan statement.</p><p>NACOC Welfare</p>`,
+      [{ filename: `loan-statement-${stmt.staff.staffNo}-${stmt.loan.id}.pdf`, content: pdf }],
+      EmailTriggerSource.Manual,
+    );
+    return { sent: true, email: staffDoc.email };
+  }
+
   @Post('contributions/bulk-send')
   @RequirePermission(AppModule.Reports, 'full')
   async triggerBulkSend(
