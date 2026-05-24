@@ -893,6 +893,11 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
     columns: Array<{ header: string; field: string }>,
     rows: object[],
   ): Promise<Buffer> {
+    const logoPath = path.join(__dirname, 'assets', 'ncc-logo.png');
+    const logoBase64 = fs.existsSync(logoPath)
+      ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
+      : '';
+
     const headers = columns.map(c => `<th>${c.header}</th>`).join('');
     const bodyRows = rows
       .map(row => {
@@ -915,9 +920,11 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   th{background:#bc4680;color:#fff;padding:6px 8px;text-align:left;font-size:11px}
   td{padding:5px 8px;border-bottom:1px solid #e5e7eb;font-size:11px}
   tr:nth-child(even) td{background:#f9fafb}
+  .watermark{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;height:320px;background-image:url('${logoBase64}');background-size:contain;background-repeat:no-repeat;background-position:center;opacity:0.05;z-index:0;pointer-events:none}
 </style>
 </head>
 <body>
+${logoBase64 ? '<div class="watermark"></div>' : ''}
 <h1>${title}</h1>
 <div class="meta">Generated: ${new Date().toLocaleString('en-GB')}</div>
 <table>
