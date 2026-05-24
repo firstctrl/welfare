@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import { Banknote, TrendingUp, AlertCircle, BarChart3, Users, ChevronDown, ChevronRight, Download } from 'lucide-react';
-import { getFundSummary, buildFundSummaryDownloadUrl } from '@/lib/reports';
+import { getFundSummary, downloadFundSummaryFile } from '@/lib/reports';
 import type { FundSummaryParams } from '@/lib/reports';
 import type {
   IFundSummaryContributionBreakdownRow,
@@ -97,7 +97,7 @@ function Section({
   children,
 }: {
   title: string;
-  downloadLinks?: { label: string; href: string }[];
+  downloadLinks?: { label: string; onClick: () => void }[];
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(true);
@@ -116,9 +116,9 @@ function Section({
         {downloadLinks && (
           <div className="flex gap-2" onClick={e => e.stopPropagation()}>
             {downloadLinks.map(l => (
-              <a key={l.label} href={l.href} target="_blank" rel="noopener noreferrer">
-                <Button variant="secondary" size="sm" Icon={Download}>{l.label}</Button>
-              </a>
+              <Button key={l.label} variant="secondary" size="sm" Icon={Download} onClick={l.onClick}>
+                {l.label}
+              </Button>
             ))}
           </div>
         )}
@@ -357,7 +357,7 @@ export function FundSummaryPanel() {
             <Section
               title="Contributions Breakdown"
               downloadLinks={[
-                { label: 'CSV', href: buildFundSummaryDownloadUrl('contributions', params, 'csv') },
+                { label: 'CSV', onClick: () => downloadFundSummaryFile('contributions', params, 'csv') },
               ]}
             >
               <SummaryTable columns={COLS_CONTRIB} data={data.contributionBreakdown} />
@@ -366,8 +366,8 @@ export function FundSummaryPanel() {
             <Section
               title="Loans Breakdown"
               downloadLinks={[
-                { label: 'CSV', href: buildFundSummaryDownloadUrl('loans', params, 'csv') },
-                { label: 'PDF', href: buildFundSummaryDownloadUrl('loans', params, 'pdf') },
+                { label: 'CSV', onClick: () => downloadFundSummaryFile('loans', params, 'csv') },
+                { label: 'PDF', onClick: () => downloadFundSummaryFile('loans', params, 'pdf') },
               ]}
             >
               <SummaryTable columns={COLS_LOANS} data={data.loanBreakdown} />
@@ -376,8 +376,8 @@ export function FundSummaryPanel() {
             <Section
               title="Defaulted Loans Detail"
               downloadLinks={[
-                { label: 'CSV', href: buildFundSummaryDownloadUrl('defaults', params, 'csv') },
-                { label: 'PDF', href: buildFundSummaryDownloadUrl('defaults', params, 'pdf') },
+                { label: 'CSV', onClick: () => downloadFundSummaryFile('defaults', params, 'csv') },
+                { label: 'PDF', onClick: () => downloadFundSummaryFile('defaults', params, 'pdf') },
               ]}
             >
               <SummaryTable columns={COLS_DEFAULTS} data={data.defaultDetails} />

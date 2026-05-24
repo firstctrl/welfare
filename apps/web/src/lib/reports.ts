@@ -210,15 +210,23 @@ export async function getFundSummary(params: FundSummaryParams): Promise<IFundSu
   return data;
 }
 
-export function buildFundSummaryDownloadUrl(
+export async function downloadFundSummaryFile(
   sub: 'contributions' | 'loans' | 'defaults',
   params: FundSummaryParams,
   format: 'csv' | 'pdf',
-): string {
-  const base = (apiClient.defaults.baseURL ?? '').replace(/\/$/, '');
-  const q = new URLSearchParams({ year: String(params.year), format });
-  if (params.fromMonth) q.set('fromMonth', String(params.fromMonth));
-  if (params.toMonth)   q.set('toMonth',   String(params.toMonth));
-  if (params.quarter)   q.set('quarter',   String(params.quarter));
-  return `${base}/reports/fund-summary/${sub}?${q.toString()}`;
+): Promise<void> {
+  const { data, headers } = await apiClient.get(`/reports/fund-summary/${sub}`, {
+    params: { year: params.year, ...(params.fromMonth ? { fromMonth: params.fromMonth } : {}), ...(params.toMonth ? { toMonth: params.toMonth } : {}), ...(params.quarter ? { quarter: params.quarter } : {}), format },
+    responseType: 'blob',
+  });
+  const mime = String(headers['content-type'] ?? (format === 'pdf' ? 'application/pdf' : 'text/csv'));
+  const blob = new Blob([data as BlobPart], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `fund-summary-${sub}-${params.year}.${format}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
