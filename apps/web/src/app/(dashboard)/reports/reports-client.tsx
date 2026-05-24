@@ -309,7 +309,6 @@ function LoanStatementPanel({ canSend }: { canSend: boolean }) {
               <input
                 value={borrowerInput}
                 onChange={handleBorrowerInput}
-                onFocus={() => !selectedBorrower && setShowBorrowerDropdown(true)}
                 onBlur={() => setTimeout(() => setShowBorrowerDropdown(false), 150)}
                 placeholder={loadingBorrowers ? 'Loading…' : 'Search by name or staff no…'}
                 disabled={loadingBorrowers}
@@ -319,7 +318,7 @@ function LoanStatementPanel({ canSend }: { canSend: boolean }) {
               <Search size={14} strokeWidth={1.75} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
             </div>
           </Field>
-          {showBorrowerDropdown && filteredBorrowers.length > 0 && (
+          {showBorrowerDropdown && borrowerInput.length > 0 && filteredBorrowers.length > 0 && (
             <div className="absolute z-20 w-full mt-1 bg-white border border-neutral-200 rounded-sm shadow-lg overflow-hidden max-h-60 overflow-y-auto">
               {filteredBorrowers.map(b => (
                 <button

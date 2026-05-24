@@ -5,6 +5,7 @@ import { Contribution } from './schemas/contribution.schema';
 import { Loan } from '../loans/schemas/loan.schema';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { AuditService } from '../audit/audit.service';
+import { StaffService } from '../staff/staff.service';
 import { ContributionStatus, ContributionSource } from '@welfare/shared';
 
 const mockFindOne = jest.fn();
@@ -39,6 +40,7 @@ const mockConfigService = {
 };
 
 const mockAuditService = { log: jest.fn() };
+const mockStaffService = { findManyByStaffIdPattern: jest.fn() };
 
 describe('ContributionsService', () => {
   let service: ContributionsService;
@@ -51,6 +53,7 @@ describe('ContributionsService', () => {
         { provide: getModelToken(Loan.name), useValue: mockLoanModel },
         { provide: SystemConfigService, useValue: mockConfigService },
         { provide: AuditService, useValue: mockAuditService },
+        { provide: StaffService, useValue: mockStaffService },
       ],
     }).compile();
     service = module.get<ContributionsService>(ContributionsService);

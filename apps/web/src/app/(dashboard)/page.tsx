@@ -1,6 +1,6 @@
 import { DashboardClient } from './dashboard-client';
 
-export const metadata = { title: 'Dashboard — NACOC Welfare' };
+export const metadata = { title: 'Dashboard - NACOC Welfare' };
 
 export default function DashboardPage() {
   return (

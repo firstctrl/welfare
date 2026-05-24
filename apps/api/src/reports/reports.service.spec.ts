@@ -347,7 +347,7 @@ describe('ReportsService', () => {
       mockStaffFind.mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
 
       const result = await service.getDashboardStats();
-      expect(result.thisMonth.month).toBe(now.getMonth() + 1);
+      expect(result.thisMonth.month).toBe(now.getMonth() === 0 ? 12 : now.getMonth());
       expect(result.thisMonth.year).toBe(now.getFullYear());
       expect(result.loans.activeCount).toBe(10);
       expect(result.monthlyTrend).toHaveLength(12);

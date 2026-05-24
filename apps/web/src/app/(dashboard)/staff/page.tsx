@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import StaffListClient from './staff-list-client';
 import { TableSkeleton } from '@/components/ui/skeleton';
 
-export const metadata = { title: 'Staff Registry — NACOC Welfare' };
+export const metadata = { title: 'Staff Registry - NACOC Welfare' };
 
 export default function StaffPage() {
   return (

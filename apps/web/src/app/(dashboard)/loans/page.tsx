@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 import { LoansListClient } from './loans-list-client';
 import { TableSkeleton } from '@/components/ui/skeleton';
 
-export const metadata: Metadata = { title: 'Loans — NACOC Welfare' };
+export const metadata: Metadata = { title: 'Loans - NACOC Welfare' };
 
 export default function LoansPage() {
   return (

@@ -474,7 +474,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   <div>
     <div class="org">NACOC Welfare</div>
     <div class="title">Loan Statement: ${stmt.staff.displayName}</div>
-    <div class="meta">Staff No: ${stmt.staff.staffNo} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString('en-GB')}</div>
+    <div class="meta">Staff ID: ${stmt.staff.staffNo} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString('en-GB')}</div>
   </div>
 </div>
 <div class="info-grid">
