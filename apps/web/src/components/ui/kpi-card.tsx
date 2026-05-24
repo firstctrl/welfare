@@ -9,6 +9,7 @@ type TrendSentiment = 'positive' | 'negative' | 'neutral';
 interface KpiCardProps {
   label: string;
   value: string;
+  title?: string;
   subtext?: string;
   trend?: Trend;
   trendLabel?: string;
@@ -42,6 +43,7 @@ const iconKindStyles: Record<NonNullable<KpiCardProps['iconKind']>, string> = {
 export function KpiCard({
   label,
   value,
+  title,
   subtext,
   trend,
   trendLabel,
@@ -59,7 +61,7 @@ export function KpiCard({
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-sm text-neutral-500 font-medium">{label}</p>
-          <p className="mt-1 text-kpi font-bold text-neutral-900 font-mono tabular leading-none">
+          <p className="mt-1 text-kpi font-bold text-neutral-900 font-mono tabular leading-none" title={title}>
             {value}
           </p>
           {(TrendIcon || subtext) && (

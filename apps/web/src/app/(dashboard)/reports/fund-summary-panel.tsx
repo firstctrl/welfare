@@ -14,7 +14,7 @@ import type {
 import { KpiCard } from '@/components/ui/kpi-card';
 import { Field, Input, Select } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
-import { fmtGHS } from '@/lib/format';
+import { fmtGHS, fmtGHSShort } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -161,19 +161,22 @@ export function FundSummaryPanel() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <KpiCard
               label="Net Fund Balance"
-              value={fmtGHS(data.fundBalance.netBalance)}
+              value={fmtGHSShort(data.fundBalance.netBalance)}
+              title={fmtGHS(data.fundBalance.netBalance)}
               icon={TrendingUp}
               iconKind={data.fundBalance.netBalance >= 0 ? 'success' : 'danger'}
             />
             <KpiCard
               label="Total Contributions"
-              value={fmtGHS(data.fundBalance.totalContributionsAllTime)}
+              value={fmtGHSShort(data.fundBalance.totalContributionsAllTime)}
+              title={fmtGHS(data.fundBalance.totalContributionsAllTime)}
               icon={Banknote}
               iconKind="success"
             />
             <KpiCard
               label="Total Disbursed"
-              value={fmtGHS(data.fundBalance.totalDisbursedAllTime)}
+              value={fmtGHSShort(data.fundBalance.totalDisbursedAllTime)}
+              title={fmtGHS(data.fundBalance.totalDisbursedAllTime)}
               icon={Banknote}
               iconKind="primary"
             />
@@ -257,8 +260,9 @@ export function FundSummaryPanel() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <KpiCard
                 label="Contributions Collected"
-                value={fmtGHS(data.contributions.totalCollected)}
-                subtext={`Expected: ${fmtGHS(data.contributions.totalExpected)}`}
+                value={fmtGHSShort(data.contributions.totalCollected)}
+                title={fmtGHS(data.contributions.totalCollected)}
+                subtext={`Expected: ${fmtGHSShort(data.contributions.totalExpected)}`}
                 icon={Banknote}
                 iconKind="success"
               />
@@ -271,14 +275,16 @@ export function FundSummaryPanel() {
               />
               <KpiCard
                 label="Loans Disbursed"
-                value={fmtGHS(data.loans.disbursedAmount)}
+                value={fmtGHSShort(data.loans.disbursedAmount)}
+                title={fmtGHS(data.loans.disbursedAmount)}
                 subtext={`${data.loans.disbursedCount} loans`}
                 icon={Banknote}
                 iconKind="primary"
               />
               <KpiCard
                 label="Defaulted Loans"
-                value={fmtGHS(data.loans.defaultedAmount)}
+                value={fmtGHSShort(data.loans.defaultedAmount)}
+                title={fmtGHS(data.loans.defaultedAmount)}
                 subtext={`${data.loans.defaultedCount} loans`}
                 icon={AlertCircle}
                 iconKind={data.loans.defaultedCount === 0 ? 'success' : 'danger'}
@@ -286,13 +292,14 @@ export function FundSummaryPanel() {
               <KpiCard
                 label="Recovery Rate"
                 value={`${data.recovery.recoveryRate}%`}
-                subtext={`Recovered: ${fmtGHS(data.recovery.totalRecovered)}`}
+                subtext={`Recovered: ${fmtGHSShort(data.recovery.totalRecovered)}`}
                 icon={BarChart3}
                 iconKind={data.recovery.recoveryRate >= 80 ? 'success' : data.recovery.recoveryRate >= 50 ? 'warning' : 'danger'}
               />
               <KpiCard
                 label="Active Loans"
-                value={fmtGHS(data.loans.activeAmount)}
+                value={fmtGHSShort(data.loans.activeAmount)}
+                title={fmtGHS(data.loans.activeAmount)}
                 subtext={`${data.loans.activeCount} loans outstanding`}
                 icon={TrendingUp}
                 iconKind="warning"
