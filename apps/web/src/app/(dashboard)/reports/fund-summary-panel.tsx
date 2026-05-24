@@ -157,7 +157,9 @@ export function FundSummaryPanel() {
       {/* All-time overview — unaffected by filters */}
       {data && (
         <div className="rounded-md border border-neutral-200 bg-neutral-50 px-4 py-3">
-          <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wide mb-3">All-Time Fund Overview</p>
+          <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wide mb-3">
+            All-Time Fund Overview
+          </p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <KpiCard
               label="Net Fund Balance"
@@ -193,12 +195,17 @@ export function FundSummaryPanel() {
       {/* Filter bar */}
       <div className="flex flex-wrap items-end gap-4 p-4 bg-neutral-50 border border-neutral-200 rounded-md">
         <Field label="Year">
-          <Input type="number" value={year} onChange={e => setYear(+e.target.value)} style={{ width: 100 }} />
+          <Input
+            type="number"
+            value={year}
+            onChange={(e) => setYear(+e.target.value)}
+            style={{ width: 100 }}
+          />
         </Field>
 
         <Field label="Period">
           <div className="flex gap-1">
-            {(['full', 'quarter', 'range'] as FilterMode[]).map(m => (
+            {(['full', 'quarter', 'range'] as FilterMode[]).map((m) => (
               <button
                 key={m}
                 onClick={() => setMode(m)}
@@ -218,7 +225,7 @@ export function FundSummaryPanel() {
         {mode === 'quarter' && (
           <Field label="Quarter">
             <div className="flex gap-1">
-              {([1,2,3,4] as const).map(q => (
+              {([1, 2, 3, 4] as const).map((q) => (
                 <button
                   key={q}
                   onClick={() => setQuarter(q)}
@@ -239,27 +246,41 @@ export function FundSummaryPanel() {
         {mode === 'range' && (
           <>
             <Field label="From">
-              <Select value={String(fromMonth)} onChange={e => setFromMonth(+e.target.value)} options={monthOptions} style={{ width: 110 }} />
+              <Select
+                value={String(fromMonth)}
+                onChange={(e) => setFromMonth(+e.target.value)}
+                options={monthOptions}
+                style={{ width: 110 }}
+              />
             </Field>
             <Field label="To">
-              <Select value={String(toMonth)} onChange={e => setToMonth(+e.target.value)} options={monthOptions} style={{ width: 110 }} />
+              <Select
+                value={String(toMonth)}
+                onChange={(e) => setToMonth(+e.target.value)}
+                options={monthOptions}
+                style={{ width: 110 }}
+              />
             </Field>
           </>
         )}
       </div>
 
       {isLoading && (
-        <div className="flex items-center justify-center py-16 text-neutral-400 text-sm">Loading…</div>
+        <div className="flex items-center justify-center py-16 text-neutral-400 text-sm">
+          Loading…
+        </div>
       )}
 
       {data && (
         <>
           {/* Period-filtered KPIs */}
           <div>
-            <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wide mb-3">Period Summary</p>
+            <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wide mb-3">
+              Period Summary
+            </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <KpiCard
-                label="Contributions Collected"
+                label="Contributions"
                 value={fmtGHSShort(data.contributions.totalCollected)}
                 title={fmtGHS(data.contributions.totalCollected)}
                 subtext={`Expected: ${fmtGHSShort(data.contributions.totalExpected)}`}
@@ -271,7 +292,13 @@ export function FundSummaryPanel() {
                 value={`${data.contributions.collectionRate}%`}
                 subtext={`${data.contributions.missedCount} missed · ${data.contributions.partialCount} partial`}
                 icon={BarChart3}
-                iconKind={data.contributions.collectionRate >= 90 ? 'success' : data.contributions.collectionRate >= 70 ? 'warning' : 'danger'}
+                iconKind={
+                  data.contributions.collectionRate >= 90
+                    ? 'success'
+                    : data.contributions.collectionRate >= 70
+                      ? 'warning'
+                      : 'danger'
+                }
               />
               <KpiCard
                 label="Loans Disbursed"
@@ -294,7 +321,13 @@ export function FundSummaryPanel() {
                 value={`${data.recovery.recoveryRate}%`}
                 subtext={`Recovered: ${fmtGHSShort(data.recovery.totalRecovered)}`}
                 icon={BarChart3}
-                iconKind={data.recovery.recoveryRate >= 80 ? 'success' : data.recovery.recoveryRate >= 50 ? 'warning' : 'danger'}
+                iconKind={
+                  data.recovery.recoveryRate >= 80
+                    ? 'success'
+                    : data.recovery.recoveryRate >= 50
+                      ? 'warning'
+                      : 'danger'
+                }
               />
               <KpiCard
                 label="Active Loans"
