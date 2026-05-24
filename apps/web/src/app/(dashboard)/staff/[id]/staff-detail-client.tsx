@@ -202,11 +202,16 @@ export default function StaffDetailClient({ id }: { id: string }) {
               )}
             </div>
             <p className="text-sm text-neutral-500 mt-1">
-              {staff.staffId} &middot; PF: {staff.pfNo} &middot; {staff.level}
+              Staff ID: {staff.staffId} &middot; PF: {staff.pfNo} &middot; Level: {staff.level}
             </p>
             {!isTerminal && (
               <div className="mt-3">
-                <Button variant="secondary" size="sm" Icon={UserCog} onClick={() => setShowStatusModal(true)}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  Icon={UserCog}
+                  onClick={() => setShowStatusModal(true)}
+                >
                   Change Status
                 </Button>
               </div>
@@ -238,13 +243,21 @@ export default function StaffDetailClient({ id }: { id: string }) {
       {/* Profile Tab */}
       {activeTab === 'Profile' && (
         <Card>
-          <CardHeader title="Profile Information" action={
-            !editing && (
-              <Button variant="secondary" size="sm" Icon={Pencil} onClick={() => startEdit(staff)}>
-                Edit
-              </Button>
-            )
-          } />
+          <CardHeader
+            title="Profile Information"
+            action={
+              !editing && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  Icon={Pencil}
+                  onClick={() => startEdit(staff)}
+                >
+                  Edit
+                </Button>
+              )
+            }
+          />
           <CardBody>
             {!editing ? (
               <div className="space-y-5">
@@ -264,7 +277,9 @@ export default function StaffDetailClient({ id }: { id: string }) {
                     ] as [string, string][]
                   ).map(([label, value]) => (
                     <div key={label}>
-                      <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">{label}</p>
+                      <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">
+                        {label}
+                      </p>
                       <p className="text-base font-medium text-neutral-900 mt-0.5">{value}</p>
                     </div>
                   ))}
@@ -287,9 +302,14 @@ export default function StaffDetailClient({ id }: { id: string }) {
                     loading={sendingStatement}
                     onClick={async () => {
                       setSendingStatement(true);
-                      try { await sendContributionStatement(id, statementYear); toast.success('Statement sent'); }
-                      catch { toast.error('Failed to send statement'); }
-                      finally { setSendingStatement(false); }
+                      try {
+                        await sendContributionStatement(id, statementYear);
+                        toast.success('Statement sent');
+                      } catch {
+                        toast.error('Failed to send statement');
+                      } finally {
+                        setSendingStatement(false);
+                      }
                     }}
                     title={!staff.email ? 'No email address on file' : undefined}
                   >
@@ -298,7 +318,10 @@ export default function StaffDetailClient({ id }: { id: string }) {
                 </div>
               </div>
             ) : (
-              <form onSubmit={profileForm.handleSubmit((v) => updateMutation.mutate(v))} className="space-y-5">
+              <form
+                onSubmit={profileForm.handleSubmit((v) => updateMutation.mutate(v))}
+                className="space-y-5"
+              >
                 <div className="grid grid-cols-2 gap-4">
                   {(
                     [
@@ -313,14 +336,26 @@ export default function StaffDetailClient({ id }: { id: string }) {
                       ['dateOfFirstContribution', 'Date of First Contribution', 'date'],
                     ] as [keyof ProfileForm, string, string][]
                   ).map(([field, label, type]) => (
-                    <Field key={field} label={label} error={profileForm.formState.errors[field]?.message}>
-                      <Input {...profileForm.register(field)} type={type} error={!!profileForm.formState.errors[field]} />
+                    <Field
+                      key={field}
+                      label={label}
+                      error={profileForm.formState.errors[field]?.message}
+                    >
+                      <Input
+                        {...profileForm.register(field)}
+                        type={type}
+                        error={!!profileForm.formState.errors[field]}
+                      />
                     </Field>
                   ))}
                 </div>
                 <div className="flex gap-3 pt-2 border-t border-neutral-100">
-                  <Button type="submit" variant="primary" loading={updateMutation.isPending}>Save Changes</Button>
-                  <Button type="button" variant="secondary" onClick={() => setEditing(false)}>Cancel</Button>
+                  <Button type="submit" variant="primary" loading={updateMutation.isPending}>
+                    Save Changes
+                  </Button>
+                  <Button type="button" variant="secondary" onClick={() => setEditing(false)}>
+                    Cancel
+                  </Button>
                 </div>
               </form>
             )}
@@ -334,7 +369,12 @@ export default function StaffDetailClient({ id }: { id: string }) {
           <CardHeader
             title="Contribution Ledger"
             action={
-              <Button variant="secondary" size="sm" Icon={Plus} onClick={() => window.location.href = '/contributions/manual'}>
+              <Button
+                variant="secondary"
+                size="sm"
+                Icon={Plus}
+                onClick={() => (window.location.href = '/contributions/manual')}
+              >
                 Add Manual Entry
               </Button>
             }
@@ -343,15 +383,31 @@ export default function StaffDetailClient({ id }: { id: string }) {
             {contribLoading ? (
               <p className="px-5 py-4 text-sm text-neutral-400">Loading…</p>
             ) : !contributions?.length ? (
-              <p className="px-5 py-8 text-sm text-neutral-400 text-center">No contributions recorded yet.</p>
+              <p className="px-5 py-8 text-sm text-neutral-400 text-center">
+                No contributions recorded yet.
+              </p>
             ) : (
               <>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm border-collapse">
                     <thead>
                       <tr className="border-b border-neutral-200 bg-neutral-50">
-                        {['Month','Year','Expected','Paid','Surplus C/F','Status','Source','Recorded By'].map((h) => (
-                          <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
+                        {[
+                          'Month',
+                          'Year',
+                          'Expected',
+                          'Paid',
+                          'Surplus C/F',
+                          'Status',
+                          'Source',
+                          'Recorded By',
+                        ].map((h) => (
+                          <th
+                            key={h}
+                            className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide"
+                          >
+                            {h}
+                          </th>
                         ))}
                       </tr>
                     </thead>
@@ -360,17 +416,28 @@ export default function StaffDetailClient({ id }: { id: string }) {
                         <tr key={c._id} className="hover:bg-neutral-50">
                           <td className="px-4 py-2">{MONTHS[c.month - 1]}</td>
                           <td className="px-4 py-2">{c.year}</td>
-                          <td className="px-4 py-2 text-right font-mono tabular">{fmtGHS(c.expectedAmount)}</td>
-                          <td className="px-4 py-2 text-right font-mono tabular">{fmtGHS(c.paidAmount)}</td>
-                          <td className="px-4 py-2 text-right font-mono tabular">{fmtGHS(c.surplusCarriedForward)}</td>
+                          <td className="px-4 py-2 text-right font-mono tabular">
+                            {fmtGHS(c.expectedAmount)}
+                          </td>
+                          <td className="px-4 py-2 text-right font-mono tabular">
+                            {fmtGHS(c.paidAmount)}
+                          </td>
+                          <td className="px-4 py-2 text-right font-mono tabular">
+                            {fmtGHS(c.surplusCarriedForward)}
+                          </td>
                           <td className="px-4 py-2">
-                            <span className={cn(
-                              'px-2 py-0.5 rounded-xs text-xs font-medium',
-                              c.status === ContributionStatus.Paid    ? 'bg-success-50 text-success-700' :
-                              c.status === ContributionStatus.Partial ? 'bg-warning-50 text-warning-700' :
-                              c.status === ContributionStatus.Missed  ? 'bg-danger-50 text-danger-700' :
-                              'bg-info-50 text-info-700',
-                            )}>
+                            <span
+                              className={cn(
+                                'px-2 py-0.5 rounded-xs text-xs font-medium',
+                                c.status === ContributionStatus.Paid
+                                  ? 'bg-success-50 text-success-700'
+                                  : c.status === ContributionStatus.Partial
+                                    ? 'bg-warning-50 text-warning-700'
+                                    : c.status === ContributionStatus.Missed
+                                      ? 'bg-danger-50 text-danger-700'
+                                      : 'bg-info-50 text-info-700',
+                              )}
+                            >
                               {c.status}
                             </span>
                           </td>
@@ -381,7 +448,12 @@ export default function StaffDetailClient({ id }: { id: string }) {
                     </tbody>
                     <tfoot className="border-t border-neutral-200 bg-neutral-50">
                       <tr>
-                        <td colSpan={2} className="px-4 py-2 text-xs font-semibold text-neutral-600">Totals</td>
+                        <td
+                          colSpan={2}
+                          className="px-4 py-2 text-xs font-semibold text-neutral-600"
+                        >
+                          Totals
+                        </td>
                         <td className="px-4 py-2 text-right text-xs font-semibold text-neutral-700 font-mono tabular">
                           {fmtGHS(contributions.reduce((s, c) => s + c.expectedAmount, 0))}
                         </td>
@@ -405,7 +477,12 @@ export default function StaffDetailClient({ id }: { id: string }) {
           <CardHeader
             title="Loan History"
             action={
-              <Button variant="secondary" size="sm" Icon={Plus} onClick={() => window.location.href = '/loans/new'}>
+              <Button
+                variant="secondary"
+                size="sm"
+                Icon={Plus}
+                onClick={() => (window.location.href = '/loans/new')}
+              >
                 Record New Loan
               </Button>
             }
@@ -420,21 +497,41 @@ export default function StaffDetailClient({ id }: { id: string }) {
                 <table className="w-full text-sm border-collapse">
                   <thead>
                     <tr className="border-b border-neutral-200 bg-neutral-50">
-                      {['Principal','Total Repayable','Tenure','Disbursed','Status',''].map((h) => (
-                        <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
-                      ))}
+                      {['Principal', 'Total Repayable', 'Tenure', 'Disbursed', 'Status', ''].map(
+                        (h) => (
+                          <th
+                            key={h}
+                            className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide"
+                          >
+                            {h}
+                          </th>
+                        ),
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-100">
                     {staffLoans.data.map((loan: ILoan) => (
                       <tr key={loan._id} className="hover:bg-neutral-50">
-                        <td className="px-4 py-2 font-mono tabular font-medium">{fmtGHS(loan.principalAmount)}</td>
-                        <td className="px-4 py-2 font-mono tabular">{fmtGHS(loan.totalRepayable)}</td>
+                        <td className="px-4 py-2 font-mono tabular font-medium">
+                          {fmtGHS(loan.principalAmount)}
+                        </td>
+                        <td className="px-4 py-2 font-mono tabular">
+                          {fmtGHS(loan.totalRepayable)}
+                        </td>
                         <td className="px-4 py-2">{loan.tenureMonths}mo</td>
-                        <td className="px-4 py-2 font-mono tabular">{fmtDate(loan.disbursedDate)}</td>
-                        <td className="px-4 py-2"><StatusBadge status={loan.status} /></td>
+                        <td className="px-4 py-2 font-mono tabular">
+                          {fmtDate(loan.disbursedDate)}
+                        </td>
                         <td className="px-4 py-2">
-                          <Link href={`/loans/${loan._id}`} className="text-primary-600 text-xs hover:underline">View</Link>
+                          <StatusBadge status={loan.status} />
+                        </td>
+                        <td className="px-4 py-2">
+                          <Link
+                            href={`/loans/${loan._id}`}
+                            className="text-primary-600 text-xs hover:underline"
+                          >
+                            View
+                          </Link>
                         </td>
                       </tr>
                     ))}
@@ -452,23 +549,36 @@ export default function StaffDetailClient({ id }: { id: string }) {
           {guaranteeLoading ? (
             <p className="text-sm text-neutral-400">Loading…</p>
           ) : !guaranteeLoans?.data.length ? (
-            <p className="text-sm text-neutral-400 py-8 text-center">Not currently guaranteeing any loans.</p>
+            <p className="text-sm text-neutral-400 py-8 text-center">
+              Not currently guaranteeing any loans.
+            </p>
           ) : (
             <>
               {(() => {
-                const active = guaranteeLoans.data.filter((l: ILoan) => l.status === LoanStatus.Active);
-                const totalExposure = active.reduce((sum: number, l: ILoan) => sum + l.totalRepayable, 0);
+                const active = guaranteeLoans.data.filter(
+                  (l: ILoan) => l.status === LoanStatus.Active,
+                );
+                const totalExposure = active.reduce(
+                  (sum: number, l: ILoan) => sum + l.totalRepayable,
+                  0,
+                );
                 const atCap = maxPerGuarantor > 0 && active.length >= maxPerGuarantor;
                 return (
                   <Card>
                     <CardBody className={cn('flex flex-wrap gap-6', atCap && 'bg-danger-50')}>
                       <div>
-                        <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">Active Guarantees</p>
+                        <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">
+                          Active Guarantees
+                        </p>
                         <p className="text-xl font-bold text-neutral-900 mt-0.5">{active.length}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">Total Exposure</p>
-                        <p className="text-xl font-bold text-neutral-900 mt-0.5 font-mono tabular">{fmtGHS(totalExposure)}</p>
+                        <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">
+                          Total Exposure
+                        </p>
+                        <p className="text-xl font-bold text-neutral-900 mt-0.5 font-mono tabular">
+                          {fmtGHS(totalExposure)}
+                        </p>
                       </div>
                       {atCap && (
                         <div className="flex items-center">
@@ -489,8 +599,20 @@ export default function StaffDetailClient({ id }: { id: string }) {
                     <table className="w-full text-sm border-collapse">
                       <thead>
                         <tr className="border-b border-neutral-200 bg-neutral-50">
-                          {['Borrower ID','Principal','Outstanding','Disbursed','Status',''].map((h) => (
-                            <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
+                          {[
+                            'Borrower ID',
+                            'Principal',
+                            'Outstanding',
+                            'Disbursed',
+                            'Status',
+                            '',
+                          ].map((h) => (
+                            <th
+                              key={h}
+                              className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide"
+                            >
+                              {h}
+                            </th>
                           ))}
                         </tr>
                       </thead>
@@ -498,19 +620,42 @@ export default function StaffDetailClient({ id }: { id: string }) {
                         {guaranteeLoans.data.map((loan: ILoan, i: number) => {
                           const schedule = guaranteeScheduleQueries[i]?.data;
                           const outstanding = schedule
-                            ? Math.round(schedule.reduce((s, r) => s + Math.max(0, r.dueAmount + r.penaltyAmount - r.paidAmount), 0) * 100) / 100
+                            ? Math.round(
+                                schedule.reduce(
+                                  (s, r) =>
+                                    s + Math.max(0, r.dueAmount + r.penaltyAmount - r.paidAmount),
+                                  0,
+                                ) * 100,
+                              ) / 100
                             : null;
                           return (
                             <tr key={loan._id} className="hover:bg-neutral-50">
-                              <td className="px-4 py-2 font-mono text-xs text-neutral-500">{loan.staffId.slice(-8)}</td>
-                              <td className="px-4 py-2 font-mono tabular">{fmtGHS(loan.principalAmount)}</td>
-                              <td className="px-4 py-2 font-mono tabular">
-                                {outstanding === null ? <span className="text-neutral-300">…</span> : fmtGHS(outstanding)}
+                              <td className="px-4 py-2 font-mono text-xs text-neutral-500">
+                                {loan.staffId.slice(-8)}
                               </td>
-                              <td className="px-4 py-2 font-mono tabular">{fmtDate(loan.disbursedDate)}</td>
-                              <td className="px-4 py-2"><StatusBadge status={loan.status} /></td>
+                              <td className="px-4 py-2 font-mono tabular">
+                                {fmtGHS(loan.principalAmount)}
+                              </td>
+                              <td className="px-4 py-2 font-mono tabular">
+                                {outstanding === null ? (
+                                  <span className="text-neutral-300">…</span>
+                                ) : (
+                                  fmtGHS(outstanding)
+                                )}
+                              </td>
+                              <td className="px-4 py-2 font-mono tabular">
+                                {fmtDate(loan.disbursedDate)}
+                              </td>
                               <td className="px-4 py-2">
-                                <Link href={`/loans/${loan._id}`} className="text-primary-600 text-xs hover:underline">View</Link>
+                                <StatusBadge status={loan.status} />
+                              </td>
+                              <td className="px-4 py-2">
+                                <Link
+                                  href={`/loans/${loan._id}`}
+                                  className="text-primary-600 text-xs hover:underline"
+                                >
+                                  View
+                                </Link>
                               </td>
                             </tr>
                           );
@@ -529,18 +674,31 @@ export default function StaffDetailClient({ id }: { id: string }) {
                       <table className="w-full text-sm border-collapse">
                         <thead>
                           <tr className="border-b border-neutral-200 bg-neutral-50">
-                            {['Date','Loan Principal','Instalment #','Amount Applied'].map((h) => (
-                              <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
-                            ))}
+                            {['Date', 'Loan Principal', 'Instalment #', 'Amount Applied'].map(
+                              (h) => (
+                                <th
+                                  key={h}
+                                  className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide"
+                                >
+                                  {h}
+                                </th>
+                              ),
+                            )}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-neutral-100">
                           {offsetHistory.map((r) => (
                             <tr key={r._id} className="bg-accent-50">
-                              <td className="px-4 py-2 font-mono tabular">{r.paidDate ? fmtDate(r.paidDate) : '—'}</td>
-                              <td className="px-4 py-2 font-mono tabular">{fmtGHS(r.loanPrincipal)}</td>
+                              <td className="px-4 py-2 font-mono tabular">
+                                {r.paidDate ? fmtDate(r.paidDate) : '—'}
+                              </td>
+                              <td className="px-4 py-2 font-mono tabular">
+                                {fmtGHS(r.loanPrincipal)}
+                              </td>
                               <td className="px-4 py-2">{r.instalmentNumber}</td>
-                              <td className="px-4 py-2 font-mono tabular font-semibold text-accent-700">{fmtGHS(r.paidAmount)}</td>
+                              <td className="px-4 py-2 font-mono tabular font-semibold text-accent-700">
+                                {fmtGHS(r.paidAmount)}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -565,7 +723,9 @@ export default function StaffDetailClient({ id }: { id: string }) {
           iconKind="warning"
           footer={
             <>
-              <Button variant="secondary" onClick={() => setShowStatusModal(false)}>Cancel</Button>
+              <Button variant="secondary" onClick={() => setShowStatusModal(false)}>
+                Cancel
+              </Button>
               <Button
                 variant="danger"
                 loading={statusMutation.isPending}
@@ -576,7 +736,10 @@ export default function StaffDetailClient({ id }: { id: string }) {
             </>
           }
         >
-          <form onSubmit={statusForm.handleSubmit((v) => statusMutation.mutate(v))} className="space-y-4 mt-2">
+          <form
+            onSubmit={statusForm.handleSubmit((v) => statusMutation.mutate(v))}
+            className="space-y-4 mt-2"
+          >
             <Field label="New Status" required error={statusForm.formState.errors.status?.message}>
               <Select
                 {...statusForm.register('status')}
@@ -585,8 +748,16 @@ export default function StaffDetailClient({ id }: { id: string }) {
                 options={TERMINAL_STATUSES.map((s) => ({ value: s, label: s }))}
               />
             </Field>
-            <Field label="Effective Date" required error={statusForm.formState.errors.effectiveDate?.message}>
-              <Input {...statusForm.register('effectiveDate')} type="date" error={!!statusForm.formState.errors.effectiveDate} />
+            <Field
+              label="Effective Date"
+              required
+              error={statusForm.formState.errors.effectiveDate?.message}
+            >
+              <Input
+                {...statusForm.register('effectiveDate')}
+                type="date"
+                error={!!statusForm.formState.errors.effectiveDate}
+              />
             </Field>
             <Field label="Notes" error={statusForm.formState.errors.notes?.message}>
               <textarea
