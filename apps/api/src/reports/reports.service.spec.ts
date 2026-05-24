@@ -398,6 +398,133 @@ describe('ReportsService', () => {
     });
   });
 
+  describe('getFundSummary', () => {
+    const year = 2025;
+    const fromMonth = 1;
+    const toMonth = 12;
+
+    const staffSelectLeanExec = (docs: any[]) => ({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(docs),
+    });
+
+    const agg = (value: any) => ({ exec: jest.fn().mockResolvedValue(value) });
+
+    beforeEach(() => {
+      // order matches Promise.all in getFundSummary:
+      // [0] contrib breakdown
+      mockContribAggregate
+        .mockReturnValueOnce(agg([
+          { _id: { month: 1, year: 2025 }, totalExpected: 5000, totalCollected: 4800, missedCount: 1, partialCount: 0 },
+          { _id: { month: 2, year: 2025 }, totalExpected: 5000, totalCollected: 5000, missedCount: 0, partialCount: 0 },
+        ]))
+        // [3] all-time contributions
+        .mockReturnValueOnce(agg([{ _id: null, total: 100000 }]));
+
+      // [1] loans by status, [2] recovery, [4] all-time disbursed, [8] default detail
+      mockLoanAggregate
+        .mockReturnValueOnce(agg([
+          { _id: 'Active',    count: 10, totalAmount: 50000 },
+          { _id: 'Completed', count: 5,  totalAmount: 20000 },
+          { _id: 'Defaulted', count: 2,  totalAmount: 8000 },
+          { _id: 'WrittenOff', count: 1, totalAmount: 3000 },
+        ]))
+        .mockReturnValueOnce(agg([{ _id: null, totalRecovered: 5000, totalUnrecovered: 3000 }]))
+        .mockReturnValueOnce(agg([{ _id: null, total: 81000 }]))
+        .mockReturnValueOnce(agg([
+          { loanId: 'loan1', staffName: 'Alice', principalAmount: 8000, totalRecovered: 5000, badDebtAmount: 3000, settledAt: new Date('2025-03-01') },
+        ]));
+
+      // [5] active staff, [6] joiners, [7] exits
+      mockStaffFind
+        .mockReturnValueOnce(staffSelectLeanExec([{ _id: 's1' }, { _id: 's2' }, { _id: 's3' }]))
+        .mockReturnValueOnce(staffSelectLeanExec([{ _id: 's4' }]))
+        .mockReturnValueOnce(staffSelectLeanExec([]));
+    });
+
+    it('returns period with correct year and months', async () => {
+      const result = await service.getFundSummary(year, fromMonth, toMonth);
+      expect(result.period).toEqual({ year: 2025, fromMonth: 1, toMonth: 12 });
+    });
+
+    it('aggregates contribution totals from breakdown rows', async () => {
+      const result = await service.getFundSummary(year, fromMonth, toMonth);
+      expect(result.contributions.totalExpected).toBe(10000);
+      expect(result.contributions.totalCollected).toBe(9800);
+      expect(result.contributions.collectionRate).toBe(98);
+      expect(result.contributions.missedCount).toBe(1);
+      expect(result.contributions.partialCount).toBe(0);
+    });
+
+    it('aggregates loan counts and amounts by status', async () => {
+      const result = await service.getFundSummary(year, fromMonth, toMonth);
+      expect(result.loans.activeCount).toBe(10);
+      expect(result.loans.activeAmount).toBe(50000);
+      expect(result.loans.defaultedCount).toBe(2);
+      expect(result.loans.defaultedAmount).toBe(8000);
+      expect(result.loans.disbursedCount).toBe(18);
+    });
+
+    it('computes recovery rate correctly', async () => {
+      const result = await service.getFundSummary(year, fromMonth, toMonth);
+      expect(result.recovery.totalRecovered).toBe(5000);
+      expect(result.recovery.totalUnrecovered).toBe(3000);
+      expect(result.recovery.recoveryRate).toBe(63);
+    });
+
+    it('computes net fund balance', async () => {
+      const result = await service.getFundSummary(year, fromMonth, toMonth);
+      expect(result.fundBalance.totalContributionsAllTime).toBe(100000);
+      expect(result.fundBalance.totalDisbursedAllTime).toBe(81000);
+      expect(result.fundBalance.netBalance).toBe(19000);
+    });
+
+    it('reports membership counts', async () => {
+      const result = await service.getFundSummary(year, fromMonth, toMonth);
+      expect(result.membership.activeCount).toBe(3);
+      expect(result.membership.joinersInPeriod).toBe(1);
+      expect(result.membership.exitsInPeriod).toBe(0);
+    });
+
+    it('returns contribution breakdown rows', async () => {
+      const result = await service.getFundSummary(year, fromMonth, toMonth);
+      expect(result.contributionBreakdown).toHaveLength(2);
+      expect(result.contributionBreakdown[0].month).toBe(1);
+      expect(result.contributionBreakdown[0].totalCollected).toBe(4800);
+    });
+
+    it('returns defaultDetails rows', async () => {
+      const result = await service.getFundSummary(year, fromMonth, toMonth);
+      expect(result.defaultDetails).toHaveLength(1);
+      expect(result.defaultDetails[0].staffName).toBe('Alice');
+      expect(result.defaultDetails[0].badDebtAmount).toBe(3000);
+    });
+
+    it('handles zero totalExpected with collectionRate of 0', async () => {
+      mockContribAggregate
+        .mockReset()
+        .mockReturnValueOnce(agg([]))
+        .mockReturnValueOnce(agg([{ _id: null, total: 0 }]));
+      mockLoanAggregate
+        .mockReset()
+        .mockReturnValueOnce(agg([]))
+        .mockReturnValueOnce(agg([]))
+        .mockReturnValueOnce(agg([]))
+        .mockReturnValueOnce(agg([]));
+      mockStaffFind
+        .mockReset()
+        .mockReturnValueOnce(staffSelectLeanExec([]))
+        .mockReturnValueOnce(staffSelectLeanExec([]))
+        .mockReturnValueOnce(staffSelectLeanExec([]));
+
+      const result = await service.getFundSummary(year, fromMonth, toMonth);
+      expect(result.contributions.collectionRate).toBe(0);
+      expect(result.contributionBreakdown).toEqual([]);
+      expect(result.defaultDetails).toEqual([]);
+    });
+  });
+
   describe('getLoanStatement', () => {
     const staffId = 'staff1';
     const loanId = 'loan1';

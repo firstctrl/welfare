@@ -23,6 +23,10 @@ import {
   IDashboardStats,
   ILoanBorrower,
   ILoanStatement,
+  IFundSummaryReport,
+  IFundSummaryContributionBreakdownRow,
+  IFundSummaryLoanBreakdownRow,
+  IFundSummaryDefaultRow,
 } from '@welfare/shared';
 import { Contribution, ContributionDocument } from '../contributions/schemas/contribution.schema';
 import { Loan, LoanDocument } from '../loans/schemas/loan.schema';
@@ -939,5 +943,207 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
     } finally {
       await browser.close();
     }
+  }
+
+  async getFundSummary(year: number, fromMonth: number, toMonth: number): Promise<IFundSummaryReport> {
+    const periodStart = new Date(year, fromMonth - 1, 1);
+    const periodEnd   = new Date(year, toMonth, 0, 23, 59, 59);
+
+    const [
+      contribRows,
+      loanGroups,
+      recoveryGroups,
+      allTimeContribs,
+      allTimeLoans,
+      activeStaff,
+      joiners,
+      exits,
+      defaultRows,
+    ] = await Promise.all([
+      // 1. Per-month contribution breakdown
+      this.contribModel.aggregate([
+        { $match: { year, month: { $gte: fromMonth, $lte: toMonth }, isDebit: { $ne: true } } },
+        {
+          $group: {
+            _id: { month: '$month', year: '$year' },
+            totalExpected:  { $sum: '$expectedAmount' },
+            totalCollected: { $sum: '$paidAmount' },
+            missedCount:    { $sum: { $cond: [{ $eq: ['$status', 'Missed'] }, 1, 0] } },
+            partialCount:   { $sum: { $cond: [{ $eq: ['$status', 'Partial'] }, 1, 0] } },
+          },
+        },
+        { $sort: { '_id.month': 1 } },
+      ]).exec(),
+
+      // 2. Loan counts/amounts by status (disbursed in period)
+      this.loanModel.aggregate([
+        { $match: { disbursedDate: { $gte: periodStart, $lte: periodEnd } } },
+        {
+          $group: {
+            _id: '$status',
+            count:       { $sum: 1 },
+            totalAmount: { $sum: '$principalAmount' },
+          },
+        },
+      ]).exec(),
+
+      // 3. Recovery from defaulted/written-off/bad-debt loans disbursed in period
+      this.loanModel.aggregate([
+        {
+          $match: {
+            disbursedDate: { $gte: periodStart, $lte: periodEnd },
+            status: { $in: [LoanStatus.Defaulted, LoanStatus.WrittenOff, LoanStatus.BadDebt] },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalRecovered:   { $sum: { $add: ['$exitDeductionAmount', '$guarantorOffsetAmount'] } },
+            totalUnrecovered: { $sum: '$badDebtAmount' },
+          },
+        },
+      ]).exec(),
+
+      // 4a. All-time total contributions collected (non-debit)
+      this.contribModel.aggregate([
+        { $match: { isDebit: { $ne: true } } },
+        { $group: { _id: null, total: { $sum: '$paidAmount' } } },
+      ]).exec(),
+
+      // 4b. All-time total loans disbursed
+      this.loanModel.aggregate([
+        { $group: { _id: null, total: { $sum: '$principalAmount' } } },
+      ]).exec(),
+
+      // 5a. Active staff count
+      this.staffModel.find({ status: StaffStatus.Active }).select('_id').lean().exec(),
+
+      // 5b. Joiners in period
+      this.staffModel.find({ createdAt: { $gte: periodStart, $lte: periodEnd } }).select('_id').lean().exec(),
+
+      // 5c. Exits in period (non-Active status with updatedAt in period)
+      this.staffModel.find({
+        status: { $in: [StaffStatus.Resigned, StaffStatus.Retired, StaffStatus.Dismissed, StaffStatus.Deceased] },
+        updatedAt: { $gte: periodStart, $lte: periodEnd },
+      }).select('_id').lean().exec(),
+
+      // 6. Defaulted loan detail rows
+      this.loanModel.aggregate([
+        {
+          $match: {
+            disbursedDate: { $gte: periodStart, $lte: periodEnd },
+            status: { $in: [LoanStatus.Defaulted, LoanStatus.WrittenOff, LoanStatus.BadDebt] },
+          },
+        },
+        {
+          $lookup: {
+            from: 'staff',
+            let: { sid: '$staffId' },
+            pipeline: [{ $match: { $expr: { $eq: [{ $toString: '$_id' }, '$$sid'] } } }],
+            as: 'staffDoc',
+          },
+        },
+        { $unwind: { path: '$staffDoc', preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            loanId:          { $toString: '$_id' },
+            staffName:       { $ifNull: ['$staffDoc.fullName', 'Unknown'] },
+            principalAmount: 1,
+            totalRecovered:  { $add: ['$exitDeductionAmount', '$guarantorOffsetAmount'] },
+            badDebtAmount:   1,
+            settledAt:       1,
+          },
+        },
+        { $sort: { settledAt: -1 } },
+      ]).exec(),
+    ]);
+
+    // ── Contribution summary ──
+    const contributionBreakdown: IFundSummaryContributionBreakdownRow[] = (contribRows as any[]).map(r => ({
+      month:          r._id.month,
+      year:           r._id.year,
+      totalExpected:  r.totalExpected,
+      totalCollected: r.totalCollected,
+      missedCount:    r.missedCount,
+      partialCount:   r.partialCount,
+    }));
+    const totalExpected  = contributionBreakdown.reduce((s, r) => s + r.totalExpected, 0);
+    const totalCollected = contributionBreakdown.reduce((s, r) => s + r.totalCollected, 0);
+    const totalMissed    = contributionBreakdown.reduce((s, r) => s + r.missedCount, 0);
+    const totalPartial   = contributionBreakdown.reduce((s, r) => s + r.partialCount, 0);
+    const collectionRate = totalExpected > 0 ? Math.round((totalCollected / totalExpected) * 100) : 0;
+
+    // ── Loan summary ──
+    const statusMap = new Map<string, { count: number; totalAmount: number }>(
+      (loanGroups as any[]).map(g => [g._id, { count: g.count, totalAmount: g.totalAmount }]),
+    );
+    const ls = (status: string) => statusMap.get(status) ?? { count: 0, totalAmount: 0 };
+    const loanBreakdown: IFundSummaryLoanBreakdownRow[] = (loanGroups as any[]).map(g => ({
+      status:      g._id,
+      count:       g.count,
+      totalAmount: g.totalAmount,
+    }));
+
+    // ── Recovery ──
+    const rec = (recoveryGroups as any[])[0] ?? { totalRecovered: 0, totalUnrecovered: 0 };
+    const totalRecovered   = rec.totalRecovered ?? 0;
+    const totalUnrecovered = rec.totalUnrecovered ?? 0;
+    const totalDefaultedAmount = totalRecovered + totalUnrecovered;
+    const recoveryRate = totalDefaultedAmount > 0 ? Math.round((totalRecovered / totalDefaultedAmount) * 100) : 0;
+
+    // ── Fund balance ──
+    const totalContributionsAllTime = (allTimeContribs as any[])[0]?.total ?? 0;
+    const totalDisbursedAllTime     = (allTimeLoans as any[])[0]?.total ?? 0;
+
+    // ── Default detail rows ──
+    const defaultDetails: IFundSummaryDefaultRow[] = (defaultRows as any[]).map(r => ({
+      loanId:          r.loanId,
+      staffName:       r.staffName,
+      principalAmount: r.principalAmount,
+      totalRecovered:  r.totalRecovered ?? 0,
+      badDebtAmount:   r.badDebtAmount ?? 0,
+      settledAt:       r.settledAt ? new Date(r.settledAt).toISOString() : '',
+    }));
+
+    return {
+      period: { year, fromMonth, toMonth },
+      contributions: {
+        totalExpected,
+        totalCollected,
+        collectionRate,
+        missedCount:  totalMissed,
+        partialCount: totalPartial,
+      },
+      loans: {
+        disbursedCount:   (loanGroups as any[]).reduce((s: number, g: any) => s + g.count, 0),
+        disbursedAmount:  (loanGroups as any[]).reduce((s: number, g: any) => s + g.totalAmount, 0),
+        activeCount:      ls(LoanStatus.Active).count,
+        activeAmount:     ls(LoanStatus.Active).totalAmount,
+        completedCount:   ls(LoanStatus.Completed).count,
+        completedAmount:  ls(LoanStatus.Completed).totalAmount,
+        defaultedCount:   ls(LoanStatus.Defaulted).count,
+        defaultedAmount:  ls(LoanStatus.Defaulted).totalAmount,
+        writtenOffCount:  ls(LoanStatus.WrittenOff).count,
+        writtenOffAmount: ls(LoanStatus.WrittenOff).totalAmount,
+      },
+      recovery: {
+        totalRecovered,
+        totalUnrecovered,
+        recoveryRate,
+      },
+      fundBalance: {
+        totalContributionsAllTime,
+        totalDisbursedAllTime,
+        netBalance: totalContributionsAllTime - totalDisbursedAllTime,
+      },
+      membership: {
+        activeCount:     (activeStaff as any[]).length,
+        joinersInPeriod: (joiners as any[]).length,
+        exitsInPeriod:   (exits as any[]).length,
+      },
+      contributionBreakdown,
+      loanBreakdown,
+      defaultDetails,
+    };
   }
 }
