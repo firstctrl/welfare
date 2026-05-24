@@ -45,6 +45,15 @@ export type {
   ILoanBorrower,
   ILoanStatement,
   ILoanStatementInstalment,
+  IFundSummaryReport,
+  IFundSummaryContributions,
+  IFundSummaryLoans,
+  IFundSummaryRecovery,
+  IFundSummaryBalance,
+  IFundSummaryMembership,
+  IFundSummaryDefaultRow,
+  IFundSummaryContributionBreakdownRow,
+  IFundSummaryLoanBreakdownRow,
 } from './interfaces/report.interface';
 
 // DTOs

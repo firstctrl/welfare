@@ -210,3 +210,78 @@ export interface ILoanStatement {
   };
   instalments: ILoanStatementInstalment[];
 }
+
+export interface IFundSummaryContributions {
+  totalExpected: number;
+  totalCollected: number;
+  collectionRate: number;
+  missedCount: number;
+  partialCount: number;
+}
+
+export interface IFundSummaryLoans {
+  disbursedCount: number;
+  disbursedAmount: number;
+  activeCount: number;
+  activeAmount: number;
+  completedCount: number;
+  completedAmount: number;
+  defaultedCount: number;
+  defaultedAmount: number;
+  writtenOffCount: number;
+  writtenOffAmount: number;
+}
+
+export interface IFundSummaryRecovery {
+  totalRecovered: number;
+  totalUnrecovered: number;
+  recoveryRate: number;
+}
+
+export interface IFundSummaryBalance {
+  totalContributionsAllTime: number;
+  totalDisbursedAllTime: number;
+  netBalance: number;
+}
+
+export interface IFundSummaryMembership {
+  activeCount: number;
+  joinersInPeriod: number;
+  exitsInPeriod: number;
+}
+
+export interface IFundSummaryDefaultRow {
+  loanId: string;
+  staffName: string;
+  principalAmount: number;
+  totalRecovered: number;
+  badDebtAmount: number;
+  settledAt: string;
+}
+
+export interface IFundSummaryContributionBreakdownRow {
+  month: number;
+  year: number;
+  totalExpected: number;
+  totalCollected: number;
+  missedCount: number;
+  partialCount: number;
+}
+
+export interface IFundSummaryLoanBreakdownRow {
+  status: string;
+  count: number;
+  totalAmount: number;
+}
+
+export interface IFundSummaryReport {
+  period: { year: number; fromMonth: number; toMonth: number };
+  contributions: IFundSummaryContributions;
+  loans: IFundSummaryLoans;
+  recovery: IFundSummaryRecovery;
+  fundBalance: IFundSummaryBalance;
+  membership: IFundSummaryMembership;
+  contributionBreakdown: IFundSummaryContributionBreakdownRow[];
+  loanBreakdown: IFundSummaryLoanBreakdownRow[];
+  defaultDetails: IFundSummaryDefaultRow[];
+}
