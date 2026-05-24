@@ -154,6 +154,39 @@ export function FundSummaryPanel() {
 
   return (
     <div className="space-y-6">
+      {/* All-time overview — unaffected by filters */}
+      {data && (
+        <div className="rounded-md border border-neutral-200 bg-neutral-50 px-4 py-3">
+          <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wide mb-3">All-Time Fund Overview</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <KpiCard
+              label="Net Fund Balance"
+              value={fmtGHS(data.fundBalance.netBalance)}
+              icon={TrendingUp}
+              iconKind={data.fundBalance.netBalance >= 0 ? 'success' : 'danger'}
+            />
+            <KpiCard
+              label="Total Contributions"
+              value={fmtGHS(data.fundBalance.totalContributionsAllTime)}
+              icon={Banknote}
+              iconKind="success"
+            />
+            <KpiCard
+              label="Total Disbursed"
+              value={fmtGHS(data.fundBalance.totalDisbursedAllTime)}
+              icon={Banknote}
+              iconKind="primary"
+            />
+            <KpiCard
+              label="Active Members"
+              value={String(data.membership.activeCount)}
+              icon={Users}
+              iconKind="primary"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Filter bar */}
       <div className="flex flex-wrap items-end gap-4 p-4 bg-neutral-50 border border-neutral-200 rounded-md">
         <Field label="Year">
@@ -218,67 +251,65 @@ export function FundSummaryPanel() {
 
       {data && (
         <>
-          {/* KPI row 1: contributions + membership */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <KpiCard
-              label="Contributions Collected"
-              value={fmtGHS(data.contributions.totalCollected)}
-              subtext={`Expected: ${fmtGHS(data.contributions.totalExpected)}`}
-              icon={Banknote}
-              iconKind="success"
-            />
-            <KpiCard
-              label="Collection Rate"
-              value={`${data.contributions.collectionRate}%`}
-              icon={BarChart3}
-              iconKind={data.contributions.collectionRate >= 90 ? 'success' : data.contributions.collectionRate >= 70 ? 'warning' : 'danger'}
-            />
-            <KpiCard
-              label="Net Fund Balance"
-              value={fmtGHS(data.fundBalance.netBalance)}
-              subtext={`Disbursed all-time: ${fmtGHS(data.fundBalance.totalDisbursedAllTime)}`}
-              icon={TrendingUp}
-              iconKind={data.fundBalance.netBalance >= 0 ? 'success' : 'danger'}
-            />
-            <KpiCard
-              label="Active Members"
-              value={String(data.membership.activeCount)}
-              subtext={`+${data.membership.joinersInPeriod} joined · ${data.membership.exitsInPeriod} exited`}
-              icon={Users}
-              iconKind="primary"
-            />
-          </div>
-
-          {/* KPI row 2: loans */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <KpiCard
-              label="Loans Disbursed"
-              value={fmtGHS(data.loans.disbursedAmount)}
-              subtext={`${data.loans.disbursedCount} loans`}
-              icon={Banknote}
-              iconKind="primary"
-            />
-            <KpiCard
-              label="Defaulted Loans"
-              value={fmtGHS(data.loans.defaultedAmount)}
-              subtext={`${data.loans.defaultedCount} loans`}
-              icon={AlertCircle}
-              iconKind={data.loans.defaultedCount === 0 ? 'success' : 'danger'}
-            />
-            <KpiCard
-              label="Recovery Rate"
-              value={`${data.recovery.recoveryRate}%`}
-              subtext={`Recovered: ${fmtGHS(data.recovery.totalRecovered)}`}
-              icon={BarChart3}
-              iconKind={data.recovery.recoveryRate >= 80 ? 'success' : data.recovery.recoveryRate >= 50 ? 'warning' : 'danger'}
-            />
-            <KpiCard
-              label="Active Loans"
-              value={fmtGHS(data.loans.activeAmount)}
-              subtext={`${data.loans.activeCount} loans outstanding`}
-              icon={TrendingUp}
-              iconKind="warning"
-            />
+          {/* Period-filtered KPIs */}
+          <div>
+            <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wide mb-3">Period Summary</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <KpiCard
+                label="Contributions Collected"
+                value={fmtGHS(data.contributions.totalCollected)}
+                subtext={`Expected: ${fmtGHS(data.contributions.totalExpected)}`}
+                icon={Banknote}
+                iconKind="success"
+              />
+              <KpiCard
+                label="Collection Rate"
+                value={`${data.contributions.collectionRate}%`}
+                subtext={`${data.contributions.missedCount} missed · ${data.contributions.partialCount} partial`}
+                icon={BarChart3}
+                iconKind={data.contributions.collectionRate >= 90 ? 'success' : data.contributions.collectionRate >= 70 ? 'warning' : 'danger'}
+              />
+              <KpiCard
+                label="Loans Disbursed"
+                value={fmtGHS(data.loans.disbursedAmount)}
+                subtext={`${data.loans.disbursedCount} loans`}
+                icon={Banknote}
+                iconKind="primary"
+              />
+              <KpiCard
+                label="Defaulted Loans"
+                value={fmtGHS(data.loans.defaultedAmount)}
+                subtext={`${data.loans.defaultedCount} loans`}
+                icon={AlertCircle}
+                iconKind={data.loans.defaultedCount === 0 ? 'success' : 'danger'}
+              />
+              <KpiCard
+                label="Recovery Rate"
+                value={`${data.recovery.recoveryRate}%`}
+                subtext={`Recovered: ${fmtGHS(data.recovery.totalRecovered)}`}
+                icon={BarChart3}
+                iconKind={data.recovery.recoveryRate >= 80 ? 'success' : data.recovery.recoveryRate >= 50 ? 'warning' : 'danger'}
+              />
+              <KpiCard
+                label="Active Loans"
+                value={fmtGHS(data.loans.activeAmount)}
+                subtext={`${data.loans.activeCount} loans outstanding`}
+                icon={TrendingUp}
+                iconKind="warning"
+              />
+              <KpiCard
+                label="New Joiners"
+                value={String(data.membership.joinersInPeriod)}
+                icon={Users}
+                iconKind="success"
+              />
+              <KpiCard
+                label="Exits"
+                value={String(data.membership.exitsInPeriod)}
+                icon={Users}
+                iconKind={data.membership.exitsInPeriod === 0 ? 'success' : 'warning'}
+              />
+            </div>
           </div>
 
           {/* Detail tables */}
