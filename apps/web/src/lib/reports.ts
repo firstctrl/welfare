@@ -12,6 +12,7 @@ import type {
   IDashboardStats,
   ILoanBorrower,
   ILoanStatement,
+  IFundSummaryReport,
 } from '@welfare/shared';
 
 export interface MonthlyContribParams {
@@ -195,4 +196,29 @@ export async function sendLoanStatement(
 ): Promise<{ sent: boolean; email: string }> {
   const { data } = await apiClient.post('/reports/loans/staff-statement/send', { staffId, loanId });
   return data;
+}
+
+export interface FundSummaryParams {
+  year: number;
+  fromMonth?: number;
+  toMonth?: number;
+  quarter?: 1 | 2 | 3 | 4;
+}
+
+export async function getFundSummary(params: FundSummaryParams): Promise<IFundSummaryReport> {
+  const { data } = await apiClient.get('/reports/fund-summary', { params });
+  return data;
+}
+
+export function buildFundSummaryDownloadUrl(
+  sub: 'contributions' | 'loans' | 'defaults',
+  params: FundSummaryParams,
+  format: 'csv' | 'pdf',
+): string {
+  const base = (apiClient.defaults.baseURL ?? '').replace(/\/$/, '');
+  const q = new URLSearchParams({ year: String(params.year), format });
+  if (params.fromMonth) q.set('fromMonth', String(params.fromMonth));
+  if (params.toMonth)   q.set('toMonth',   String(params.toMonth));
+  if (params.quarter)   q.set('quarter',   String(params.quarter));
+  return `${base}/reports/fund-summary/${sub}?${q.toString()}`;
 }
