@@ -6,7 +6,7 @@ import { EmailTriggerSource, StaffStatus } from '@welfare/shared';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ReportsService } from './reports.service';
-import { ReportQueryDto } from './dto/report-query.dto';
+import { ReportQueryDto, FundSummaryQueryDto } from './dto/report-query.dto';
 import { EmailService } from '../email/email.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
@@ -63,6 +63,26 @@ const CSV_COLUMNS = {
     { header: 'Status', field: 'status' },
     { header: 'Outstanding Loans (GHS)', field: 'outstandingLoanBalance' },
     { header: 'Missed Contributions', field: 'missedContributionsCount' },
+  ],
+  fundSummaryContributions: [
+    { header: 'Month',           field: 'month' },
+    { header: 'Year',            field: 'year' },
+    { header: 'Expected (GHS)',  field: 'totalExpected' },
+    { header: 'Collected (GHS)', field: 'totalCollected' },
+    { header: 'Missed',          field: 'missedCount' },
+    { header: 'Partial',         field: 'partialCount' },
+  ],
+  fundSummaryLoans: [
+    { header: 'Status',      field: 'status' },
+    { header: 'Count',       field: 'count' },
+    { header: 'Total (GHS)', field: 'totalAmount' },
+  ],
+  fundSummaryDefaults: [
+    { header: 'Staff Name',      field: 'staffName' },
+    { header: 'Principal (GHS)', field: 'principalAmount' },
+    { header: 'Recovered (GHS)', field: 'totalRecovered' },
+    { header: 'Bad Debt (GHS)',  field: 'badDebtAmount' },
+    { header: 'Settled At',      field: 'settledAt' },
   ],
 };
 
@@ -338,6 +358,90 @@ export class ReportsController {
 
     const job = await this.bulkQueue.add('bulk-send', { staffIds: ids, year, triggeredBy: 'manual' });
     return { jobId: job.id, queued: ids.length };
+  }
+
+  @Get('fund-summary')
+  @RequirePermission(AppModule.Reports, 'readonly')
+  async getFundSummary(@Query() dto: FundSummaryQueryDto) {
+    const quarterMap: Record<number, [number, number]> = { 1: [1,3], 2: [4,6], 3: [7,9], 4: [10,12] };
+    let fromMonth = dto.fromMonth ?? 1;
+    let toMonth   = dto.toMonth ?? 12;
+    if (dto.quarter) [fromMonth, toMonth] = quarterMap[dto.quarter];
+    return this.reportsService.getFundSummary(dto.year, fromMonth, toMonth);
+  }
+
+  @Get('fund-summary/contributions')
+  @RequirePermission(AppModule.Reports, 'readonly')
+  async getFundSummaryContributions(
+    @Query() dto: FundSummaryQueryDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const quarterMap: Record<number, [number, number]> = { 1: [1,3], 2: [4,6], 3: [7,9], 4: [10,12] };
+    let fromMonth = dto.fromMonth ?? 1;
+    let toMonth   = dto.toMonth ?? 12;
+    if (dto.quarter) [fromMonth, toMonth] = quarterMap[dto.quarter];
+    const summary = await this.reportsService.getFundSummary(dto.year, fromMonth, toMonth);
+    if (dto.format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="fund-contributions-${dto.year}.csv"`);
+      return this.reportsService.generateCsv(
+        summary.contributionBreakdown,
+        CSV_COLUMNS.fundSummaryContributions.map(c => c.field),
+      );
+    }
+    return summary.contributionBreakdown;
+  }
+
+  @Get('fund-summary/loans')
+  @RequirePermission(AppModule.Reports, 'readonly')
+  async getFundSummaryLoans(
+    @Query() dto: FundSummaryQueryDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const quarterMap: Record<number, [number, number]> = { 1: [1,3], 2: [4,6], 3: [7,9], 4: [10,12] };
+    let fromMonth = dto.fromMonth ?? 1;
+    let toMonth   = dto.toMonth ?? 12;
+    if (dto.quarter) [fromMonth, toMonth] = quarterMap[dto.quarter];
+    const summary = await this.reportsService.getFundSummary(dto.year, fromMonth, toMonth);
+    if (dto.format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="fund-loans-${dto.year}.csv"`);
+      return this.reportsService.generateCsv(summary.loanBreakdown, CSV_COLUMNS.fundSummaryLoans.map(c => c.field));
+    }
+    if (dto.format === 'pdf') {
+      const pdf = await this.reportsService.generatePdf(`Fund Summary — Loans ${dto.year}`, CSV_COLUMNS.fundSummaryLoans, summary.loanBreakdown);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="fund-loans-${dto.year}.pdf"`);
+      res.end(pdf);
+      return;
+    }
+    return summary.loanBreakdown;
+  }
+
+  @Get('fund-summary/defaults')
+  @RequirePermission(AppModule.Reports, 'readonly')
+  async getFundSummaryDefaults(
+    @Query() dto: FundSummaryQueryDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const quarterMap: Record<number, [number, number]> = { 1: [1,3], 2: [4,6], 3: [7,9], 4: [10,12] };
+    let fromMonth = dto.fromMonth ?? 1;
+    let toMonth   = dto.toMonth ?? 12;
+    if (dto.quarter) [fromMonth, toMonth] = quarterMap[dto.quarter];
+    const summary = await this.reportsService.getFundSummary(dto.year, fromMonth, toMonth);
+    if (dto.format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="fund-defaults-${dto.year}.csv"`);
+      return this.reportsService.generateCsv(summary.defaultDetails, CSV_COLUMNS.fundSummaryDefaults.map(c => c.field));
+    }
+    if (dto.format === 'pdf') {
+      const pdf = await this.reportsService.generatePdf(`Fund Summary — Defaulted Loans ${dto.year}`, CSV_COLUMNS.fundSummaryDefaults, summary.defaultDetails);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="fund-defaults-${dto.year}.pdf"`);
+      res.end(pdf);
+      return;
+    }
+    return summary.defaultDetails;
   }
 
   @Get('contributions/bulk-send/status')
