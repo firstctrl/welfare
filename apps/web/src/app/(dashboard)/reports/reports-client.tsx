@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { FundSummaryPanel } from './fund-summary-panel';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   createColumnHelper,
@@ -988,6 +989,7 @@ function SimplePanel<T>({
 // ── Sidebar nav ───────────────────────────────────────────────────────────────
 
 const SECTIONS = [
+  { id: 'fund-summary',    label: 'Fund Summary' },
   { id: 'monthly-contrib', label: 'Contribution Statement' },
   { id: 'bulk-statements', label: 'Bulk Statements' },
   { id: 'loan-statement', label: 'Loan Statement' },
@@ -1006,7 +1008,7 @@ const SECTIONS = [
 export function ReportsClient() {
   const permission = usePermission(AppModule.Reports);
   const canSend = permission === 'full';
-  const [active, setActive] = useState('monthly-contrib');
+  const [active, setActive] = useState('fund-summary');
   const activeSection = SECTIONS.find(s => s.id === active);
 
   return (
@@ -1037,6 +1039,7 @@ export function ReportsClient() {
         <Card className="min-h-[400px]">
           <CardHeader title={activeSection?.label ?? ''} />
           <CardBody>
+            {active === 'fund-summary' && <FundSummaryPanel />}
             {active === 'monthly-contrib' && <StaffStatementPanel canSend={canSend} />}
             {active === 'bulk-statements' && <BulkStatementsPanel canSend={canSend} />}
             {active === 'loan-statement' && <LoanStatementPanel canSend={canSend} />}
