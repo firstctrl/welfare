@@ -274,6 +274,69 @@ export interface IFundSummaryLoanBreakdownRow {
   totalAmount: number;
 }
 
+export interface IRemittanceReportRow {
+  period: string;
+  receiptDate: string;
+  grossAmount: number;
+  charges: number;
+  netPayable: number;
+}
+
+export interface IRemittanceReport {
+  rows: IRemittanceReportRow[];
+  totalGross: number;
+  totalCharges: number;
+  totalNet: number;
+}
+
+export interface IInvestmentRow {
+  id: string;
+  purchaseDate: string;
+  description: string;
+  cost: number;
+  maturityDate: string;
+  faceValue: number;
+  interest: number;
+  rate: number;
+  status: 'Active' | 'Matured';
+  instruction: 'One-Time' | 'Roll-Over';
+}
+
+export interface IPayOffPreview {
+  principal: number;
+  totalInterest: number;
+  alreadyPaid: number;
+  remainingPrincipal: number;
+  remainingInterest: number;
+  discountApplied: boolean;
+  discountRate: number;
+  discountAmount: number;
+  netPayable: number;
+  tier: 1 | 2;
+  withinDiscountWindow: boolean;
+}
+
+export interface IDiscountRecord {
+  id: string;
+  staffId: string;
+  staffName: string;
+  loanId: string;
+  discountType: 'Origination' | 'PayOff';
+  discountRate: number;
+  discountAmount: number;
+  dateGranted: string;
+  cancelled: boolean;
+}
+
+export interface IFundSummaryDiscountRow {
+  staffName: string;
+  loanReference: string;
+  discountType: 'Origination' | 'PayOff';
+  rate: number;
+  amount: number;
+  dateGranted: string;
+}
+
 export interface IFundSummaryReport {
   period: { year: number; fromMonth: number; toMonth: number };
   contributions: IFundSummaryContributions;
@@ -284,4 +347,6 @@ export interface IFundSummaryReport {
   contributionBreakdown: IFundSummaryContributionBreakdownRow[];
   loanBreakdown: IFundSummaryLoanBreakdownRow[];
   defaultDetails: IFundSummaryDefaultRow[];
+  totalDiscountsGiven: number;
+  discountBreakdown: IFundSummaryDiscountRow[];
 }
