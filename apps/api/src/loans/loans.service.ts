@@ -800,7 +800,7 @@ export class LoansService implements OnModuleInit {
     );
 
     const remainingPrincipal = round2(remaining.reduce((s, r) => s + ((r.principalAmount ?? 0) - (r.status === LoanRepaymentStatus.Partial ? r.paidAmount * ((r.principalAmount ?? 0) / r.dueAmount) : 0)), 0));
-    const remainingInterest = round2(remaining.reduce((s, r) => s + (r.interestAmount ?? 0), 0));
+    const remainingInterest = round2(remaining.reduce((s, r) => s + ((r.interestAmount ?? 0) - (r.status === LoanRepaymentStatus.Partial ? r.paidAmount * ((r.interestAmount ?? 0) / r.dueAmount) : 0)), 0));
 
     const tier: 1 | 2 = loan.tenureMonths <= 6 ? 1 : 2;
     const monthsElapsed = monthsBetween(loan.disbursedDate, new Date());
