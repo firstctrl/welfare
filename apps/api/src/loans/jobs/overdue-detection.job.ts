@@ -168,14 +168,20 @@ export class OverdueDetectionJob {
         const N = unpaid.length;
         if (N > 0) {
           const newTotalInterest = round2(newTotalRepayable - loan.principalAmount);
-          const interestPerInst = round2(newTotalInterest / loan.tenureMonths);
+          const paidInterest = round2(
+            allRepayments
+              .filter(r => !['Pending', 'Partial', 'Overdue'].includes(r.status))
+              .reduce((s, r) => s + (r.interestAmount ?? 0), 0),
+          );
+          const remainingInterest = round2(Math.max(0, newTotalInterest - paidInterest));
+          const interestPerInst = round2(remainingInterest / N);
           const baseNewDue = round2(newOutstanding / N);
 
           for (let i = 0; i < N; i++) {
             const inst = unpaid[i];
             const isLast = i === N - 1;
             const dueAmount = isLast ? round2(newOutstanding - baseNewDue * (N - 1)) : baseNewDue;
-            const interestAmount = isLast ? round2(newTotalInterest - interestPerInst * (loan.tenureMonths - 1)) : interestPerInst;
+            const interestAmount = isLast ? round2(remainingInterest - interestPerInst * (N - 1)) : interestPerInst;
             const principalAmount = round2(Math.max(0, dueAmount - interestAmount));
             await this.repaymentModel.updateOne({ _id: inst._id }, { dueAmount, principalAmount, interestAmount });
           }
