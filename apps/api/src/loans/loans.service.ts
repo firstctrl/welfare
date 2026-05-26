@@ -249,6 +249,19 @@ export class LoansService implements OnModuleInit {
       this.logger.warn(`Loan schedule email failed: ${(err as Error).message}`),
     );
 
+    // Record origination discount for Tier 1 loans (tenureMonths ≤ 6, rate 10% vs 15%)
+    if (dto.tenureMonths <= 6) {
+      const discountAmount = round2(dto.principalAmount * 0.05);
+      void this.discountModel.create({
+        staffId: dto.staffId,
+        loanId,
+        discountType: 'Origination',
+        discountRate: 5,
+        discountAmount,
+        dateGranted: disbursedDate,
+      }).catch(err => this.logger.warn(`Failed to create origination discount: ${err.message}`));
+    }
+
     return loan;
   }
 
