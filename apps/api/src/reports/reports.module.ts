@@ -11,6 +11,7 @@ import { ImportBatch, ImportBatchSchema } from '../contributions/schemas/import-
 import { Loan, LoanSchema } from '../loans/schemas/loan.schema';
 import { LoanRepayment, LoanRepaymentSchema } from '../loans/schemas/loan-repayment.schema';
 import { Staff, StaffSchema } from '../staff/schemas/staff.schema';
+import { Discount, DiscountSchema } from '../loans/schemas/discount.schema';
 
 @Module({
   imports: [
@@ -20,11 +21,13 @@ import { Staff, StaffSchema } from '../staff/schemas/staff.schema';
       { name: Loan.name, schema: LoanSchema },
       { name: LoanRepayment.name, schema: LoanRepaymentSchema },
       { name: Staff.name, schema: StaffSchema },
+      { name: Discount.name, schema: DiscountSchema },
     ]),
     BullModule.registerQueue({ name: 'bulk-statements' }),
     SystemConfigModule,
   ],
   controllers: [ReportsController],
   providers: [ReportsService, BulkStatementsProcessor, BulkStatementsCronService],
+  exports: [ReportsService],
 })
 export class ReportsModule {}
