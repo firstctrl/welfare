@@ -30,6 +30,9 @@ export class Loan {
   @Prop({ min: 0, default: 0 }) guarantorRestitutionOwed!: number;
   @Prop({ min: 0, default: 0 }) guarantorRestitutionPaid!: number;
   @Prop() recoveryRanAt?: Date;
+  @Prop() forfeitedAt?: Date;
+  @Prop() payOffDate?: Date;
+  @Prop({ min: 0, default: 0 }) payOffAmountReceived?: number;
 }
 
 export const LoanSchema = SchemaFactory.createForClass(Loan);
