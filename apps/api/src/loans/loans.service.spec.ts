@@ -4,6 +4,7 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { LoansService } from './loans.service';
 import { Loan } from './schemas/loan.schema';
 import { LoanRepayment } from './schemas/loan-repayment.schema';
+import { Discount } from './schemas/discount.schema';
 import { StaffService } from '../staff/staff.service';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { AuditService } from '../audit/audit.service';
@@ -74,6 +75,7 @@ describe('LoansService', () => {
         LoansService,
         { provide: getModelToken(Loan.name), useValue: loanModel },
         { provide: getModelToken(LoanRepayment.name), useValue: repaymentModel },
+        { provide: getModelToken(Discount.name), useValue: { create: jest.fn().mockResolvedValue({}), findOne: jest.fn(), updateOne: jest.fn() } },
         { provide: StaffService, useValue: staffService },
         { provide: SystemConfigService, useValue: configService },
         { provide: AuditService, useValue: auditService },
