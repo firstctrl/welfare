@@ -1,5 +1,5 @@
 import { apiClient } from './api-client';
-import type { ILoan, ILoanRepayment, ILoanRepaymentImportBatch, ILoanRecordsImportBatch, PaginatedResult, LoanStatus } from '@welfare/shared';
+import type { ILoan, ILoanRepayment, ILoanRepaymentImportBatch, ILoanRecordsImportBatch, PaginatedResult, LoanStatus, IPayOffPreview } from '@welfare/shared';
 
 export interface LoanFilters {
   staffId?: string;
@@ -165,5 +165,18 @@ export async function getLoansByGuarantor(
   limit = 50,
 ): Promise<PaginatedResult<ILoan>> {
   const { data } = await apiClient.get(`/loans/guarantor/${staffId}`, { params: { page, limit } });
+  return data;
+}
+
+export async function getPayOffPreview(loanId: string): Promise<IPayOffPreview> {
+  const { data } = await apiClient.get(`/loans/${loanId}/payoff-preview`);
+  return data;
+}
+
+export async function processPayOff(
+  loanId: string,
+  payload: { amountReceived: number; paymentDate: string },
+): Promise<unknown> {
+  const { data } = await apiClient.post(`/loans/${loanId}/payoff`, payload);
   return data;
 }

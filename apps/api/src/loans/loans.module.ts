@@ -8,10 +8,12 @@ import { LoansImportService } from './loans.import.service';
 import { LoansRecordsImportService } from './loans.records.import.service';
 import { OverdueDetectionJob } from './jobs/overdue-detection.job';
 import { DefaultRecoveryJob } from './jobs/default-recovery.job';
+import { PaymentReminderJob } from './jobs/payment-reminder.job';
 import { Loan, LoanSchema } from './schemas/loan.schema';
 import { LoanRepayment, LoanRepaymentSchema } from './schemas/loan-repayment.schema';
 import { LoanImportBatch, LoanImportBatchSchema } from './schemas/loan-import-batch.schema';
 import { LoanRecordsImportBatch, LoanRecordsImportBatchSchema } from './schemas/loan-records-import-batch.schema';
+import { Discount, DiscountSchema } from './schemas/discount.schema';
 import { Staff, StaffSchema } from '../staff/schemas/staff.schema';
 import { LoanScheduleSenderService } from './loan-schedule-sender.service';
 import { StaffModule } from '../staff/staff.module';
@@ -26,6 +28,7 @@ import { ContributionsModule } from '../contributions/contributions.module';
       { name: LoanImportBatch.name, schema: LoanImportBatchSchema },
       { name: LoanRecordsImportBatch.name, schema: LoanRecordsImportBatchSchema },
       { name: Staff.name, schema: StaffSchema },
+      { name: Discount.name, schema: DiscountSchema },
     ]),
     MulterModule.register({}),
     StaffModule,
@@ -33,7 +36,7 @@ import { ContributionsModule } from '../contributions/contributions.module';
     ContributionsModule,
   ],
   controllers: [LoansController, StaffLoansController],
-  providers: [LoansService, LoansImportService, LoansRecordsImportService, OverdueDetectionJob, DefaultRecoveryJob, LoanScheduleSenderService],
+  providers: [LoansService, LoansImportService, LoansRecordsImportService, OverdueDetectionJob, DefaultRecoveryJob, LoanScheduleSenderService, PaymentReminderJob],
   exports: [LoansService],
 })
 export class LoansModule {}

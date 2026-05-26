@@ -33,6 +33,7 @@ import { Loan, LoanDocument } from '../loans/schemas/loan.schema';
 import { LoanRepayment, LoanRepaymentDocument } from '../loans/schemas/loan-repayment.schema';
 import { Staff, StaffDocument } from '../staff/schemas/staff.schema';
 import { ImportBatch, ImportBatchDocument } from '../contributions/schemas/import-batch.schema';
+import { Discount, DiscountDocument } from '../loans/schemas/discount.schema';
 
 @Injectable()
 export class ReportsService {
@@ -44,6 +45,7 @@ export class ReportsService {
     @InjectModel(LoanRepayment.name) private readonly repaymentModel: Model<LoanRepaymentDocument>,
     @InjectModel(Staff.name) private readonly staffModel: Model<StaffDocument>,
     @InjectModel(ImportBatch.name) private readonly batchModel: Model<ImportBatchDocument>,
+    @InjectModel(Discount.name) private readonly discountModel: Model<DiscountDocument>,
   ) {}
 
   // ─────────────────────────── CONTRIBUTIONS ───────────────────────────
@@ -966,6 +968,8 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
       joiners,
       exits,
       defaultRows,
+      allTimeDiscountsAgg,
+      periodDiscounts,
     ] = await Promise.all([
       // 1. Per-month contribution breakdown
       this.contribModel.aggregate([
@@ -1063,6 +1067,42 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
         },
         { $sort: { settledAt: -1 } },
       ]).exec(),
+
+      // 7. All-time total discounts given
+      this.discountModel.aggregate([
+        { $match: { cancelled: false } },
+        { $group: { _id: null, total: { $sum: '$discountAmount' } } },
+      ]).exec(),
+
+      // 8. Period discount breakdown with staff name
+      this.discountModel.aggregate([
+        {
+          $match: {
+            cancelled: false,
+            dateGranted: { $gte: periodStart, $lte: periodEnd },
+          },
+        },
+        {
+          $lookup: {
+            from: 'staff',
+            let: { sid: '$staffId' },
+            pipeline: [{ $match: { $expr: { $eq: [{ $toString: '$_id' }, '$$sid'] } } }],
+            as: 'staffDoc',
+          },
+        },
+        { $unwind: { path: '$staffDoc', preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            staffName: { $ifNull: ['$staffDoc.fullName', 'Unknown'] },
+            loanReference: { $substr: ['$loanId', { $subtract: [{ $strLenCP: '$loanId' }, 6] }, 6] },
+            discountType: 1,
+            rate: '$discountRate',
+            amount: '$discountAmount',
+            dateGranted: 1,
+          },
+        },
+        { $sort: { dateGranted: -1 } },
+      ]).exec(),
     ]);
 
     // ── Contribution summary ──
@@ -1151,6 +1191,15 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
       contributionBreakdown,
       loanBreakdown,
       defaultDetails,
+      totalDiscountsGiven: Math.round((allTimeDiscountsAgg[0]?.total ?? 0) * 100) / 100,
+      discountBreakdown: periodDiscounts.map((d: any) => ({
+        staffName: d.staffName,
+        loanReference: String(d.loanReference).toUpperCase(),
+        discountType: d.discountType,
+        rate: d.rate,
+        amount: d.amount,
+        dateGranted: d.dateGranted instanceof Date ? d.dateGranted.toISOString() : d.dateGranted,
+      })),
     };
   }
 }

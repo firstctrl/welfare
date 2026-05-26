@@ -13,6 +13,8 @@ import {
   ScrollText,
   Mail,
   Coins,
+  Receipt,
+  TrendingUp,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -32,6 +34,8 @@ const navItems: NavItem[] = [
   { href: '/staff',         label: 'Staff',         icon: Users,         matchPrefix: true, module: AppModule.Staff },
   { href: '/contributions', label: 'Contributions', icon: Coins,         matchPrefix: true, module: AppModule.Contributions },
   { href: '/loans',         label: 'Loans',         icon: Landmark,      matchPrefix: true, module: AppModule.Loans },
+  { href: '/remittances',   label: 'Remittances',   icon: Receipt,       matchPrefix: true, module: AppModule.Remittances },
+  { href: '/investments',   label: 'Investments',   icon: TrendingUp,    matchPrefix: true, module: AppModule.Investments },
   { href: '/reports',       label: 'Reports',       icon: FileBarChart2, matchPrefix: true, module: AppModule.Reports },
   { href: '/audit',         label: 'Audit Log',     icon: ScrollText,    module: AppModule.AuditLog },
   { href: '/email-log',     label: 'Email Log',     icon: Mail,          module: AppModule.EmailLog },

@@ -6,6 +6,7 @@ import { Loan } from '../loans/schemas/loan.schema';
 import { LoanRepayment } from '../loans/schemas/loan-repayment.schema';
 import { Staff } from '../staff/schemas/staff.schema';
 import { ImportBatch } from '../contributions/schemas/import-batch.schema';
+import { Discount } from '../loans/schemas/discount.schema';
 import {
   ContributionStatus,
   LoanStatus,
@@ -30,6 +31,8 @@ const mockLoanModel = { find: mockLoanFind, aggregate: mockLoanAggregate, distin
 const mockRepaymentModel = { find: mockRepaymentFind, aggregate: mockRepaymentAggregate };
 const mockStaffModel = { find: mockStaffFind, findById: mockStaffFindById };
 const mockBatchModel = { find: mockBatchFind };
+const mockDiscountAggregate = jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+const mockDiscountModel = { aggregate: mockDiscountAggregate };
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -45,6 +48,7 @@ describe('ReportsService', () => {
         { provide: getModelToken(LoanRepayment.name), useValue: mockRepaymentModel },
         { provide: getModelToken(Staff.name), useValue: mockStaffModel },
         { provide: getModelToken(ImportBatch.name), useValue: mockBatchModel },
+        { provide: getModelToken(Discount.name), useValue: mockDiscountModel },
       ],
     }).compile();
     service = module.get<ReportsService>(ReportsService);

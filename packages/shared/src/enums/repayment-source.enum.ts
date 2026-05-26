@@ -3,5 +3,6 @@ export enum RepaymentSource {
   Import = 'Import',
   GuarantorOffset = 'GuarantorOffset',
   ExitDeduction = 'ExitDeduction',
+  PayOff = 'PayOff',
 }
 

@@ -23,4 +23,6 @@ export enum ConfigKey {
   OutlookPassword = 'OUTLOOK_PASSWORD',
   EmailContributionStatementCron = 'EMAIL_CONTRIBUTION_STATEMENT_CRON',
   EmailLoanScheduleEnabled = 'EMAIL_LOAN_SCHEDULE_ENABLED',
+  RemittanceChargeRate = 'REMITTANCE_CHARGE_RATE',
+  LoanPayOffDiscountRate = 'LOAN_PAYOFF_DISCOUNT_RATE',
 }

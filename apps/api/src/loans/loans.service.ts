@@ -15,6 +15,7 @@ import {
   AuditAction,
   AuditEntity,
   ConfigKey,
+  IPayOffPreview,
   LoanRepaymentStatus,
   LoanStatus,
   PaginatedResult,
@@ -23,6 +24,7 @@ import {
 } from '@welfare/shared';
 import { Loan, LoanDocument } from './schemas/loan.schema';
 import { LoanRepayment, LoanRepaymentDocument } from './schemas/loan-repayment.schema';
+import { Discount, DiscountDocument } from './schemas/discount.schema';
 import { StaffService } from '../staff/staff.service';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { AuditService } from '../audit/audit.service';
@@ -76,6 +78,7 @@ export class LoansService implements OnModuleInit {
     @Inject(MINIO_CLIENT) private readonly minioClient: MinioClient,
     private readonly loanScheduleSender: LoanScheduleSenderService,
     @Inject(MEILISEARCH_CLIENT) private readonly meiliClient: MeiliSearch,
+    @InjectModel(Discount.name) private readonly discountModel: Model<DiscountDocument>,
   ) {}
 
   async onModuleInit() {
@@ -245,6 +248,19 @@ export class LoansService implements OnModuleInit {
     void this.loanScheduleSender.sendForLoan(loan).catch(err =>
       this.logger.warn(`Loan schedule email failed: ${(err as Error).message}`),
     );
+
+    // Record origination discount for Tier 1 loans (tenureMonths ≤ 6, rate 10% vs 15%)
+    if (dto.tenureMonths <= 6) {
+      const discountAmount = round2(dto.principalAmount * 0.05);
+      void this.discountModel.create({
+        staffId: dto.staffId,
+        loanId,
+        discountType: 'Origination',
+        discountRate: 5,
+        discountAmount,
+        dateGranted: disbursedDate,
+      }).catch(err => this.logger.warn(`Failed to create origination discount: ${err.message}`));
+    }
 
     return loan;
   }
@@ -766,5 +782,102 @@ export class LoansService implements OnModuleInit {
     }
 
     return updated!;
+  }
+
+  // ───────────────── PAY-OFF ─────────────────
+
+  async getPayOffPreview(loanId: string): Promise<IPayOffPreview> {
+    const loan = await this.loanModel.findById(loanId).exec();
+    if (!loan) throw new NotFoundException('Loan not found');
+
+    const repayments = await this.repaymentModel.find({ loanId }).exec();
+    const config = await this.configService.getAll();
+    const payOffDiscountRate = parseFloat(config[ConfigKey.LoanPayOffDiscountRate]?.value ?? '5');
+
+    const alreadyPaid = round2(repayments.reduce((s, r) => s + r.paidAmount, 0));
+    const remaining = repayments.filter(r =>
+      [LoanRepaymentStatus.Pending, LoanRepaymentStatus.Partial, LoanRepaymentStatus.Overdue].includes(r.status),
+    );
+
+    const remainingPrincipal = round2(remaining.reduce((s, r) => s + ((r.principalAmount ?? 0) - (r.status === LoanRepaymentStatus.Partial ? r.paidAmount * ((r.principalAmount ?? 0) / r.dueAmount) : 0)), 0));
+    const remainingInterest = round2(remaining.reduce((s, r) => s + (r.interestAmount ?? 0), 0));
+
+    const tier: 1 | 2 = loan.tenureMonths <= 6 ? 1 : 2;
+    const monthsElapsed = monthsBetween(loan.disbursedDate, new Date());
+    const withinDiscountWindow = tier === 2 && monthsElapsed < 6;
+    const discountApplied = withinDiscountWindow;
+
+    const discountAmount = discountApplied ? round2(remainingInterest * payOffDiscountRate / 100) : 0;
+    const netPayable = round2(remainingPrincipal + remainingInterest - discountAmount);
+
+    return {
+      principal: loan.principalAmount,
+      totalInterest: round2(loan.totalRepayable - loan.principalAmount),
+      alreadyPaid,
+      remainingPrincipal,
+      remainingInterest,
+      discountApplied,
+      discountRate: discountApplied ? payOffDiscountRate : 0,
+      discountAmount,
+      netPayable,
+      tier,
+      withinDiscountWindow,
+    };
+  }
+
+  async processPayOff(
+    loanId: string,
+    dto: { amountReceived: number; paymentDate: string },
+    actorId: string,
+    actorName: string,
+  ): Promise<LoanDocument> {
+    const loan = await this.loanModel.findById(loanId).exec();
+    if (!loan) throw new NotFoundException('Loan not found');
+    if (loan.status !== LoanStatus.Active) throw new BadRequestException('Loan is not Active');
+
+    const preview = await this.getPayOffPreview(loanId);
+    const paidDate = new Date(dto.paymentDate);
+
+    const remaining = await this.repaymentModel.find({
+      loanId,
+      status: { $in: [LoanRepaymentStatus.Pending, LoanRepaymentStatus.Partial, LoanRepaymentStatus.Overdue] },
+    }).exec();
+    for (const r of remaining) {
+      r.paidAmount = r.dueAmount;
+      r.paidDate = paidDate;
+      r.source = RepaymentSource.PayOff;
+      r.status = LoanRepaymentStatus.Paid;
+      await r.save();
+    }
+
+    await this.loanModel.updateOne(
+      { _id: loanId },
+      {
+        status: LoanStatus.Completed,
+        settledAt: paidDate,
+        payOffDate: paidDate,
+        payOffAmountReceived: dto.amountReceived,
+      },
+    );
+
+    if (preview.discountApplied) {
+      await this.discountModel.create({
+        staffId: loan.staffId,
+        loanId,
+        discountType: 'PayOff',
+        discountRate: preview.discountRate,
+        discountAmount: preview.discountAmount,
+        dateGranted: paidDate,
+      });
+    }
+
+    this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.Loan, loanId, undefined, {
+      event: 'payoff',
+      amountReceived: dto.amountReceived,
+      netPayable: preview.netPayable,
+      discountApplied: preview.discountApplied,
+    });
+
+    return (await this.loanModel.findById(loanId).exec())!;
   }
 }

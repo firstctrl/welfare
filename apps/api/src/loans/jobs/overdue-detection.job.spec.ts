@@ -3,9 +3,12 @@ import { getModelToken } from '@nestjs/mongoose';
 import { OverdueDetectionJob } from './overdue-detection.job';
 import { LoanRepayment } from '../schemas/loan-repayment.schema';
 import { Loan } from '../schemas/loan.schema';
+import { Discount } from '../schemas/discount.schema';
+import { Staff } from '../../staff/schemas/staff.schema';
 import { SystemConfigService } from '../../system-config/system-config.service';
 import { AuditService } from '../../audit/audit.service';
 import { ContributionsService } from '../../contributions/contributions.service';
+import { EmailService } from '../../email/email.service';
 import { LoanRepaymentStatus, LoanStatus, RepaymentSource } from '@welfare/shared';
 
 const mockConfig = () => ({
@@ -24,7 +27,7 @@ describe('OverdueDetectionJob', () => {
 
   beforeEach(async () => {
     repaymentModel = { find: jest.fn() };
-    loanModel = { findById: jest.fn() };
+    loanModel = { findById: jest.fn(), find: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }) };
     configService = { getAll: jest.fn() };
     auditService = { log: jest.fn() };
     contributionsService = { debitGuarantorOffset: jest.fn() };
@@ -34,9 +37,12 @@ describe('OverdueDetectionJob', () => {
         OverdueDetectionJob,
         { provide: getModelToken(LoanRepayment.name), useValue: repaymentModel },
         { provide: getModelToken(Loan.name), useValue: loanModel },
+        { provide: getModelToken(Discount.name), useValue: { create: jest.fn(), updateOne: jest.fn() } },
+        { provide: getModelToken(Staff.name), useValue: { findById: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(null) }) } },
         { provide: SystemConfigService, useValue: configService },
         { provide: AuditService, useValue: auditService },
         { provide: ContributionsService, useValue: contributionsService },
+        { provide: EmailService, useValue: { send: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
