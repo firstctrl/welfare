@@ -10,6 +10,7 @@ import type {
   IFundSummaryContributionBreakdownRow,
   IFundSummaryLoanBreakdownRow,
   IFundSummaryDefaultRow,
+  IFundSummaryDiscountRow,
 } from '@welfare/shared';
 import { KpiCard } from '@/components/ui/kpi-card';
 import { Field, Input, Select } from '@/components/ui/field';
@@ -46,6 +47,16 @@ const COLS_DEFAULTS = [
   colDefault.accessor('totalRecovered',  { header: 'Recovered (GHS)', cell: i => fmtGHS(i.getValue()) }),
   colDefault.accessor('badDebtAmount',   { header: 'Bad Debt (GHS)',  cell: i => fmtGHS(i.getValue()) }),
   colDefault.accessor('settledAt',       { header: 'Settled At', cell: i => i.getValue() ? new Date(i.getValue()).toLocaleDateString('en-GB') : '—' }),
+];
+
+const colDiscount = createColumnHelper<IFundSummaryDiscountRow>();
+const COLS_DISCOUNTS = [
+  colDiscount.accessor('staffName',     { header: 'Staff Name' }),
+  colDiscount.accessor('loanReference', { header: 'Loan Ref' }),
+  colDiscount.accessor('discountType',  { header: 'Type' }),
+  colDiscount.accessor('rate',          { header: 'Rate (%)', cell: i => `${i.getValue()}%` }),
+  colDiscount.accessor('amount',        { header: 'Amount (GHS)', cell: i => fmtGHS(i.getValue()) }),
+  colDiscount.accessor('dateGranted',   { header: 'Date Granted', cell: i => i.getValue() ? new Date(i.getValue()).toLocaleDateString('en-GB') : '—' }),
 ];
 
 // ── Generic table ──────────────────────────────────────────────────────────────
@@ -160,7 +171,7 @@ export function FundSummaryPanel() {
           <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wide mb-3">
             All-Time Fund Overview
           </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <KpiCard
               label="Net Fund Balance"
               value={fmtGHSShort(data.fundBalance.netBalance)}
@@ -187,6 +198,13 @@ export function FundSummaryPanel() {
               value={String(data.membership.activeCount)}
               icon={Users}
               iconKind="primary"
+            />
+            <KpiCard
+              label="Total Discounts Given"
+              value={fmtGHSShort(data.totalDiscountsGiven ?? 0)}
+              title={fmtGHS(data.totalDiscountsGiven ?? 0)}
+              icon={AlertCircle}
+              iconKind="warning"
             />
           </div>
         </div>
@@ -382,6 +400,12 @@ export function FundSummaryPanel() {
             >
               <SummaryTable columns={COLS_DEFAULTS} data={data.defaultDetails} />
             </Section>
+
+            {data.discountBreakdown.length > 0 && (
+              <Section title="Discount Breakdown">
+                <SummaryTable columns={COLS_DISCOUNTS} data={data.discountBreakdown} />
+              </Section>
+            )}
           </div>
         </>
       )}
