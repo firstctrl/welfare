@@ -35,6 +35,7 @@ import {
   sendLoanStatement,
 } from '@/lib/reports';
 import { listLoans } from '@/lib/loans';
+import { getRemittancesReport, buildRemittancesReportDownloadUrl } from '@/lib/remittances';
 import { searchStaff } from '@/lib/staff';
 import type {
   IMonthlyContributionRow,
@@ -48,6 +49,7 @@ import type {
   IExitClearanceRow,
   ILoan,
   ILoanBorrower,
+  IRemittanceReportRow,
 } from '@welfare/shared';
 import { Card, CardHeader, CardBody } from '@/components/ui/card';
 import { KpiCard } from '@/components/ui/kpi-card';
@@ -986,6 +988,124 @@ function SimplePanel<T>({
   );
 }
 
+function RemittancesReportPanel() {
+  const now = new Date();
+  const [fromMonth, setFromMonth] = useState(1);
+  const [fromYear, setFromYear]   = useState(now.getFullYear());
+  const [toMonth, setToMonth]     = useState(now.getMonth() + 1);
+  const [toYear, setToYear]       = useState(now.getFullYear());
+  const [params, setParams]       = useState<{ fromMonth: number; fromYear: number; toMonth: number; toYear: number } | null>(null);
+  const [rangeError, setRangeError] = useState('');
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['remittances-report', params],
+    queryFn: () => getRemittancesReport(params!),
+    enabled: params !== null,
+  });
+
+  const colRem = createColumnHelper<IRemittanceReportRow>();
+  const COLS = [
+    colRem.accessor('period', { header: 'Period' }),
+    colRem.accessor('receiptDate', { header: 'Receipt Date' }),
+    colRem.accessor('grossAmount', { header: 'Gross Amt (GHS)', cell: i => fmtGHS(i.getValue()) }),
+    colRem.accessor('charges', { header: 'Charges (GHS)', cell: i => fmtGHS(i.getValue()) }),
+    colRem.accessor('netPayable', { header: 'Net Payable (GHS)', cell: i => fmtGHS(i.getValue()) }),
+  ];
+
+  const table = useReactTable({ data: data?.rows ?? [], columns: COLS, getCoreRowModel: getCoreRowModel() });
+
+  const monthOptions = MONTHS.map((m, i) => ({ value: String(i + 1), label: m }));
+
+  const handleRun = () => {
+    if (toYear < fromYear || (toYear === fromYear && toMonth < fromMonth)) {
+      setRangeError('To period must not be before From period');
+      return;
+    }
+    setRangeError('');
+    setParams({ fromMonth, fromYear, toMonth, toYear });
+  };
+
+  const downloadUrl = (format: 'csv' | 'pdf') =>
+    params ? buildRemittancesReportDownloadUrl({ ...params, format }) : '#';
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end gap-4 p-4 bg-neutral-50 border border-neutral-200 rounded-md">
+        <Field label="From Month">
+          <Select value={String(fromMonth)} onChange={e => setFromMonth(+e.target.value)} options={monthOptions} style={{ width: 120 }} />
+        </Field>
+        <Field label="From Year">
+          <Input type="number" value={fromYear} onChange={e => setFromYear(+e.target.value)} style={{ width: 100 }} />
+        </Field>
+        <Field label="To Month">
+          <Select value={String(toMonth)} onChange={e => setToMonth(+e.target.value)} options={monthOptions} style={{ width: 120 }} />
+        </Field>
+        <Field label="To Year">
+          <Input type="number" value={toYear} onChange={e => setToYear(+e.target.value)} style={{ width: 100 }} />
+        </Field>
+        <Button onClick={handleRun} disabled={isLoading}>
+          {isLoading ? 'Loading…' : 'Run Report'}
+        </Button>
+      </div>
+      {rangeError && <p className="text-sm text-danger-600">{rangeError}</p>}
+
+      {data && (
+        <>
+          <div className="flex gap-2">
+            <a href={downloadUrl('csv')} download>
+              <Button variant="secondary" size="sm" Icon={Download}>CSV</Button>
+            </a>
+            <a href={downloadUrl('pdf')} download>
+              <Button variant="secondary" size="sm" Icon={Download}>PDF</Button>
+            </a>
+          </div>
+
+          <div className="rounded-md border border-neutral-200 bg-neutral-50 px-4 py-3 grid grid-cols-3 gap-4 text-sm">
+            <div><p className="text-neutral-500 text-xs uppercase tracking-wide">Total Gross</p><p className="font-semibold">{fmtGHS(data.totalGross)}</p></div>
+            <div><p className="text-neutral-500 text-xs uppercase tracking-wide">Total Charges</p><p className="font-semibold">{fmtGHS(data.totalCharges)}</p></div>
+            <div><p className="text-neutral-500 text-xs uppercase tracking-wide">Total Net Payable</p><p className="font-semibold text-primary-700">{fmtGHS(data.totalNet)}</p></div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                {table.getHeaderGroups().map(hg => (
+                  <tr key={hg.id} className="border-b border-neutral-200 bg-neutral-50">
+                    {hg.headers.map(h => (
+                      <th key={h.id} className="px-3 py-2.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide whitespace-nowrap">
+                        {flexRender(h.column.columnDef.header, h.getContext())}
+                      </th>
+                    ))}
+                  </tr>
+                ))}
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {table.getRowModel().rows.length === 0 ? (
+                  <tr><td colSpan={5} className="px-3 py-6 text-center text-neutral-400">No remittance records in this period</td></tr>
+                ) : (
+                  table.getRowModel().rows.map(row => (
+                    <tr key={row.id} className="hover:bg-neutral-50">
+                      {row.getVisibleCells().map(cell => (
+                        <td key={cell.id} className="px-3 py-2.5 text-neutral-700 whitespace-nowrap">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {!data && !isLoading && params === null && (
+        <p className="text-sm text-neutral-400 text-center py-8">Select a period and click Run Report.</p>
+      )}
+    </div>
+  );
+}
+
 // ── Sidebar nav ───────────────────────────────────────────────────────────────
 
 const SECTIONS = [
@@ -1001,6 +1121,7 @@ const SECTIONS = [
   { id: 'guarantor-exposure', label: 'Guarantor Exposure' },
   { id: 'bad-debt', label: 'Bad Debt' },
   { id: 'exit-clearance', label: 'Exit Clearance' },
+  { id: 'remittances', label: 'Remittances' },
 ];
 
 // ── Root component ────────────────────────────────────────────────────────────
@@ -1102,6 +1223,7 @@ export function ReportsClient() {
                 formats={['csv', 'pdf']}
               />
             )}
+            {active === 'remittances' && <RemittancesReportPanel />}
           </CardBody>
         </Card>
       </div>
