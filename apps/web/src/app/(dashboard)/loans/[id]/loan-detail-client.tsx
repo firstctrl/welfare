@@ -1,16 +1,17 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Download, Send, CreditCard, Trash2, Ban } from 'lucide-react';
-import { LoanStatus, LoanRepaymentStatus, StaffStatus } from '@welfare/shared';
+import { Download, Send, CreditCard, Trash2, Ban, Banknote } from 'lucide-react';
+import { LoanStatus, LoanRepaymentStatus, StaffStatus, AppModule } from '@welfare/shared';
 import type { ILoanRepayment } from '@welfare/shared';
-import { getLoan, getLoanSchedule, getLoanDocumentUrl, recordPayment, exitSettle, getLoansByGuarantor, deleteLoan, writeOffLoan } from '@/lib/loans';
+import { getLoan, getLoanSchedule, getLoanDocumentUrl, recordPayment, exitSettle, getLoansByGuarantor, deleteLoan, writeOffLoan, getPayOffPreview, processPayOff } from '@/lib/loans';
+import { usePermission } from '@/hooks/use-permission';
 import { getStaff } from '@/lib/staff';
 import { sendLoanSchedule } from '@/lib/email';
 import { StatusBadge } from '@/components/ui/badge';
@@ -68,10 +69,14 @@ const repaymentStatusStyle: Record<LoanRepaymentStatus, string> = {
 export function LoanDetailClient({ id }: { id: string }) {
   const router = useRouter();
   const qc = useQueryClient();
+  const permission = usePermission(AppModule.Loans);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showWriteOffModal, setShowWriteOffModal] = useState(false);
   const [sendingSchedule, setSendingSchedule] = useState(false);
+  const [showPayOff, setShowPayOff] = useState(false);
+  const [payOffDate, setPayOffDate] = useState(today());
+  const [amountReceived, setAmountReceived] = useState('');
 
   const { data: loan, isLoading: loanLoading } = useQuery({ queryKey: ['loans', id], queryFn: () => getLoan(id) });
   const { data: schedule, isLoading: scheduleLoading } = useQuery({
@@ -128,6 +133,30 @@ export function LoanDetailClient({ id }: { id: string }) {
     mutationFn: (values: SettlementForm) => exitSettle(id, values),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans', id] }); toast.success('Exit settlement recorded'); },
     onError: (err: unknown) => { toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Settlement failed'); },
+  });
+
+  const { data: payOffPreview, isLoading: previewLoading } = useQuery({
+    queryKey: ['payoff-preview', id],
+    queryFn: () => getPayOffPreview(id),
+    enabled: showPayOff,
+  });
+
+  useEffect(() => {
+    if (payOffPreview) setAmountReceived(String(payOffPreview.netPayable));
+  }, [payOffPreview]);
+
+  const payOffMut = useMutation({
+    mutationFn: () =>
+      processPayOff(id, { amountReceived: parseFloat(amountReceived), paymentDate: payOffDate }),
+    onSuccess: () => {
+      toast.success('Loan settled successfully');
+      setShowPayOff(false);
+      qc.invalidateQueries({ queryKey: ['loans', id] });
+      qc.invalidateQueries({ queryKey: ['loans', id, 'schedule'] });
+    },
+    onError: (err: unknown) => {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Pay-off failed');
+    },
   });
 
   async function handleDownloadDoc() {
@@ -195,6 +224,11 @@ export function LoanDetailClient({ id }: { id: string }) {
             {loan.status === LoanStatus.Active && (
               <Button variant="primary" size="sm" Icon={CreditCard} onClick={() => setShowPaymentModal(true)}>
                 Record Payment
+              </Button>
+            )}
+            {loan.status === LoanStatus.Active && permission === 'full' && (
+              <Button variant="secondary" size="sm" Icon={Banknote} onClick={() => setShowPayOff(true)}>
+                Settle Loan
               </Button>
             )}
             {loan.status === LoanStatus.Active && (
@@ -516,6 +550,54 @@ export function LoanDetailClient({ id }: { id: string }) {
               </div>
             )}
           </form>
+        </Modal>
+      )}
+
+      {/* Pay-Off / Settle Loan Modal */}
+      {showPayOff && (
+        <Modal open onClose={() => setShowPayOff(false)} title="Settle Loan (Early Pay-Off)">
+          <div className="p-4 space-y-4">
+            {previewLoading && <p className="text-sm text-neutral-400">Computing pay-off amount…</p>}
+            {payOffPreview && (
+              <>
+                <div className="rounded-md border border-neutral-200 bg-neutral-50 px-4 py-3 space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-neutral-500">Remaining Principal</span><span>{fmtGHS(payOffPreview.remainingPrincipal)}</span></div>
+                  <div className="flex justify-between"><span className="text-neutral-500">Remaining Interest</span><span>{fmtGHS(payOffPreview.remainingInterest)}</span></div>
+                  {payOffPreview.discountApplied && (
+                    <div className="flex justify-between text-success-700">
+                      <span>Pay-Off Discount ({payOffPreview.discountRate}%)</span>
+                      <span>−{fmtGHS(payOffPreview.discountAmount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-semibold border-t border-neutral-200 pt-2">
+                    <span>Net Payable</span>
+                    <span className="text-primary-700">{fmtGHS(payOffPreview.netPayable)}</span>
+                  </div>
+                  {!payOffPreview.discountApplied && payOffPreview.tier === 2 && (
+                    <p className="text-xs text-neutral-400 pt-1">No pay-off discount — loan is past the 6-month early settlement window.</p>
+                  )}
+                  {payOffPreview.tier === 1 && (
+                    <p className="text-xs text-neutral-400 pt-1">Tier 1 loan — origination discount already applied at disbursement.</p>
+                  )}
+                </div>
+                <Field label="Amount Received (GHS)">
+                  <Input type="number" step="0.01" value={amountReceived} onChange={e => setAmountReceived(e.target.value)} />
+                </Field>
+                <Field label="Payment Date">
+                  <Input type="date" value={payOffDate} onChange={e => setPayOffDate(e.target.value)} max={today()} />
+                </Field>
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    onClick={() => payOffMut.mutate()}
+                    disabled={payOffMut.isPending || !amountReceived || !payOffDate}
+                  >
+                    {payOffMut.isPending ? 'Processing…' : 'Confirm Settlement'}
+                  </Button>
+                  <Button variant="secondary" onClick={() => setShowPayOff(false)}>Cancel</Button>
+                </div>
+              </>
+            )}
+          </div>
         </Modal>
       )}
     </div>
