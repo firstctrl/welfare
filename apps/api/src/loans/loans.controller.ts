@@ -23,6 +23,7 @@ import { CreateLoanDto } from './dto/create-loan.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { ExitSettlementDto } from './dto/exit-settlement.dto';
 import { LoanQueryDto } from './dto/loan-query.dto';
+import { ProcessPayOffDto } from './dto/process-payoff.dto';
 
 @Controller('loans')
 export class LoansController {
@@ -179,6 +180,22 @@ export class LoansController {
     @CurrentUser() user: { sub: string; displayName: string },
   ) {
     return this.loansService.recordPayment(id, dto, user.sub, user.displayName);
+  }
+
+  @Get(':id/payoff-preview')
+  @RequirePermission(AppModule.Loans, 'readonly')
+  getPayOffPreview(@Param('id') id: string) {
+    return this.loansService.getPayOffPreview(id);
+  }
+
+  @Post(':id/payoff')
+  @RequirePermission(AppModule.Loans, 'full')
+  processPayOff(
+    @Param('id') id: string,
+    @Body() dto: ProcessPayOffDto,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.loansService.processPayOff(id, dto, user.sub, user.displayName);
   }
 
   @Patch(':id/write-off')
