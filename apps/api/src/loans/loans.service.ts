@@ -795,12 +795,21 @@ export class LoansService implements OnModuleInit {
     const payOffDiscountRate = parseFloat(config[ConfigKey.LoanPayOffDiscountRate]?.value ?? '5');
 
     const alreadyPaid = round2(repayments.reduce((s, r) => s + r.paidAmount, 0));
-    const remaining = repayments.filter(r =>
-      [LoanRepaymentStatus.Pending, LoanRepaymentStatus.Partial, LoanRepaymentStatus.Overdue].includes(r.status),
-    );
+    // Identify rows with outstanding balance directly from amounts (status-agnostic, matches Outstanding display)
+    const remaining = repayments.filter(r => (r.dueAmount + (r.penaltyAmount ?? 0)) > r.paidAmount);
 
-    const remainingPrincipal = round2(remaining.reduce((s, r) => s + ((r.principalAmount ?? 0) - (r.status === LoanRepaymentStatus.Partial ? r.paidAmount * ((r.principalAmount ?? 0) / r.dueAmount) : 0)), 0));
-    const remainingInterest = round2(remaining.reduce((s, r) => s + ((r.interestAmount ?? 0) - (r.status === LoanRepaymentStatus.Partial ? r.paidAmount * ((r.interestAmount ?? 0) / r.dueAmount) : 0)), 0));
+    const remainingPrincipal = round2(remaining.reduce((s, r) => {
+      const principal = r.principalAmount ?? 0;
+      const due = r.dueAmount || 1;
+      const paidPrincipal = r.paidAmount > 0 ? r.paidAmount * (principal / due) : 0;
+      return s + Math.max(0, principal - paidPrincipal);
+    }, 0));
+    const remainingInterest = round2(remaining.reduce((s, r) => {
+      const interest = r.interestAmount ?? 0;
+      const due = r.dueAmount || 1;
+      const paidInterest = r.paidAmount > 0 ? r.paidAmount * (interest / due) : 0;
+      return s + Math.max(0, interest - paidInterest);
+    }, 0));
 
     const tier: 1 | 2 = loan.tenureMonths <= 6 ? 1 : 2;
     const monthsElapsed = monthsBetween(loan.disbursedDate, new Date());
@@ -838,12 +847,10 @@ export class LoansService implements OnModuleInit {
     const preview = await this.getPayOffPreview(loanId);
     const paidDate = new Date(dto.paymentDate);
 
-    const remaining = await this.repaymentModel.find({
-      loanId,
-      status: { $in: [LoanRepaymentStatus.Pending, LoanRepaymentStatus.Partial, LoanRepaymentStatus.Overdue] },
-    }).exec();
+    const allRepayments = await this.repaymentModel.find({ loanId }).exec();
+    const remaining = allRepayments.filter(r => (r.dueAmount + (r.penaltyAmount ?? 0)) > r.paidAmount);
     for (const r of remaining) {
-      r.paidAmount = r.dueAmount;
+      r.paidAmount = round2(r.dueAmount + (r.penaltyAmount ?? 0));
       r.paidDate = paidDate;
       r.source = RepaymentSource.PayOff;
       r.status = LoanRepaymentStatus.Paid;
