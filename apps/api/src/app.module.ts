@@ -25,6 +25,7 @@ import { SearchModule } from './search/search.module';
 import { ContributionsModule } from './contributions/contributions.module';
 import { LoansModule } from './loans/loans.module';
 import { ReportsModule } from './reports/reports.module';
+import { RemittancesModule } from './remittances/remittances.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { ReportsModule } from './reports/reports.module';
     SearchModule,
     ContributionsModule,
     LoansModule,
+    RemittancesModule,
     ReportsModule,
   ],
   providers: [
