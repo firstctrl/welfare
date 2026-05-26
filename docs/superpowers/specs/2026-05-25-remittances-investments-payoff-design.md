@@ -367,13 +367,19 @@ const forfeitureCandidates = await loanModel.find({
 });
 ```
 
+Forfeiture loses the **entire** origination discount, not just the unearned portion. Recalculate interest on the **whole principal** at 15% — the previously-waived 5% is clawed back and added to the outstanding balance.
+
 For each candidate:
-1. Recalculate `totalRepayable` at 15%: `principal × 1.15`
-2. Find all unpaid instalments; proportionally increase `dueAmount` to reflect 15% rate
-3. Set `loan.interestRate = 15`, `loan.forfeitedAt = today`
-4. Cancel origination `Discount` record: `{ cancelled: true, cancelledAt: today, cancelledReason: 'Discount forfeiture: loan crossed 6-month threshold due to default' }`
-5. Audit log: `AuditAction.Update`, `AuditEntity.Loan`, note forfeiture
-6. Send email to staff: subject "Interest Rate Adjustment on Your Loan", body includes revised outstanding balance
+1. Recalculate `totalRepayable` at 15% on full principal: `newTotalRepayable = principal × 1.15`
+2. Sum `alreadyPaid` across all repayments for this loan
+3. `newOutstanding = newTotalRepayable − alreadyPaid` (this includes the clawed-back discount)
+4. Find all unpaid/partial instalments (count = `N`); set each `dueAmount = newOutstanding / N` (round to 2dp; absorb rounding remainder into the last instalment). Recompute `principalAmount`/`interestAmount` portions per instalment using the 15% schedule.
+5. Update loan: `interestRate = 15`, `totalRepayable = newTotalRepayable`, `monthlyInstalment = newOutstanding / N`, `forfeitedAt = today`
+6. Cancel origination `Discount` record: `{ cancelled: true, cancelledAt: today, cancelledReason: 'Discount forfeiture: loan crossed 6-month threshold with outstanding balance' }`
+7. Audit log: `AuditAction.Update`, `AuditEntity.Loan`, note forfeiture with before/after totalRepayable
+8. Send email to staff: subject "Interest Rate Adjustment on Your Loan", body includes original total, revised total at 15%, clawed-back discount amount, and new outstanding balance
+
+**Worked example:** Principal 10,000. Original 10% → totalRepayable 11,000; staff paid 5,500; outstanding 5,500. Forfeiture triggers: newTotalRepayable = 10,000 × 1.15 = 11,500; newOutstanding = 11,500 − 5,500 = 6,000 (an extra 500 — the full 5% discount on the principal is reinstated). Remaining instalments share the 6,000.
 
 New `EmailLogType` entry: `LoanForfeitureNotice`.
 
@@ -474,7 +480,7 @@ Backend: `ReportsService.getFundSummary` queries `discounts` where `dateGranted`
 | Investment immutability | Edit/delete allowed with mandatory reason; soft-delete preserves audit trail |
 | Origination discount recording | Written at `createLoan` time for Tier 1; backfill migration for existing loans |
 | Origination discount rate | Hardcoded 5% differential (15% − 10%); not configurable — it is a policy fact |
-| Forfeiture adjusts which instalments | Only remaining unpaid/partial instalments; paid instalments unchanged |
+| Forfeiture recalculation scope | Interest recalculated on **full principal** at 15%, not just remaining. Entire 5% discount clawed back into outstanding. Paid instalments untouched; new outstanding spread across remaining unpaid/partial instalments. |
 | `forfeitedAt` field on Loan | Prevents re-processing by the daily job |
 | Pay-off `RepaymentSource` | Add `PayOff = 'PayOff'` to `RepaymentSource` enum |
 | Pay-off amount received | Stored as `loan.payOffAmountReceived`; the user can enter a different figure than `netPayable` |
