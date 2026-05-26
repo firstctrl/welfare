@@ -26,6 +26,7 @@ import { ContributionsModule } from './contributions/contributions.module';
 import { LoansModule } from './loans/loans.module';
 import { ReportsModule } from './reports/reports.module';
 import { RemittancesModule } from './remittances/remittances.module';
+import { InvestmentsModule } from './investments/investments.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { RemittancesModule } from './remittances/remittances.module';
     ContributionsModule,
     LoansModule,
     RemittancesModule,
+    InvestmentsModule,
     ReportsModule,
   ],
   providers: [
