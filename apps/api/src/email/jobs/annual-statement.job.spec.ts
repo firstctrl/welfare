@@ -4,18 +4,21 @@ import { getQueueToken } from '@nestjs/bullmq';
 import { AnnualStatementJob } from './annual-statement.job';
 import { Staff } from '../../staff/schemas/staff.schema';
 import { Contribution } from '../../contributions/schemas/contribution.schema';
+import { LoanRepayment } from '../../loans/schemas/loan-repayment.schema';
 import { SystemConfigService } from '../../system-config/system-config.service';
 import { AuditService } from '../../audit/audit.service';
 import { StaffStatus } from '@welfare/shared';
 
 const mockStaffFind = jest.fn();
 const mockContribAggregate = jest.fn();
+const mockRepaymentFind = jest.fn();
 const mockQueueAdd = jest.fn();
 const mockConfigGetAll = jest.fn();
 const mockAuditLog = jest.fn();
 
 const mockStaffModel = { find: mockStaffFind };
 const mockContribModel = { aggregate: mockContribAggregate };
+const mockRepaymentModel = { find: mockRepaymentFind };
 const mockQueue = { add: mockQueueAdd };
 const mockConfigService = { getAll: mockConfigGetAll };
 const mockAuditService = { log: mockAuditLog };
@@ -35,6 +38,7 @@ describe('AnnualStatementJob', () => {
         AnnualStatementJob,
         { provide: getModelToken(Staff.name), useValue: mockStaffModel },
         { provide: getModelToken(Contribution.name), useValue: mockContribModel },
+        { provide: getModelToken(LoanRepayment.name), useValue: mockRepaymentModel },
         { provide: getQueueToken('email-batch'), useValue: mockQueue },
         { provide: SystemConfigService, useValue: mockConfigService },
         { provide: AuditService, useValue: mockAuditService },
@@ -58,6 +62,7 @@ describe('AnnualStatementJob', () => {
         { month: 1, expectedAmount: 100, paidAmount: 100, surplusCarriedForward: 0, status: 'Paid' },
       ]),
     });
+    mockRepaymentFind.mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
     mockQueueAdd.mockResolvedValue({});
     mockAuditLog.mockResolvedValue({});
 
@@ -77,6 +82,7 @@ describe('AnnualStatementJob', () => {
       ]),
     });
     mockContribAggregate.mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+    mockRepaymentFind.mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
     mockQueueAdd.mockResolvedValue({});
     mockAuditLog.mockResolvedValue({});
 

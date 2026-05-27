@@ -737,9 +737,15 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
 
   async getStaffContributionStatement(staffMongoId: string): Promise<{
     staff: { _id: string; fullName: string; staffId: string; email?: string };
-    kpis: { totalPaid: number; totalExpected: number; missedMonths: number; totalSurplus: number; collectionRate: number };
+    kpis: { totalPaid: number; totalExpected: number; missedMonths: number; totalSurplus: number; collectionRate: number; totalOffsets: number };
     years: number[];
-    rows: Array<{ year: number; cells: Record<number, { paidAmount: number; expectedAmount: number; status: string } | null>; yearTotal: number }>;
+    rows: Array<{
+      year: number;
+      cells: Record<number, { paidAmount: number; expectedAmount: number; status: string } | null>;
+      offsetCells: Record<number, { totalAmount: number; items: Array<{ borrowerName: string; borrowerStaffNo: string; loanId: string; amount: number }> } | null>;
+      yearTotal: number;
+      yearOffsetTotal: number;
+    }>;
   }> {
     const staff = await this.staffModel.findById(staffMongoId).exec();
     if (!staff) throw new Error(`Staff ${staffMongoId} not found`);
@@ -749,12 +755,47 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
       .sort({ year: 1, month: 1 })
       .exec();
 
-    const years = [...new Set(contribs.map(c => c.year))].sort((a, b) => a - b);
+    // Guarantor offset deductions
+    const offsetRepayments = await this.repaymentModel
+      .find({ guarantorStaffId: staffMongoId, source: RepaymentSource.GuarantorOffset })
+      .exec();
+
+    // Look up borrower staff docs for offsets
+    const borrowerIds = [...new Set(offsetRepayments.map(r => r.staffId).filter(Boolean))];
+    const borrowerStaff = borrowerIds.length
+      ? await this.staffModel.find({ _id: { $in: borrowerIds } }).exec()
+      : [];
+    const borrowerMap = new Map(borrowerStaff.map(s => [s._id.toString(), s]));
+
+    // Build offset map: yyyy-mm -> { totalAmount, items }
+    const offsetByKey = new Map<string, { totalAmount: number; items: Array<{ borrowerName: string; borrowerStaffNo: string; loanId: string; amount: number }> }>();
+    for (const r of offsetRepayments) {
+      if (!r.paidDate) continue;
+      const d = new Date(r.paidDate);
+      const y = d.getFullYear();
+      const mo = d.getMonth() + 1;
+      const key = `${y}-${mo}`;
+      const borrower = borrowerMap.get(r.staffId);
+      const bucket = offsetByKey.get(key) ?? { totalAmount: 0, items: [] };
+      bucket.totalAmount += r.paidAmount;
+      bucket.items.push({
+        borrowerName: borrower?.fullName ?? 'Unknown',
+        borrowerStaffNo: borrower?.staffId ?? '',
+        loanId: r.loanId,
+        amount: r.paidAmount,
+      });
+      offsetByKey.set(key, bucket);
+    }
+
+    const offsetYears = [...new Set(offsetRepayments.filter(r => r.paidDate).map(r => new Date(r.paidDate as Date).getFullYear()))];
+    const years = [...new Set([...contribs.map(c => c.year), ...offsetYears])].sort((a, b) => a - b);
     const byKey = new Map(contribs.map(c => [`${c.year}-${c.month}`, c]));
 
     const rows = years.map(year => {
       const cells: Record<number, { paidAmount: number; expectedAmount: number; status: string } | null> = {};
+      const offsetCells: Record<number, { totalAmount: number; items: Array<{ borrowerName: string; borrowerStaffNo: string; loanId: string; amount: number }> } | null> = {};
       let yearTotal = 0;
+      let yearOffsetTotal = 0;
       for (let m = 1; m <= 12; m++) {
         const c = byKey.get(`${year}-${m}`);
         if (c) {
@@ -763,8 +804,15 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
         } else {
           cells[m] = null;
         }
+        const o = offsetByKey.get(`${year}-${m}`);
+        if (o) {
+          offsetCells[m] = o;
+          yearOffsetTotal += o.totalAmount;
+        } else {
+          offsetCells[m] = null;
+        }
       }
-      return { year, cells, yearTotal };
+      return { year, cells, offsetCells, yearTotal, yearOffsetTotal };
     });
 
     const totalPaid = contribs.reduce((s, c) => s + c.paidAmount, 0);
@@ -772,10 +820,11 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
     const totalSurplus = contribs.reduce((s, c) => s + c.surplusCarriedForward, 0);
     const missedMonths = contribs.filter(c => c.status === ContributionStatus.Missed || c.status === ContributionStatus.Partial).length;
     const collectionRate = totalExpected > 0 ? Math.round((totalPaid / totalExpected) * 100) : 0;
+    const totalOffsets = offsetRepayments.reduce((s, r) => s + r.paidAmount, 0);
 
     return {
       staff: { _id: staff._id.toString(), fullName: staff.fullName, staffId: staff.staffId, email: staff.email },
-      kpis: { totalPaid, totalExpected, missedMonths, totalSurplus, collectionRate },
+      kpis: { totalPaid, totalExpected, missedMonths, totalSurplus, collectionRate, totalOffsets },
       years,
       rows,
     };
@@ -797,15 +846,58 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
 
     const headerCells = MONTHS.map(m => `<th>${m}</th>`).join('') + '<th>Total</th>';
 
+    const escapeAttr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
     const bodyRows = rows.map(row => {
       const cells = Array.from({ length: 12 }, (_, i) => {
         const c = row.cells[i + 1];
-        if (!c) return `<td class="empty">—</td>`;
+        const o = row.offsetCells[i + 1];
+        const offsetLine = o && o.totalAmount > 0
+          ? `<br/><span style="color:#dc2626;font-size:9px">−${fmt(o.totalAmount)}</span>`
+          : '';
+        const offsetTitle = o && o.items.length
+          ? escapeAttr(o.items.map(it => `${it.borrowerName} (${it.borrowerStaffNo}): ${fmt(it.amount)}`).join('; '))
+          : '';
+        if (!c) {
+          if (offsetLine) {
+            return `<td title="${offsetTitle}">—${offsetLine}</td>`;
+          }
+          return `<td class="empty">—</td>`;
+        }
         const bg = statusColor[c.status] ?? '#fff';
-        return `<td style="background:${bg}" title="${c.status}">${fmt(c.paidAmount)}</td>`;
+        const title = offsetTitle ? `${c.status} | Offsets: ${offsetTitle}` : c.status;
+        return `<td style="background:${bg}" title="${escapeAttr(title)}">${fmt(c.paidAmount)}${offsetLine}</td>`;
       }).join('');
-      return `<tr><td class="year-label">${row.year}</td>${cells}<td class="total">${fmt(row.yearTotal)}</td></tr>`;
+      const yearTotalCell = row.yearOffsetTotal > 0
+        ? `<td class="total">${fmt(row.yearTotal)}<br/><span style="color:#dc2626;font-size:9px">−${fmt(row.yearOffsetTotal)}</span></td>`
+        : `<td class="total">${fmt(row.yearTotal)}</td>`;
+      return `<tr><td class="year-label">${row.year}</td>${cells}${yearTotalCell}</tr>`;
     }).join('');
+
+    // Build offset detail rows (flat list across years)
+    const offsetDetailItems: Array<{ paidDate: Date; borrowerName: string; borrowerStaffNo: string; loanRef: string; amount: number }> = [];
+    for (const row of rows) {
+      for (let m = 1; m <= 12; m++) {
+        const o = row.offsetCells[m];
+        if (!o) continue;
+        for (const it of o.items) {
+          offsetDetailItems.push({
+            paidDate: new Date(row.year, m - 1, 1),
+            borrowerName: it.borrowerName,
+            borrowerStaffNo: it.borrowerStaffNo,
+            loanRef: it.loanId.slice(-6).toUpperCase(),
+            amount: it.amount,
+          });
+        }
+      }
+    }
+    const offsetDetailHtml = offsetDetailItems.length
+      ? `<div style="margin-top:16px"><div style="font-size:11px;font-weight:bold;margin-bottom:6px;color:#1e293b">Guarantor Offset Detail</div>
+<table>
+  <thead><tr><th style="text-align:left">Period</th><th style="text-align:left">Borrower</th><th style="text-align:left">Loan Ref</th><th style="text-align:right">Amount</th></tr></thead>
+  <tbody>${offsetDetailItems.map(it => `<tr><td style="text-align:left">${it.paidDate.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</td><td style="text-align:left">${it.borrowerName} (${it.borrowerStaffNo})</td><td style="text-align:left">${it.loanRef}</td><td style="text-align:right;color:#dc2626">−${fmt(it.amount)}</td></tr>`).join('')}</tbody>
+</table></div>`
+      : '';
 
     const html = `<!DOCTYPE html>
 <html>
@@ -816,7 +908,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   .org{font-size:18px;font-weight:bold;color:#bc4680}
   .title{font-size:13px;font-weight:bold;margin-top:4px}
   .meta{color:#666;font-size:10px;margin-top:2px}
-  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px}
   .kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px}
   .kpi-label{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em}
   .kpi-value{font-size:15px;font-weight:bold;color:#1e293b;margin-top:2px}
@@ -847,6 +939,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   <div class="kpi"><div class="kpi-label">Total Expected</div><div class="kpi-value">${fmt(kpis.totalExpected)}</div></div>
   <div class="kpi"><div class="kpi-label">Collection Rate</div><div class="kpi-value">${kpis.collectionRate}%</div></div>
   <div class="kpi"><div class="kpi-label">Missed / Partial</div><div class="kpi-value">${kpis.missedMonths} months</div></div>
+  <div class="kpi"><div class="kpi-label">Guarantor Offsets</div><div class="kpi-value" style="color:#dc2626">${fmt(kpis.totalOffsets)}</div></div>
 </div>
 <table>
   <thead><tr><th>Year</th>${headerCells}</tr></thead>
@@ -858,6 +951,8 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   <div class="leg-item"><div class="leg-dot" style="background:#fee2e2"></div> Missed</div>
   <div class="leg-item"><div class="leg-dot" style="background:#dbeafe"></div> Carried Forward</div>
 </div>
+<div style="margin-top:8px;font-size:9px;color:#6b7280;font-style:italic">Red figures indicate amounts deducted from your contributions to settle loans you guaranteed.</div>
+${offsetDetailHtml}
 </body></html>`;
 
     const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] });

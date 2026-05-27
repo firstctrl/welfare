@@ -10,6 +10,18 @@ interface ContributionRow {
   status: ContributionStatus;
 }
 
+interface OffsetRow {
+  month: number;
+  amount: number;
+}
+
+interface OffsetDetailRow {
+  paidDate: string;
+  borrowerName: string;
+  loanRef: string;
+  amount: number;
+}
+
 interface ContributionStatementProps {
   staffName: string;
   staffNo: string;
@@ -20,6 +32,9 @@ interface ContributionStatementProps {
   totalPaid: number;
   totalMissed: number;
   netSurplus: number;
+  offsetRows?: OffsetRow[];
+  totalOffsets?: number;
+  offsetDetail?: OffsetDetailRow[];
 }
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -36,6 +51,10 @@ function statusColor(s: ContributionStatus): string {
 
 export function ContributionStatementEmail(props: ContributionStatementProps) {
   const { staffName, staffNo, year, organisationName, rows, totalExpected, totalPaid, totalMissed, netSurplus } = props;
+  const offsetRows = props.offsetRows ?? [];
+  const totalOffsets = props.totalOffsets ?? 0;
+  const offsetDetail = props.offsetDetail ?? [];
+  const offsetByMonth = new Map(offsetRows.map(o => [o.month, o.amount]));
 
   return (
     <html>
@@ -71,6 +90,7 @@ export function ContributionStatementEmail(props: ContributionStatementProps) {
                         <td><strong>Total Paid:</strong> GHS {fmt(totalPaid)}</td>
                         <td><strong>Total Missed:</strong> GHS {fmt(totalMissed)}</td>
                         <td><strong>Net Surplus:</strong> GHS {fmt(netSurplus)}</td>
+                        <td><strong>Guarantor Offsets:</strong> <span style={{ color: '#dc2626' }}>GHS {fmt(totalOffsets)}</span></td>
                       </tr>
                     </table>
                   </td>
@@ -83,6 +103,7 @@ export function ContributionStatementEmail(props: ContributionStatementProps) {
                           <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 'normal' }}>Month</th>
                           <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 'normal' }}>Expected (GHS)</th>
                           <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 'normal' }}>Paid (GHS)</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 'normal' }}>Offset (GHS)</th>
                           <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 'normal' }}>Surplus C/F</th>
                           <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 'normal' }}>Status</th>
                         </tr>
@@ -93,6 +114,7 @@ export function ContributionStatementEmail(props: ContributionStatementProps) {
                             <td style={{ padding: '7px 10px', borderBottom: '1px solid #e5e7eb' }}>{MONTH_NAMES[row.month - 1]}</td>
                             <td style={{ padding: '7px 10px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>{fmt(row.expectedAmount)}</td>
                             <td style={{ padding: '7px 10px', textAlign: 'right', borderBottom: '1px solid #e5e7eb' }}>{fmt(row.paidAmount)}</td>
+                            <td style={{ padding: '7px 10px', textAlign: 'right', borderBottom: '1px solid #e5e7eb', color: offsetByMonth.get(row.month) ? '#dc2626' : '#9ca3af' }}>{offsetByMonth.get(row.month) ? `−${fmt(offsetByMonth.get(row.month) as number)}` : '—'}</td>
                             <td style={{ padding: '7px 10px', textAlign: 'right', borderBottom: '1px solid #e5e7eb', color: '#16a34a' }}>{fmt(row.surplusCarriedForward)}</td>
                             <td style={{ padding: '7px 10px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', color: statusColor(row.status), fontWeight: 'bold', fontSize: '12px' }}>{row.status}</td>
                           </tr>
@@ -101,6 +123,35 @@ export function ContributionStatementEmail(props: ContributionStatementProps) {
                     </table>
                   </td>
                 </tr>
+                {offsetDetail.length > 0 && (
+                  <tr>
+                    <td style={{ padding: '0 32px 24px' }}>
+                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 8px' }}>
+                        The following deductions were applied to your contributions to settle loans you guaranteed:
+                      </p>
+                      <table width="100%" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse', fontSize: '12px' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#fef2f2', color: '#7f1d1d' }}>
+                            <th style={{ padding: '7px 10px', textAlign: 'left', fontWeight: 'normal' }}>Date</th>
+                            <th style={{ padding: '7px 10px', textAlign: 'left', fontWeight: 'normal' }}>Borrower</th>
+                            <th style={{ padding: '7px 10px', textAlign: 'left', fontWeight: 'normal' }}>Loan Ref</th>
+                            <th style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 'normal' }}>Amount (GHS)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {offsetDetail.map((od, i) => (
+                            <tr key={i} style={{ backgroundColor: i % 2 === 0 ? '#ffffff' : '#fafafa' }}>
+                              <td style={{ padding: '6px 10px', borderBottom: '1px solid #e5e7eb' }}>{od.paidDate}</td>
+                              <td style={{ padding: '6px 10px', borderBottom: '1px solid #e5e7eb' }}>{od.borrowerName}</td>
+                              <td style={{ padding: '6px 10px', borderBottom: '1px solid #e5e7eb' }}>{od.loanRef}</td>
+                              <td style={{ padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid #e5e7eb', color: '#dc2626' }}>−{fmt(od.amount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                )}
                 <tr>
                   <td style={{ padding: '16px 32px', backgroundColor: '#f8fafc', borderTop: '1px solid #e5e7eb', fontSize: '12px', color: '#6b7280' }}>
                     Generated: {new Date().toLocaleDateString('en-GB')} | {organisationName} — Welfare Department
