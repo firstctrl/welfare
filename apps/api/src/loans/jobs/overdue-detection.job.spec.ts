@@ -108,6 +108,8 @@ describe('OverdueDetectionJob', () => {
       'loan-1',
       'system',
       'Overdue Detection Job',
+      undefined,
+      undefined,
     );
     expect(inst.status).toBe(LoanRepaymentStatus.Paid);
     expect(inst.source).toBe(RepaymentSource.GuarantorOffset);

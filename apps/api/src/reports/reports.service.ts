@@ -11,7 +11,6 @@ import {
   ContributionStatus,
   LoanRepaymentStatus,
   LoanStatus,
-  RepaymentSource,
   StaffStatus,
   IMonthlyContributionReport,
   IArrearRow,
@@ -142,36 +141,39 @@ export class ReportsService {
   }
 
   async getGuarantorOffsets(fromDate?: Date, toDate?: Date): Promise<IGuarantorOffsetRow[]> {
-    const match: Record<string, unknown> = { source: RepaymentSource.GuarantorOffset };
+    const match: Record<string, unknown> = { isDebit: true, source: 'GuarantorOffset' };
     if (fromDate || toDate) {
       const dateFilter: Record<string, unknown> = {};
       if (fromDate) dateFilter.$gte = fromDate;
       if (toDate) dateFilter.$lte = toDate;
-      match.paidDate = dateFilter;
+      match.createdAt = dateFilter;
     }
 
-    const repayments = await this.repaymentModel.find(match).sort({ paidDate: -1 }).exec();
-    if (repayments.length === 0) return [];
+    const debits = await this.contribModel.find(match).sort({ createdAt: -1 }).exec();
+    if (debits.length === 0) return [];
 
     const allIds = [
       ...new Set([
-        ...repayments.map(r => r.staffId),
-        ...repayments.filter(r => r.guarantorStaffId).map(r => r.guarantorStaffId as string),
+        ...debits.map(d => d.staffId),
+        ...debits.filter(d => d.borrowerStaffId).map(d => d.borrowerStaffId as string),
       ]),
     ];
     const staffDocs = await this.staffModel.find({ _id: { $in: allIds } }).exec();
     const staffMap = new Map(staffDocs.map(s => [s._id.toString(), s]));
 
-    return repayments.map(r => ({
-      guarantorStaffId: r.guarantorStaffId ?? '',
-      guarantorName: r.guarantorStaffId ? (staffMap.get(r.guarantorStaffId)?.fullName ?? 'Unknown') : 'Unknown',
-      borrowerStaffId: r.staffId,
-      borrowerName: staffMap.get(r.staffId)?.fullName ?? 'Unknown',
-      loanId: r.loanId,
-      instalmentNumber: r.instalmentNumber,
-      offsetAmount: r.paidAmount,
-      offsetDate: r.paidDate?.toISOString() ?? '',
-    }));
+    return debits.map(d => {
+      const createdAt = (d as unknown as { createdAt?: Date }).createdAt;
+      return {
+        guarantorStaffId: d.staffId,
+        guarantorName: staffMap.get(d.staffId)?.fullName ?? 'Unknown',
+        borrowerStaffId: d.borrowerStaffId ?? '',
+        borrowerName: d.borrowerStaffId ? (staffMap.get(d.borrowerStaffId)?.fullName ?? 'Unknown') : 'Unknown',
+        loanId: d.loanId ?? '',
+        instalmentNumber: d.instalmentNumber ?? 0,
+        offsetAmount: d.paidAmount,
+        offsetDate: createdAt ? createdAt.toISOString() : '',
+      };
+    });
   }
 
   // ─────────────────────────── LOANS ───────────────────────────
@@ -287,13 +289,15 @@ export class ReportsService {
         totalOutstanding += pending.reduce((s, r) => s + r.dueAmount - r.paidAmount, 0);
       }
 
-      const offsetRepayments = await this.repaymentModel
-        .find({ guarantorStaffId: gId, source: RepaymentSource.GuarantorOffset })
+      const offsetDebits = await this.contribModel
+        .find({ staffId: gId, isDebit: true, source: 'GuarantorOffset' })
         .exec();
-      const totalOffsetAmount = offsetRepayments.reduce((s, r) => s + r.paidAmount, 0);
+      const totalOffsetAmount = offsetDebits.reduce((s, d) => s + d.paidAmount, 0);
 
-      const borrowerIds = [...new Set(offsetRepayments.map(r => r.staffId))];
-      const borrowerDocs = await this.staffModel.find({ _id: { $in: borrowerIds } }).exec();
+      const borrowerIds = [...new Set(offsetDebits.map(d => d.borrowerStaffId).filter(Boolean) as string[])];
+      const borrowerDocs = borrowerIds.length
+        ? await this.staffModel.find({ _id: { $in: borrowerIds } }).exec()
+        : [];
       const borrowerMap = new Map(borrowerDocs.map(s => [s._id.toString(), s]));
 
       const staff = staffMap.get(gId);
@@ -304,12 +308,15 @@ export class ReportsService {
         totalOutstanding: Math.round(totalOutstanding * 100) / 100,
         activeLoansCount: gLoans.length,
         totalOffsetAmount: Math.round(totalOffsetAmount * 100) / 100,
-        offsetHistory: offsetRepayments.map(r => ({
-          loanId: r.loanId,
-          borrowerName: borrowerMap.get(r.staffId)?.fullName ?? 'Unknown',
-          offsetAmount: r.paidAmount,
-          offsetDate: r.paidDate?.toISOString() ?? '',
-        })),
+        offsetHistory: offsetDebits.map(d => {
+          const createdAt = (d as unknown as { createdAt?: Date }).createdAt;
+          return {
+            loanId: d.loanId ?? '',
+            borrowerName: d.borrowerStaffId ? (borrowerMap.get(d.borrowerStaffId)?.fullName ?? 'Unknown') : 'Unknown',
+            offsetAmount: d.paidAmount,
+            offsetDate: createdAt ? createdAt.toISOString() : '',
+          };
+        }),
       });
     }
     return rows.sort((a, b) => b.totalOutstanding - a.totalOutstanding);
@@ -758,13 +765,13 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
       .sort({ year: 1, month: 1 })
       .exec();
 
-    // Guarantor offset deductions
-    const offsetRepayments = await this.repaymentModel
-      .find({ guarantorStaffId: staffMongoId, source: RepaymentSource.GuarantorOffset })
+    // Guarantor offset deductions (stored as debit contributions)
+    const offsetDebits = await this.contribModel
+      .find({ staffId: staffMongoId, isDebit: true, source: 'GuarantorOffset' })
       .exec();
 
-    // Look up borrower staff docs for offsets
-    const borrowerIds = [...new Set(offsetRepayments.map(r => r.staffId).filter(Boolean))];
+    // Look up borrower staff docs for offsets (bulk fetch)
+    const borrowerIds = [...new Set(offsetDebits.map(d => d.borrowerStaffId).filter(Boolean) as string[])];
     const borrowerStaff = borrowerIds.length
       ? await this.staffModel.find({ _id: { $in: borrowerIds } }).exec()
       : [];
@@ -772,25 +779,21 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
 
     // Build offset map: yyyy-mm -> { totalAmount, items }
     const offsetByKey = new Map<string, { totalAmount: number; items: Array<{ borrowerName: string; borrowerStaffNo: string; loanId: string; amount: number }> }>();
-    for (const r of offsetRepayments) {
-      if (!r.paidDate) continue;
-      const d = new Date(r.paidDate);
-      const y = d.getFullYear();
-      const mo = d.getMonth() + 1;
-      const key = `${y}-${mo}`;
-      const borrower = borrowerMap.get(r.staffId);
+    for (const d of offsetDebits) {
+      const key = `${d.year}-${d.month}`;
+      const borrower = d.borrowerStaffId ? borrowerMap.get(d.borrowerStaffId) : undefined;
       const bucket = offsetByKey.get(key) ?? { totalAmount: 0, items: [] };
-      bucket.totalAmount += r.paidAmount;
+      bucket.totalAmount += d.paidAmount;
       bucket.items.push({
         borrowerName: borrower?.fullName ?? 'Unknown',
-        borrowerStaffNo: borrower?.staffId ?? '',
-        loanId: r.loanId,
-        amount: r.paidAmount,
+        borrowerStaffNo: borrower?.staffId ?? '—',
+        loanId: d.loanId ?? '—',
+        amount: d.paidAmount,
       });
       offsetByKey.set(key, bucket);
     }
 
-    const offsetYears = [...new Set(offsetRepayments.filter(r => r.paidDate).map(r => new Date(r.paidDate as Date).getFullYear()))];
+    const offsetYears = [...new Set(offsetDebits.map(d => d.year))];
     const years = [...new Set([...contribs.map(c => c.year), ...offsetYears])].sort((a, b) => a - b);
     const byKey = new Map(contribs.map(c => [`${c.year}-${c.month}`, c]));
 
@@ -823,7 +826,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
     const totalSurplus = contribs.reduce((s, c) => s + c.surplusCarriedForward, 0);
     const missedMonths = contribs.filter(c => c.status === ContributionStatus.Missed || c.status === ContributionStatus.Partial).length;
     const collectionRate = totalExpected > 0 ? Math.round((totalPaid / totalExpected) * 100) : 0;
-    const totalOffsets = offsetRepayments.reduce((s, r) => s + r.paidAmount, 0);
+    const totalOffsets = offsetDebits.reduce((s, d) => s + d.paidAmount, 0);
 
     return {
       staff: { _id: staff._id.toString(), fullName: staff.fullName, staffId: staff.staffId, email: staff.email },
@@ -1183,28 +1186,29 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
       : `<tr><td colspan="7" style="text-align:center;padding:14px;color:#999">Not guaranteeing any loans</td></tr>`;
 
     // ─── Section 5: offset history ───
-    const offsetRepayments = await this.repaymentModel
-      .find({ guarantorStaffId: staffMongoId, source: RepaymentSource.GuarantorOffset })
-      .sort({ paidDate: -1 })
+    const offsetDebits = await this.contribModel
+      .find({ staffId: staffMongoId, isDebit: true, source: 'GuarantorOffset' })
+      .sort({ createdAt: -1 })
       .exec();
-    const offsetBorrowerIds = [...new Set(offsetRepayments.map(r => r.staffId))];
+    const offsetBorrowerIds = [...new Set(offsetDebits.map(d => d.borrowerStaffId).filter(Boolean) as string[])];
     const offsetBorrowerDocs = offsetBorrowerIds.length
       ? await this.staffModel.find({ _id: { $in: offsetBorrowerIds } }).exec()
       : [];
     const offsetBorrowerMap = new Map(offsetBorrowerDocs.map(s => [s._id.toString(), s]));
-    const offsetRows = offsetRepayments.length
-      ? offsetRepayments.map(r => {
-          const b = offsetBorrowerMap.get(r.staffId);
-          const ref = r.loanId.slice(-6).toUpperCase();
+    const offsetRows = offsetDebits.length
+      ? offsetDebits.map(d => {
+          const b = d.borrowerStaffId ? offsetBorrowerMap.get(d.borrowerStaffId) : undefined;
+          const ref = d.loanId ? d.loanId.slice(-6).toUpperCase() : '—';
+          const createdAt = (d as unknown as { createdAt?: Date }).createdAt;
           const borrowerCell = b
             ? `${escapeHtml(b.fullName)} <span style="color:#6b7280;font-size:9px">(${escapeHtml(b.staffId)})</span>`
             : `<span style="color:#999">Unknown</span>`;
           return `<tr>
-            <td>${fmtDate(r.paidDate)}</td>
+            <td>${fmtDate(createdAt)}</td>
             <td style="text-align:left">${borrowerCell}</td>
             <td style="text-align:left;font-family:monospace">${ref}</td>
-            <td>${r.instalmentNumber}</td>
-            <td style="text-align:right;color:#dc2626">−${fmt(r.paidAmount)}</td>
+            <td>${d.instalmentNumber ?? '—'}</td>
+            <td style="text-align:right;color:#dc2626">−${fmt(d.paidAmount)}</td>
           </tr>`;
         }).join('')
       : `<tr><td colspan="5" style="text-align:center;padding:14px;color:#999">No offset history</td></tr>`;
@@ -1291,7 +1295,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   <tbody>${guaranteedRows}</tbody>
 </table>
 
-<div class="section-title">Guarantor Offset History (${offsetRepayments.length})</div>
+<div class="section-title">Guarantor Offset History (${offsetDebits.length})</div>
 <table>
   <thead><tr>
     <th>Date</th>

@@ -16,6 +16,7 @@ import {
 } from '@welfare/shared';
 
 const mockContribAggregate = jest.fn();
+const mockContribFind = jest.fn();
 const mockLoanFind = jest.fn();
 const mockLoanAggregate = jest.fn();
 const mockLoanDistinct = jest.fn();
@@ -26,7 +27,7 @@ const mockStaffFind = jest.fn();
 const mockStaffFindById = jest.fn();
 const mockBatchFind = jest.fn();
 
-const mockContribModel = { aggregate: mockContribAggregate };
+const mockContribModel = { aggregate: mockContribAggregate, find: mockContribFind };
 const mockLoanModel = { find: mockLoanFind, aggregate: mockLoanAggregate, distinct: mockLoanDistinct, findById: mockLoanFindById };
 const mockRepaymentModel = { find: mockRepaymentFind, aggregate: mockRepaymentAggregate };
 const mockStaffModel = { find: mockStaffFind, findById: mockStaffFindById };
@@ -108,18 +109,20 @@ describe('ReportsService', () => {
   });
 
   describe('getGuarantorOffsets', () => {
-    it('returns repayments with guarantor source', async () => {
-      mockRepaymentFind.mockReturnValue({
+    it('returns debit contributions with guarantor offset source', async () => {
+      mockContribFind.mockReturnValue({
         sort: jest.fn().mockReturnValue({
           exec: jest.fn().mockResolvedValue([
             {
-              _id: 'rep1',
+              _id: 'deb1',
+              staffId: 'guarantor1',
+              borrowerStaffId: 'borrower1',
               loanId: 'loan1',
-              staffId: 'borrower1',
-              guarantorStaffId: 'guarantor1',
               instalmentNumber: 3,
               paidAmount: 200,
-              paidDate: new Date('2025-03-05'),
+              isDebit: true,
+              source: 'GuarantorOffset',
+              createdAt: new Date('2025-03-05'),
             },
           ]),
         }),
@@ -134,10 +137,12 @@ describe('ReportsService', () => {
       const result = await service.getGuarantorOffsets();
       expect(result).toHaveLength(1);
       expect(result[0].offsetAmount).toBe(200);
+      expect(result[0].guarantorStaffId).toBe('guarantor1');
+      expect(result[0].borrowerStaffId).toBe('borrower1');
     });
 
-    it('returns empty array when no offset repayments exist', async () => {
-      mockRepaymentFind.mockReturnValue({
+    it('returns empty array when no offset debits exist', async () => {
+      mockContribFind.mockReturnValue({
         sort: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }),
       });
 
