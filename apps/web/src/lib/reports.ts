@@ -86,6 +86,7 @@ export interface StaffStatementCell {
 }
 
 export interface StaffStatementOffsetItem {
+  kind?: 'Guarantor' | 'Defaulter';
   borrowerName: string;
   borrowerStaffNo: string;
   loanId: string;

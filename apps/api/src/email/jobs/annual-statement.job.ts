@@ -66,12 +66,13 @@ export class AnnualStatementJob {
       const totalMissed = rows.reduce((s: number, r: any) => s + Math.max(0, r.expectedAmount - r.paidAmount), 0);
       const netSurplus = rows.reduce((s: number, r: any) => s + r.surplusCarriedForward, 0);
 
-      // Fetch guarantor offsets for this staff over lastYear (stored as debit contributions)
+      // Fetch loan-related deductions for this staff over lastYear
+      // (stored as debit contributions): guarantor offsets + own defaulter deductions.
       const offsets = await this.contribModel
         .find({
           staffId: staff._id.toString(),
           isDebit: true,
-          source: 'GuarantorOffset',
+          source: { $in: ['GuarantorOffset', 'DefaulterDeduction'] },
           year: lastYear,
         })
         .exec();
@@ -94,14 +95,17 @@ export class AnnualStatementJob {
 
       const offsetDetail = offsets
         .map(o => {
-          const b = o.borrowerStaffId ? borrowerMap.get(o.borrowerStaffId) : undefined;
+          const isGuarantor = o.source === 'GuarantorOffset';
+          const b = isGuarantor && o.borrowerStaffId ? borrowerMap.get(o.borrowerStaffId) : undefined;
           const createdAt = (o as unknown as { createdAt?: Date }).createdAt;
           const paidDate = createdAt
             ? new Date(createdAt).toLocaleDateString('en-GB')
             : `${String(o.month).padStart(2, '0')}/${o.year}`;
           return {
             paidDate,
-            borrowerName: b ? `${b.fullName} (${b.staffId})` : 'Unknown',
+            borrowerName: isGuarantor
+              ? (b ? `${b.fullName} (${b.staffId})` : 'Unknown')
+              : 'Own missed instalment',
             loanRef: o.loanId ? o.loanId.slice(-6).toUpperCase() : '—',
             amount: o.paidAmount,
           };

@@ -90,7 +90,7 @@ export function ContributionStatementEmail(props: ContributionStatementProps) {
                         <td><strong>Total Paid:</strong> GHS {fmt(totalPaid)}</td>
                         <td><strong>Total Missed:</strong> GHS {fmt(totalMissed)}</td>
                         <td><strong>Net Surplus:</strong> GHS {fmt(netSurplus)}</td>
-                        <td><strong>Guarantor Offsets:</strong> <span style={{ color: '#dc2626' }}>GHS {fmt(totalOffsets)}</span></td>
+                        <td><strong>Loan Deductions:</strong> <span style={{ color: '#dc2626' }}>GHS {fmt(totalOffsets)}</span></td>
                       </tr>
                     </table>
                   </td>

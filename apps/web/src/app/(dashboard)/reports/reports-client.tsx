@@ -622,9 +622,9 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
             />
             {(kpis.totalOffsets ?? 0) > 0 && (
               <KpiCard
-                label="Guarantor Offsets"
+                label="Loan Deductions"
                 value={fmtGHS(kpis.totalOffsets ?? 0)}
-                subtext="Deducted to settle guaranteed loans"
+                subtext="Deducted to settle a loan you guaranteed or your own missed instalment"
                 icon={AlertCircle}
                 iconKind="danger"
               />
@@ -666,7 +666,7 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
                             {offset && offset.totalAmount > 0 && (
                               <div
                                 className="mt-0.5 text-[10px] font-mono tabular text-danger-700"
-                                title={offset.items.map(it => `${it.borrowerName} (${it.borrowerStaffNo}): ${fmtGHS(it.amount)}`).join('\n')}
+                                title={offset.items.map(it => it.kind === 'Defaulter' ? `Own missed instalment: ${fmtGHS(it.amount)}` : `Guarantor offset for ${it.borrowerName} (${it.borrowerStaffNo}): ${fmtGHS(it.amount)}`).join('\n')}
                               >
                                 −{fmtGHS(offset.totalAmount)}
                               </div>
@@ -714,7 +714,7 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
           </div>
           {(kpis.totalOffsets ?? 0) > 0 && (
             <p className="text-xs text-neutral-500">
-              <span className="text-danger-700 font-mono">−amount</span> indicates contributions deducted to settle loans this staff guaranteed (hover for borrower detail).
+              <span className="text-danger-700 font-mono">−amount</span> indicates contributions deducted to settle a loan this staff guaranteed or their own missed instalment (hover for detail).
             </p>
           )}
         </>

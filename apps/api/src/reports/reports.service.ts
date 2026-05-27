@@ -752,7 +752,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
     rows: Array<{
       year: number;
       cells: Record<number, { paidAmount: number; expectedAmount: number; status: string } | null>;
-      offsetCells: Record<number, { totalAmount: number; items: Array<{ borrowerName: string; borrowerStaffNo: string; loanId: string; amount: number }> } | null>;
+      offsetCells: Record<number, { totalAmount: number; items: Array<{ kind?: 'Guarantor' | 'Defaulter'; borrowerName: string; borrowerStaffNo: string; loanId: string; amount: number }> } | null>;
       yearTotal: number;
       yearOffsetTotal: number;
     }>;
@@ -765,12 +765,18 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
       .sort({ year: 1, month: 1 })
       .exec();
 
-    // Guarantor offset deductions (stored as debit contributions)
+    // Loan-related deductions stored as debit contributions:
+    //  - GuarantorOffset: deducted to settle a loan THIS staff guaranteed
+    //  - DefaulterDeduction: deducted to cover THIS staff's own missed instalment
     const offsetDebits = await this.contribModel
-      .find({ staffId: staffMongoId, isDebit: true, source: 'GuarantorOffset' })
+      .find({
+        staffId: staffMongoId,
+        isDebit: true,
+        source: { $in: ['GuarantorOffset', 'DefaulterDeduction'] },
+      })
       .exec();
 
-    // Look up borrower staff docs for offsets (bulk fetch)
+    // Look up borrower staff docs for guarantor-offset rows (bulk fetch)
     const borrowerIds = [...new Set(offsetDebits.map(d => d.borrowerStaffId).filter(Boolean) as string[])];
     const borrowerStaff = borrowerIds.length
       ? await this.staffModel.find({ _id: { $in: borrowerIds } }).exec()
@@ -778,15 +784,19 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
     const borrowerMap = new Map(borrowerStaff.map(s => [s._id.toString(), s]));
 
     // Build offset map: yyyy-mm -> { totalAmount, items }
-    const offsetByKey = new Map<string, { totalAmount: number; items: Array<{ borrowerName: string; borrowerStaffNo: string; loanId: string; amount: number }> }>();
+    // For DefaulterDeduction rows, the borrower IS this staff — leave borrowerName blank
+    // and tag the item kind so the renderer can distinguish.
+    const offsetByKey = new Map<string, { totalAmount: number; items: Array<{ kind: 'Guarantor' | 'Defaulter'; borrowerName: string; borrowerStaffNo: string; loanId: string; amount: number }> }>();
     for (const d of offsetDebits) {
       const key = `${d.year}-${d.month}`;
-      const borrower = d.borrowerStaffId ? borrowerMap.get(d.borrowerStaffId) : undefined;
+      const isGuarantor = d.source === 'GuarantorOffset';
+      const borrower = isGuarantor && d.borrowerStaffId ? borrowerMap.get(d.borrowerStaffId) : undefined;
       const bucket = offsetByKey.get(key) ?? { totalAmount: 0, items: [] };
       bucket.totalAmount += d.paidAmount;
       bucket.items.push({
-        borrowerName: borrower?.fullName ?? 'Unknown',
-        borrowerStaffNo: borrower?.staffId ?? '—',
+        kind: isGuarantor ? 'Guarantor' : 'Defaulter',
+        borrowerName: isGuarantor ? (borrower?.fullName ?? 'Unknown') : '',
+        borrowerStaffNo: isGuarantor ? (borrower?.staffId ?? '—') : '',
         loanId: d.loanId ?? '—',
         amount: d.paidAmount,
       });
@@ -799,7 +809,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
 
     const rows = years.map(year => {
       const cells: Record<number, { paidAmount: number; expectedAmount: number; status: string } | null> = {};
-      const offsetCells: Record<number, { totalAmount: number; items: Array<{ borrowerName: string; borrowerStaffNo: string; loanId: string; amount: number }> } | null> = {};
+      const offsetCells: Record<number, { totalAmount: number; items: Array<{ kind?: 'Guarantor' | 'Defaulter'; borrowerName: string; borrowerStaffNo: string; loanId: string; amount: number }> } | null> = {};
       let yearTotal = 0;
       let yearOffsetTotal = 0;
       for (let m = 1; m <= 12; m++) {
@@ -862,7 +872,10 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
           ? `<br/><span style="color:#dc2626;font-size:9px">−${fmt(o.totalAmount)}</span>`
           : '';
         const offsetTitle = o && o.items.length
-          ? escapeAttr(o.items.map(it => `${it.borrowerName} (${it.borrowerStaffNo}): ${fmt(it.amount)}`).join('; '))
+          ? escapeAttr(o.items.map(it => it.kind === 'Defaulter'
+              ? `Own missed instalment: ${fmt(it.amount)}`
+              : `Guarantor offset for ${it.borrowerName} (${it.borrowerStaffNo}): ${fmt(it.amount)}`,
+            ).join('; '))
           : '';
         if (!c) {
           if (offsetLine) {
@@ -871,7 +884,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
           return `<td class="empty">—</td>`;
         }
         const bg = statusColor[c.status] ?? '#fff';
-        const title = offsetTitle ? `${c.status} | Offsets: ${offsetTitle}` : c.status;
+        const title = offsetTitle ? `${c.status} | Deductions: ${offsetTitle}` : c.status;
         return `<td style="background:${bg}" title="${escapeAttr(title)}">${fmt(c.paidAmount)}${offsetLine}</td>`;
       }).join('');
       const yearTotalCell = row.yearOffsetTotal > 0
@@ -881,7 +894,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
     }).join('');
 
     // Build offset detail rows (flat list across years)
-    const offsetDetailItems: Array<{ paidDate: Date; borrowerName: string; borrowerStaffNo: string; loanRef: string; amount: number }> = [];
+    const offsetDetailItems: Array<{ paidDate: Date; kind: string; borrowerLabel: string; loanRef: string; amount: number }> = [];
     for (const row of rows) {
       for (let m = 1; m <= 12; m++) {
         const o = row.offsetCells[m];
@@ -889,19 +902,19 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
         for (const it of o.items) {
           offsetDetailItems.push({
             paidDate: new Date(row.year, m - 1, 1),
-            borrowerName: it.borrowerName,
-            borrowerStaffNo: it.borrowerStaffNo,
-            loanRef: it.loanId.slice(-6).toUpperCase(),
+            kind: it.kind === 'Defaulter' ? 'Own missed instalment' : 'Guarantor offset',
+            borrowerLabel: it.kind === 'Defaulter' ? '—' : `${it.borrowerName} (${it.borrowerStaffNo})`,
+            loanRef: it.loanId !== '—' ? it.loanId.slice(-6).toUpperCase() : '—',
             amount: it.amount,
           });
         }
       }
     }
     const offsetDetailHtml = offsetDetailItems.length
-      ? `<div style="margin-top:16px"><div style="font-size:11px;font-weight:bold;margin-bottom:6px;color:#1e293b">Guarantor Offset Detail</div>
+      ? `<div style="margin-top:16px"><div style="font-size:11px;font-weight:bold;margin-bottom:6px;color:#1e293b">Loan Deduction Detail</div>
 <table>
-  <thead><tr><th style="text-align:left">Period</th><th style="text-align:left">Borrower</th><th style="text-align:left">Loan Ref</th><th style="text-align:right">Amount</th></tr></thead>
-  <tbody>${offsetDetailItems.map(it => `<tr><td style="text-align:left">${it.paidDate.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</td><td style="text-align:left">${it.borrowerName} (${it.borrowerStaffNo})</td><td style="text-align:left">${it.loanRef}</td><td style="text-align:right;color:#dc2626">−${fmt(it.amount)}</td></tr>`).join('')}</tbody>
+  <thead><tr><th style="text-align:left">Period</th><th style="text-align:left">Type</th><th style="text-align:left">Borrower</th><th style="text-align:left">Loan Ref</th><th style="text-align:right">Amount</th></tr></thead>
+  <tbody>${offsetDetailItems.map(it => `<tr><td style="text-align:left">${it.paidDate.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</td><td style="text-align:left">${it.kind}</td><td style="text-align:left">${it.borrowerLabel}</td><td style="text-align:left">${it.loanRef}</td><td style="text-align:right;color:#dc2626">−${fmt(it.amount)}</td></tr>`).join('')}</tbody>
 </table></div>`
       : '';
 
@@ -945,7 +958,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   <div class="kpi"><div class="kpi-label">Total Expected</div><div class="kpi-value">${fmt(kpis.totalExpected)}</div></div>
   <div class="kpi"><div class="kpi-label">Collection Rate</div><div class="kpi-value">${kpis.collectionRate}%</div></div>
   <div class="kpi"><div class="kpi-label">Missed / Partial</div><div class="kpi-value">${kpis.missedMonths} months</div></div>
-  <div class="kpi"><div class="kpi-label">Guarantor Offsets</div><div class="kpi-value" style="color:#dc2626">${fmt(kpis.totalOffsets)}</div></div>
+  <div class="kpi"><div class="kpi-label">Loan Deductions</div><div class="kpi-value" style="color:#dc2626">${fmt(kpis.totalOffsets)}</div></div>
 </div>
 <table>
   <thead><tr><th>Year</th>${headerCells}</tr></thead>
@@ -957,7 +970,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   <div class="leg-item"><div class="leg-dot" style="background:#fee2e2"></div> Missed</div>
   <div class="leg-item"><div class="leg-dot" style="background:#dbeafe"></div> Carried Forward</div>
 </div>
-<div style="margin-top:8px;font-size:9px;color:#6b7280;font-style:italic">Red figures indicate amounts deducted from your contributions to settle loans you guaranteed.</div>
+<div style="margin-top:8px;font-size:9px;color:#6b7280;font-style:italic">Red figures indicate amounts deducted from your contributions: either to settle a loan you guaranteed or to cover your own missed loan instalment.</div>
 ${offsetDetailHtml}
 </body></html>`;
 
@@ -1185,9 +1198,13 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
         }).join('')
       : `<tr><td colspan="7" style="text-align:center;padding:14px;color:#999">Not guaranteeing any loans</td></tr>`;
 
-    // ─── Section 5: offset history ───
+    // ─── Section 5: loan deductions (guarantor offsets + own defaulter deductions) ───
     const offsetDebits = await this.contribModel
-      .find({ staffId: staffMongoId, isDebit: true, source: 'GuarantorOffset' })
+      .find({
+        staffId: staffMongoId,
+        isDebit: true,
+        source: { $in: ['GuarantorOffset', 'DefaulterDeduction'] },
+      })
       .sort({ createdAt: -1 })
       .exec();
     const offsetBorrowerIds = [...new Set(offsetDebits.map(d => d.borrowerStaffId).filter(Boolean) as string[])];
@@ -1197,21 +1214,26 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
     const offsetBorrowerMap = new Map(offsetBorrowerDocs.map(s => [s._id.toString(), s]));
     const offsetRows = offsetDebits.length
       ? offsetDebits.map(d => {
-          const b = d.borrowerStaffId ? offsetBorrowerMap.get(d.borrowerStaffId) : undefined;
+          const isGuarantor = d.source === 'GuarantorOffset';
+          const b = isGuarantor && d.borrowerStaffId ? offsetBorrowerMap.get(d.borrowerStaffId) : undefined;
           const ref = d.loanId ? d.loanId.slice(-6).toUpperCase() : '—';
           const createdAt = (d as unknown as { createdAt?: Date }).createdAt;
-          const borrowerCell = b
-            ? `${escapeHtml(b.fullName)} <span style="color:#6b7280;font-size:9px">(${escapeHtml(b.staffId)})</span>`
-            : `<span style="color:#999">Unknown</span>`;
+          const typeCell = isGuarantor ? 'Guarantor offset' : 'Own missed instalment';
+          const borrowerCell = isGuarantor
+            ? (b
+                ? `${escapeHtml(b.fullName)} <span style="color:#6b7280;font-size:9px">(${escapeHtml(b.staffId)})</span>`
+                : `<span style="color:#999">Unknown</span>`)
+            : '—';
           return `<tr>
             <td>${fmtDate(createdAt)}</td>
+            <td>${typeCell}</td>
             <td style="text-align:left">${borrowerCell}</td>
             <td style="text-align:left;font-family:monospace">${ref}</td>
             <td>${d.instalmentNumber ?? '—'}</td>
             <td style="text-align:right;color:#dc2626">−${fmt(d.paidAmount)}</td>
           </tr>`;
         }).join('')
-      : `<tr><td colspan="5" style="text-align:center;padding:14px;color:#999">No offset history</td></tr>`;
+      : `<tr><td colspan="6" style="text-align:center;padding:14px;color:#999">No loan deductions</td></tr>`;
 
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"/>
@@ -1295,14 +1317,15 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   <tbody>${guaranteedRows}</tbody>
 </table>
 
-<div class="section-title">Guarantor Offset History (${offsetDebits.length})</div>
+<div class="section-title">Loan Deduction History (${offsetDebits.length})</div>
 <table>
   <thead><tr>
     <th>Date</th>
+    <th>Type</th>
     <th style="text-align:left">Borrower</th>
     <th style="text-align:left">Loan Ref</th>
     <th>Instalment #</th>
-    <th style="text-align:right">Amount Applied</th>
+    <th style="text-align:right">Deducted From You</th>
   </tr></thead>
   <tbody>${offsetRows}</tbody>
 </table>
