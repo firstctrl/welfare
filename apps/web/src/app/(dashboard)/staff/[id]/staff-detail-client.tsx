@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { UserCog, Send, Pencil, Plus } from 'lucide-react';
+import { UserCog, Send, Pencil, Plus, Download } from 'lucide-react';
 import Link from 'next/link';
 import { StaffStatus, ContributionStatus, LoanStatus } from '@welfare/shared';
 import type { IStaff, IContribution, ILoan, ILoanRepayment } from '@welfare/shared';
@@ -15,6 +15,7 @@ import { getContributionsByStaff } from '@/lib/contributions';
 import { getLoansByStaff, getLoansByGuarantor, getLoanSchedule } from '@/lib/loans';
 import { getConfig } from '@/lib/config';
 import { sendContributionStatement } from '@/lib/email';
+import { downloadStaffRecordPdf } from '@/lib/reports';
 import { Avatar } from '@/components/ui/avatar';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -61,6 +62,7 @@ export default function StaffDetailClient({ id }: { id: string }) {
   const [editing, setEditing] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [sendingStatement, setSendingStatement] = useState(false);
+  const [downloadingRecord, setDownloadingRecord] = useState(false);
   const [statementYear, setStatementYear] = useState(new Date().getFullYear());
 
   const { data: staff, isLoading } = useQuery({ queryKey: ['staff', id], queryFn: () => getStaff(id) });
@@ -230,8 +232,8 @@ export default function StaffDetailClient({ id }: { id: string }) {
             <p className="text-sm text-neutral-500 mt-1">
               Staff ID: {staff.staffId} &middot; PF: {staff.pfNo} &middot; Level: {staff.level}
             </p>
-            {!isTerminal && (
-              <div className="mt-3">
+            <div className="mt-3 flex flex-wrap gap-2">
+              {!isTerminal && (
                 <Button
                   variant="secondary"
                   size="sm"
@@ -240,8 +242,27 @@ export default function StaffDetailClient({ id }: { id: string }) {
                 >
                   Change Status
                 </Button>
-              </div>
-            )}
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                Icon={Download}
+                loading={downloadingRecord}
+                onClick={async () => {
+                  setDownloadingRecord(true);
+                  try {
+                    await downloadStaffRecordPdf(id, staff.staffId);
+                    toast.success('Staff record downloaded');
+                  } catch {
+                    toast.error('Failed to download staff record');
+                  } finally {
+                    setDownloadingRecord(false);
+                  }
+                }}
+              >
+                Download Record
+              </Button>
+            </div>
           </div>
         </CardBody>
       </Card>

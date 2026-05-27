@@ -137,6 +137,21 @@ export async function downloadStatementPdf(staffMongoId: string, staffNo: string
   URL.revokeObjectURL(url);
 }
 
+export async function downloadStaffRecordPdf(staffMongoId: string, staffNo: string): Promise<void> {
+  const { data } = await apiClient.get('/reports/staff-record/pdf', {
+    params: { staffId: staffMongoId },
+    responseType: 'blob',
+  });
+  const url = URL.createObjectURL(data as Blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `staff-record-${staffNo}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export interface BulkSendParams {
   year: number;
   sendTo: 'all' | 'selected';
