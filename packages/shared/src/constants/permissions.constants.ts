@@ -12,7 +12,7 @@ export const PERMISSIONS: PermissionMatrix = {
     [AppModule.Remittances]:    'full',
     [AppModule.Investments]:    'full',
     [AppModule.Reports]:        'full',
-    [AppModule.Settings]:       'full',
+    [AppModule.Settings]:       'none',
     [AppModule.AuditLog]:       'none',
     [AppModule.EmailLog]:       'none',
     [AppModule.UserManagement]: 'none',

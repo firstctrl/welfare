@@ -25,4 +25,5 @@ export enum ConfigKey {
   EmailLoanScheduleEnabled = 'EMAIL_LOAN_SCHEDULE_ENABLED',
   RemittanceChargeRate = 'REMITTANCE_CHARGE_RATE',
   LoanPayOffDiscountRate = 'LOAN_PAYOFF_DISCOUNT_RATE',
+  SessionIdleTimeoutMinutes = 'SESSION_IDLE_TIMEOUT_MINUTES',
 }

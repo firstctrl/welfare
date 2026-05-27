@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ConfigKey, IRemittanceReport, IRemittanceReportRow, PaginatedResult } from '@welfare/shared';
@@ -69,11 +69,67 @@ export class RemittancesService {
 
   async findAll(page = 1, limit = 20): Promise<PaginatedResult<RemittanceDocument>> {
     const skip = (page - 1) * limit;
+    const filter = { deletedAt: { $exists: false } };
     const [data, total] = await Promise.all([
-      this.remittanceModel.find().sort({ year: -1, month: -1 }).skip(skip).limit(limit).exec(),
-      this.remittanceModel.countDocuments().exec(),
+      this.remittanceModel.find(filter).sort({ year: -1, month: -1 }).skip(skip).limit(limit).exec(),
+      this.remittanceModel.countDocuments(filter).exec(),
     ]);
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  async update(id: string, dto: { month?: number; year?: number; receiptDate?: string }, reason: string, actorId: string): Promise<RemittanceDocument> {
+    if (!reason?.trim()) throw new BadRequestException('reason is required for edits');
+
+    const doc = await this.remittanceModel.findOne({ _id: id, deletedAt: { $exists: false } }).exec();
+    if (!doc) throw new NotFoundException('Remittance not found');
+
+    const snapshot: Record<string, unknown> = {
+      month: doc.month,
+      year: doc.year,
+      grossAmount: doc.grossAmount,
+      chargeRate: doc.chargeRate,
+      charges: doc.charges,
+      netPayable: doc.netPayable,
+      receiptDate: doc.receiptDate,
+    };
+
+    const newMonth = dto.month ?? doc.month;
+    const newYear = dto.year ?? doc.year;
+
+    if (newMonth !== doc.month || newYear !== doc.year) {
+      const conflict = await this.remittanceModel.findOne({
+        _id: { $ne: doc._id },
+        month: newMonth,
+        year: newYear,
+        deletedAt: { $exists: false },
+      }).exec();
+      if (conflict) throw new ConflictException(`Remittance for ${newMonth}/${newYear} already exists`);
+
+      doc.month = newMonth;
+      doc.year = newYear;
+      const grossAmount = await this.getGrossForPeriod(newMonth, newYear);
+      doc.grossAmount = grossAmount;
+      doc.charges = r2(grossAmount * doc.chargeRate / 100);
+      doc.netPayable = r2(grossAmount - doc.charges);
+    }
+
+    if (dto.receiptDate) doc.receiptDate = new Date(dto.receiptDate);
+
+    doc.editHistory.push({ editedBy: actorId, editedAt: new Date(), reason: reason.trim(), snapshot });
+    await doc.save();
+    return doc;
+  }
+
+  async softDelete(id: string, reason: string, actorId: string): Promise<void> {
+    if (!reason?.trim()) throw new BadRequestException('reason is required for deletion');
+
+    const doc = await this.remittanceModel.findOne({ _id: id, deletedAt: { $exists: false } }).exec();
+    if (!doc) throw new NotFoundException('Remittance not found');
+
+    await this.remittanceModel.updateOne(
+      { _id: id },
+      { deletedAt: new Date(), deletedBy: actorId, deletionReason: reason.trim() },
+    );
   }
 
   async getReport(

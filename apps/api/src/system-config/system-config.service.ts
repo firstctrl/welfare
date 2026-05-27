@@ -44,6 +44,7 @@ const SEED_DEFAULTS: Array<{ key: ConfigKey; value: string; description?: string
   { key: ConfigKey.OutlookPassword, value: '' },
   { key: ConfigKey.EmailContributionStatementCron, value: '0 9 1 * *' },
   { key: ConfigKey.EmailLoanScheduleEnabled, value: 'false' },
+  { key: ConfigKey.SessionIdleTimeoutMinutes, value: '30' },
 ];
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -275,6 +276,12 @@ export class SystemConfigService implements OnModuleInit {
           if (value !== 'true' && value !== 'false')
             throw new UnprocessableEntityException(`EmailLoanScheduleEnabled must be 'true' or 'false'`);
           break;
+        case ConfigKey.SessionIdleTimeoutMinutes: {
+          const mins = parseInt(value, 10);
+          if (!(mins >= 5 && mins <= 480))
+            throw new UnprocessableEntityException(`SessionIdleTimeoutMinutes must be between 5 and 480`);
+          break;
+        }
         // Keys with no rules: accept any non-undefined string
         default:
           break;

@@ -2,7 +2,12 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
   Post,
   Query,
   Res,
@@ -21,6 +26,7 @@ import { RequirePermission } from '../auth/decorators/require-permission.decorat
 import { RemittancesService } from './remittances.service';
 import { RemittancesImportService } from './remittances.import.service';
 import { CreateRemittanceDto } from './dto/create-remittance.dto';
+import { UpdateRemittanceDto } from './dto/update-remittance.dto';
 import { RemittanceQueryDto } from './dto/remittance-query.dto';
 
 const CSV_COLUMNS = [
@@ -69,6 +75,29 @@ export class RemittancesController {
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
     return this.importService.processImport(file.buffer, file.originalname, user._id.toString(), user.displayName);
+  }
+
+  @Patch(':id')
+  @RequirePermission(AppModule.Remittances, 'full')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateRemittanceDto,
+    @CurrentUser() user: { _id: { toString(): string } },
+  ) {
+    const { reason, ...fields } = dto;
+    return this.service.update(id, fields, reason, user._id.toString());
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermission(AppModule.Remittances, 'full')
+  async remove(
+    @Param('id') id: string,
+    @Body('reason') reason: string,
+    @CurrentUser() user: { _id: { toString(): string } },
+  ) {
+    if (!reason?.trim()) throw new BadRequestException('reason is required');
+    await this.service.softDelete(id, reason, user._id.toString());
   }
 
   @Get('report')

@@ -50,6 +50,22 @@ export async function createRemittance(payload: { month: number; year: number; r
   return data;
 }
 
+export interface UpdateRemittancePayload {
+  month?: number;
+  year?: number;
+  receiptDate?: string;
+  reason: string;
+}
+
+export async function updateRemittance(id: string, payload: UpdateRemittancePayload): Promise<RemittanceRecord> {
+  const { data } = await apiClient.patch(`/remittances/${id}`, payload);
+  return data;
+}
+
+export async function deleteRemittance(id: string, reason: string): Promise<void> {
+  await apiClient.delete(`/remittances/${id}`, { data: { reason } });
+}
+
 export async function importRemittances(file: File): Promise<{ batchId: string; imported: number; flagged: number; total: number }> {
   const form = new FormData();
   form.append('file', file);

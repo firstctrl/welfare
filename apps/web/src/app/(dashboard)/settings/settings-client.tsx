@@ -593,6 +593,62 @@ function EmailSection({ cfg, onUpdate, onDirtyChange, canEdit }: { cfg: ConfigMa
   );
 }
 
+// ─── section: Security ──────────────────────────────────────────────────────
+
+const SECURITY_KEYS = ['SESSION_IDLE_TIMEOUT_MINUTES'] as const;
+
+function SecuritySection({ cfg, onUpdate, onDirtyChange, canEdit }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void; canEdit: boolean }) {
+  const [timeout, setTimeout_] = useState(cfg['SESSION_IDLE_TIMEOUT_MINUTES']?.value ?? '30');
+  const [saving, setSaving] = useState(false);
+
+  const [original] = useState(() => cfg['SESSION_IDLE_TIMEOUT_MINUTES']?.value ?? '30');
+  const dirty = timeout !== original;
+  const meta = latestEntry(cfg, [...SECURITY_KEYS]);
+
+  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
+
+  async function save() {
+    if (!dirty) return;
+    const mins = parseInt(timeout, 10);
+    if (isNaN(mins) || mins < 5 || mins > 480) {
+      toast.error('Idle timeout must be between 5 and 480 minutes');
+      return;
+    }
+    setSaving(true);
+    try {
+      const next = await updateConfig({ SESSION_IDLE_TIMEOUT_MINUTES: timeout });
+      onUpdate(next);
+      setTimeout_(next['SESSION_IDLE_TIMEOUT_MINUTES']?.value ?? timeout);
+      onDirtyChange(false);
+      toast.success('Security settings saved');
+    } catch {
+      toast.error('Failed to save security settings');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <SectionCard title="Security" meta={meta} onSave={save} saving={saving} dirty={dirty} canEdit={canEdit}>
+      <Field label="Session Idle Timeout (minutes)" required>
+        <Input
+          type="number"
+          min={5}
+          max={480}
+          step={1}
+          value={timeout}
+          onChange={(e) => setTimeout_(e.target.value)}
+          disabled={saving}
+          suffix="min"
+        />
+      </Field>
+      <p className="text-xs text-neutral-500">
+        Users are automatically logged out after this many minutes of inactivity. Min 5, max 480 (8 hours).
+      </p>
+    </SectionCard>
+  );
+}
+
 // ─── root client component ───────────────────────────────────────────────────
 
 export function SettingsClient() {
@@ -630,6 +686,14 @@ export function SettingsClient() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [anyDirty]);
 
+  if (permission === 'none') {
+    return (
+      <div className="bg-danger-50 border border-danger-200 text-danger-700 px-4 py-3 rounded-sm text-sm">
+        You do not have permission to view Settings.
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -653,6 +717,7 @@ export function SettingsClient() {
       <GuarantorsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('guarantors')} canEdit={canEdit} />
       <PaymentsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('payments')} canEdit={canEdit} />
       <EmailSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('email')} canEdit={canEdit} />
+      <SecuritySection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('security')} canEdit={canEdit} />
     </div>
   );
 }
