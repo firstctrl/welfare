@@ -110,8 +110,11 @@ export function NewLoanClient() {
   const totalRepayable    = watchPrincipal ? round2(watchPrincipal * (1 + derivedRate / 100)) : 0;
   const monthlyInstalment = watchTenure && totalRepayable ? round2(totalRepayable / watchTenure) : 0;
 
+  const principalOutOfRange = !!watchPrincipal && (watchPrincipal < minAmount || watchPrincipal > maxAmount);
+
   const schedulePreview = useMemo(() => {
     if (!watchPrincipal || !watchTenure || !watchDate) return [];
+    if (watchPrincipal < minAmount || watchPrincipal > maxAmount) return [];
     const d = new Date(watchDate);
     if (isNaN(d.getTime())) return [];
     const totalInterest = round2(watchPrincipal * derivedRate / 100);
@@ -127,7 +130,7 @@ export function NewLoanClient() {
       balance = round2(Math.max(0, balance - monthlyInstalment));
       return { n: i + 1, dueDate, instalment: monthlyInstalment, principalAmt, interestAmt, balanceAfter: balance };
     });
-  }, [watchPrincipal, watchTenure, watchDate, totalRepayable, monthlyInstalment, derivedRate]);
+  }, [watchPrincipal, watchTenure, watchDate, totalRepayable, monthlyInstalment, derivedRate, minAmount, maxAmount]);
 
   const { data: eligibility } = useQuery({
     queryKey: ['eligibility', watchStaffId],
@@ -165,7 +168,7 @@ export function NewLoanClient() {
   });
 
   const ineligible = !!selectedStaff && eligibility?.eligible === false;
-  const submitDisabled = isSubmitting || mutation.isPending || guarantorAtCap || ineligible;
+  const submitDisabled = isSubmitting || mutation.isPending || guarantorAtCap || ineligible || principalOutOfRange;
 
   return (
     <div className="grid grid-cols-2 gap-6 items-start">
@@ -221,9 +224,9 @@ export function NewLoanClient() {
               <Field
                 label={`Principal Amount${cfg ? ` (min: ${fmtGHS(minAmount)}, max: ${fmtGHS(maxAmount)})` : ''}`}
                 required
-                error={errors.principalAmount?.message}
+                error={errors.principalAmount?.message ?? (principalOutOfRange ? `Amount must be between ${fmtGHS(minAmount)} and ${fmtGHS(maxAmount)}` : undefined)}
               >
-                <Input {...register('principalAmount')} type="number" min={minAmount} max={maxAmount} step="0.01" prefix="₵" error={!!errors.principalAmount} disabled={ineligible} />
+                <Input {...register('principalAmount')} type="number" min={minAmount} max={maxAmount} step="0.01" prefix="₵" error={!!errors.principalAmount || principalOutOfRange} disabled={ineligible} />
               </Field>
 
               <div className="space-y-1.5">

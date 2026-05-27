@@ -816,7 +816,9 @@ export class LoansService implements OnModuleInit {
     const withinDiscountWindow = tier === 2 && monthsElapsed < 6;
     const discountApplied = withinDiscountWindow;
 
-    const discountAmount = discountApplied ? round2(remainingInterest * payOffDiscountRate / 100) : 0;
+    // Pay-off discount reduces effective interest rate by payOffDiscountRate percentage points
+    // (e.g. Tier 2 rate 15% drops to 10%, matching Tier 1). Applied to remaining principal.
+    const discountAmount = discountApplied ? round2(remainingPrincipal * payOffDiscountRate / 100) : 0;
     const netPayable = round2(remainingPrincipal + remainingInterest - discountAmount);
 
     return {
