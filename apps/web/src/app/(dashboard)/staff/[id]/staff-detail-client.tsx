@@ -682,7 +682,7 @@ export default function StaffDetailClient({ id }: { id: string }) {
                                 {borrower ? (
                                   <Link href={`/staff/${loan.staffId}`} className="hover:underline">
                                     <span className="text-neutral-900">{borrower.fullName}</span>
-                                    <span className="ml-1.5 text-xs text-neutral-400 font-mono">{borrower.pfNo}</span>
+                                    <span className="ml-1.5 text-xs text-neutral-400 font-mono">{borrower.staffId}</span>
                                   </Link>
                                 ) : (
                                   <span className="font-mono text-xs text-neutral-400">{loan.staffId.slice(-8)}</span>
@@ -753,7 +753,7 @@ export default function StaffDetailClient({ id }: { id: string }) {
                                 {b ? (
                                   <Link href={`/staff/${r.borrowerStaffId}`} className="hover:underline">
                                     <span className="text-neutral-900">{b.fullName}</span>
-                                    <span className="ml-1.5 text-xs text-neutral-400 font-mono">{b.pfNo}</span>
+                                    <span className="ml-1.5 text-xs text-neutral-400 font-mono">{b.staffId}</span>
                                   </Link>
                                 ) : (
                                   <span className="font-mono text-xs text-neutral-400">{r.borrowerStaffId.slice(-8)}</span>
