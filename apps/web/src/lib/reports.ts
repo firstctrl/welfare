@@ -85,15 +85,29 @@ export interface StaffStatementCell {
   status: string;
 }
 
+export interface StaffStatementOffsetItem {
+  borrowerName: string;
+  borrowerStaffNo: string;
+  loanId: string;
+  amount: number;
+}
+
+export interface StaffStatementOffsetCell {
+  totalAmount: number;
+  items: StaffStatementOffsetItem[];
+}
+
 export interface StaffStatementRow {
   year: number;
   cells: Record<number, StaffStatementCell | null>;
+  offsetCells?: Record<number, StaffStatementOffsetCell | null>;
   yearTotal: number;
+  yearOffsetTotal?: number;
 }
 
 export interface StaffStatement {
   staff: { _id: string; fullName: string; staffId: string; email?: string };
-  kpis: { totalPaid: number; totalExpected: number; missedMonths: number; totalSurplus: number; collectionRate: number };
+  kpis: { totalPaid: number; totalExpected: number; missedMonths: number; totalSurplus: number; collectionRate: number; totalOffsets?: number };
   years: number[];
   rows: StaffStatementRow[];
 }

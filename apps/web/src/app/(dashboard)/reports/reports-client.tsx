@@ -620,6 +620,15 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
               icon={AlertCircle}
               iconKind={kpis.missedMonths === 0 ? 'success' : kpis.missedMonths <= 3 ? 'warning' : 'danger'}
             />
+            {(kpis.totalOffsets ?? 0) > 0 && (
+              <KpiCard
+                label="Guarantor Offsets"
+                value={fmtGHS(kpis.totalOffsets ?? 0)}
+                subtext="Deducted to settle guaranteed loans"
+                icon={AlertCircle}
+                iconKind="danger"
+              />
+            )}
           </div>
 
           {/* Crosstab */}
@@ -641,8 +650,9 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
                       <td className="px-4 py-2 font-bold text-neutral-700 bg-neutral-50 group-hover:bg-neutral-100 transition-colors">{row.year}</td>
                       {Array.from({ length: 12 }, (_, i) => {
                         const cell = row.cells[i + 1];
+                        const offset = row.offsetCells?.[i + 1];
                         return (
-                          <td key={i} className="px-1 py-1 text-center">
+                          <td key={i} className="px-1 py-1 text-center align-top">
                             {cell ? (
                               <span
                                 className={cn('inline-block w-full px-1.5 py-1 rounded text-xs font-mono tabular leading-tight', STATUS_BG[cell.status] ?? 'bg-neutral-100 text-neutral-600')}
@@ -653,10 +663,23 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
                             ) : (
                               <span className="text-neutral-300">—</span>
                             )}
+                            {offset && offset.totalAmount > 0 && (
+                              <div
+                                className="mt-0.5 text-[10px] font-mono tabular text-danger-700"
+                                title={offset.items.map(it => `${it.borrowerName} (${it.borrowerStaffNo}): ${fmtGHS(it.amount)}`).join('\n')}
+                              >
+                                −{fmtGHS(offset.totalAmount)}
+                              </div>
+                            )}
                           </td>
                         );
                       })}
-                      <td className="px-4 py-2 text-right font-bold font-mono tabular text-neutral-900">{fmtGHS(row.yearTotal)}</td>
+                      <td className="px-4 py-2 text-right font-bold font-mono tabular text-neutral-900 align-top">
+                        {fmtGHS(row.yearTotal)}
+                        {(row.yearOffsetTotal ?? 0) > 0 && (
+                          <div className="mt-0.5 text-[10px] font-normal text-danger-700">−{fmtGHS(row.yearOffsetTotal ?? 0)}</div>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -689,6 +712,11 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
               <span key={status} className={cn('px-2 py-0.5 rounded font-medium', cls)}>{status}</span>
             ))}
           </div>
+          {(kpis.totalOffsets ?? 0) > 0 && (
+            <p className="text-xs text-neutral-500">
+              <span className="text-danger-700 font-mono">−amount</span> indicates contributions deducted to settle loans this staff guaranteed (hover for borrower detail).
+            </p>
+          )}
         </>
       )}
     </div>
