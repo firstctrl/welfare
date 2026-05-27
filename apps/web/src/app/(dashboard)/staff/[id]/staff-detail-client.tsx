@@ -70,7 +70,7 @@ export default function StaffDetailClient({ id }: { id: string }) {
   const { data: contributions, isLoading: contribLoading } = useQuery({
     queryKey: ['contributions', 'staff', id],
     queryFn: () => getContributionsByStaff(id),
-    enabled: activeTab === 'Contributions',
+    enabled: activeTab === 'Contributions' || activeTab === 'Guaranteeing',
   });
 
   const { data: staffLoans, isLoading: loansLoading } = useQuery({
@@ -102,26 +102,33 @@ export default function StaffDetailClient({ id }: { id: string }) {
     })),
   });
 
+  // Offset history reflects what was actually deducted from THIS guarantor's
+  // contributions (one debit row per offset event), not the instalment's
+  // paidAmount on the loan side which may aggregate guarantor + borrower
+  // deductions.
   const offsetHistory = useMemo(() => {
-    const all: Array<ILoanRepayment & { loanPrincipal: number; borrowerStaffId: string }> = [];
-    (guaranteeLoans?.data ?? []).forEach((loan: ILoan, i: number) => {
-      const schedule = guaranteeScheduleQueries[i]?.data ?? [];
-      schedule
-        .filter((r) => r.source === 'GuarantorOffset' && r.guarantorStaffId === id)
-        .forEach((r) => all.push({ ...r, loanPrincipal: loan.principalAmount, borrowerStaffId: loan.staffId }));
-    });
-    return all.sort((a, b) =>
-      new Date(b.paidDate ?? b.createdAt).getTime() - new Date(a.paidDate ?? a.createdAt).getTime(),
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [guaranteeLoans, JSON.stringify(guaranteeScheduleQueries.map((q) => q.status)), id]);
+    return (contributions ?? [])
+      .filter((c: IContribution) => c.isDebit && c.source === 'GuarantorOffset')
+      .map((c: IContribution) => ({
+        _id: c._id,
+        paidDate: c.createdAt,
+        paidAmount: c.paidAmount,
+        loanId: c.loanId,
+        borrowerStaffId: c.borrowerStaffId,
+        instalmentNumber: c.instalmentNumber,
+      }))
+      .sort((a, b) => new Date(b.paidDate).getTime() - new Date(a.paidDate).getTime());
+  }, [contributions]);
 
-  // Look up borrower staff records for the guaranteed loans (name + staffNo)
+  // Look up borrower staff records: union of guarantee-loan borrowers + offset
+  // detail borrowers (older debit rows may reference borrowers whose loans
+  // aren't in the current guaranteeLoans list).
   const borrowerStaffIds = useMemo(() => {
     const set = new Set<string>();
     (guaranteeLoans?.data ?? []).forEach((l: ILoan) => set.add(l.staffId));
+    offsetHistory.forEach((o) => { if (o.borrowerStaffId) set.add(o.borrowerStaffId); });
     return Array.from(set);
-  }, [guaranteeLoans]);
+  }, [guaranteeLoans, offsetHistory]);
 
   const borrowerStaffQueries = useQueries({
     queries: borrowerStaffIds.map((sid) => ({
@@ -729,7 +736,7 @@ export default function StaffDetailClient({ id }: { id: string }) {
                       <table className="w-full text-sm border-collapse">
                         <thead>
                           <tr className="border-b border-neutral-200 bg-neutral-50">
-                            {['Date', 'Borrower', 'Loan Principal', 'Instalment #', 'Amount Applied'].map(
+                            {['Date', 'Borrower', 'Loan Ref', 'Instalment #', 'Deducted From You'].map(
                               (h) => (
                                 <th
                                   key={h}
@@ -743,26 +750,28 @@ export default function StaffDetailClient({ id }: { id: string }) {
                         </thead>
                         <tbody className="divide-y divide-neutral-100">
                           {offsetHistory.map((r) => {
-                            const b = borrowerMap.get(r.borrowerStaffId);
+                            const b = r.borrowerStaffId ? borrowerMap.get(r.borrowerStaffId) : undefined;
                             return (
                             <tr key={r._id} className="bg-accent-50">
                               <td className="px-4 py-2 font-mono tabular">
                                 {r.paidDate ? fmtDate(r.paidDate) : '—'}
                               </td>
                               <td className="px-4 py-2">
-                                {b ? (
+                                {b && r.borrowerStaffId ? (
                                   <Link href={`/staff/${r.borrowerStaffId}`} className="hover:underline">
                                     <span className="text-neutral-900">{b.fullName}</span>
                                     <span className="ml-1.5 text-xs text-neutral-400 font-mono">{b.staffId}</span>
                                   </Link>
                                 ) : (
-                                  <span className="font-mono text-xs text-neutral-400">{r.borrowerStaffId.slice(-8)}</span>
+                                  <span className="text-neutral-400">—</span>
                                 )}
                               </td>
-                              <td className="px-4 py-2 font-mono tabular">
-                                {fmtGHS(r.loanPrincipal)}
+                              <td className="px-4 py-2 font-mono text-xs text-neutral-500">
+                                {r.loanId ? (
+                                  <Link href={`/loans/${r.loanId}`} className="hover:underline">{r.loanId.slice(-6).toUpperCase()}</Link>
+                                ) : '—'}
                               </td>
-                              <td className="px-4 py-2">{r.instalmentNumber}</td>
+                              <td className="px-4 py-2">{r.instalmentNumber ?? '—'}</td>
                               <td className="px-4 py-2 font-mono tabular font-semibold text-accent-700">
                                 {fmtGHS(r.paidAmount)}
                               </td>

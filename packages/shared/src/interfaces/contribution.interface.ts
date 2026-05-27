@@ -11,6 +11,10 @@ export interface IContribution {
   surplusCarriedForward: number;
   status: ContributionStatus;
   source: ContributionSource;
+  isDebit?: boolean;
+  loanId?: string;
+  borrowerStaffId?: string;
+  instalmentNumber?: number;
   importBatchId?: string;
   recordedBy: string;
   createdAt: string;
