@@ -562,6 +562,7 @@ export class LoansService implements OnModuleInit {
         this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.Loan, loanId, undefined, {
           status: LoanStatus.Completed,
         });
+        await this.contributionsService.settleGuarantorRestitution(loanId, actorId, actorName);
         this.staffService.findById(completedLoan.staffId)
           .then(staff => this.syncLoanToMeilisearch(completedLoan, staff.fullName))
           .catch(() => { /* non-fatal */ });
@@ -879,6 +880,9 @@ export class LoansService implements OnModuleInit {
         dateGranted: paidDate,
       });
     }
+
+    // Credit guarantor for any restitution still owed after settlement
+    await this.contributionsService.settleGuarantorRestitution(loanId, actorId, actorName);
 
     this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.Loan, loanId, undefined, {
       event: 'payoff',

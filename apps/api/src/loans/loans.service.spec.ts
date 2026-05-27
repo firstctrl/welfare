@@ -67,7 +67,11 @@ describe('LoansService', () => {
     staffService = { findById: jest.fn().mockResolvedValue(activeStaff('staff-123')) };
     configService = { getAll: jest.fn() };
     auditService = { log: jest.fn() };
-    contributionsService = { debitGuarantorOffset: jest.fn() };
+    contributionsService = {
+      debitGuarantorOffset: jest.fn(),
+      debitDefaulterContribution: jest.fn().mockResolvedValue({ debited: 0, remaining: 0 }),
+      settleGuarantorRestitution: jest.fn().mockResolvedValue(0),
+    };
     minioClient = { putObject: jest.fn(), presignedGetObject: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({

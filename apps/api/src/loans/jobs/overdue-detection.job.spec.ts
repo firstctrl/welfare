@@ -27,10 +27,13 @@ describe('OverdueDetectionJob', () => {
 
   beforeEach(async () => {
     repaymentModel = { find: jest.fn() };
-    loanModel = { findById: jest.fn(), find: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }) };
+    loanModel = { findById: jest.fn(), find: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }), updateOne: jest.fn().mockResolvedValue({}) };
     configService = { getAll: jest.fn() };
     auditService = { log: jest.fn() };
-    contributionsService = { debitGuarantorOffset: jest.fn() };
+    contributionsService = {
+      debitGuarantorOffset: jest.fn(),
+      debitDefaulterContribution: jest.fn().mockResolvedValue({ debited: 0, remaining: 0 }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -130,6 +133,8 @@ describe('OverdueDetectionJob', () => {
     loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(makeLoan()) });
     configService.getAll.mockResolvedValue(mockConfig());
     contributionsService.debitGuarantorOffset.mockResolvedValue({ debited: 1000, remaining: 3000 });
+    // Borrower also has no balance to cover the shortfall
+    contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 0, remaining: 3000 });
 
     await job.detectAndProcess();
 

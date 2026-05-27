@@ -261,6 +261,8 @@ export class ContributionsService {
     amount: number,
     actorId: string,
     actorName: string,
+    loanId?: string,
+    instalmentNumber?: number,
   ): Promise<{ debited: number; remaining: number }> {
     const balance = await this.getBalance(staffId);
     const debited = Math.min(amount, Math.max(0, balance));
@@ -278,6 +280,8 @@ export class ContributionsService {
         isDebit: true,
         status: ContributionStatus.Paid,
         source: ContributionSource.DefaulterDeduction,
+        loanId,
+        instalmentNumber,
         recordedBy: actorName,
       });
     }
@@ -320,15 +324,62 @@ export class ContributionsService {
     return { debited, remaining };
   }
 
+  /**
+   * On loan settlement, credit guarantor for any restitution still owed.
+   * Borrower paid the loan off but did not have enough subsequent
+   * contributions to fully repay the guarantor through redirect — so the
+   * outstanding owed is now compensated directly.
+   */
+  async settleGuarantorRestitution(
+    loanId: string,
+    actorId: string,
+    actorName: string,
+  ): Promise<number> {
+    const loan = await this.loanModel.findById(loanId).exec();
+    if (!loan) return 0;
+    const owed = (loan.guarantorRestitutionOwed ?? 0) - (loan.guarantorRestitutionPaid ?? 0);
+    if (owed <= 0) return 0;
+
+    const now = new Date();
+    await this.contributionModel.create({
+      staffId: loan.guarantorId,
+      month: now.getMonth() + 1,
+      year: now.getFullYear(),
+      expectedAmount: 0,
+      paidAmount: owed,
+      surplusCarriedForward: 0,
+      isDebit: false,
+      status: ContributionStatus.Paid,
+      source: ContributionSource.DefaulterRestitution,
+      loanId,
+      recordedBy: actorName,
+    });
+
+    await this.loanModel.updateOne(
+      { _id: loan._id },
+      { $inc: { guarantorRestitutionPaid: owed } },
+    );
+
+    this.auditService.log(
+      actorId, actorName, AuditAction.Update, AuditEntity.Loan,
+      loan._id.toString(), undefined,
+      { event: 'restitution_settled', creditedToGuarantor: owed, guarantorId: loan.guarantorId },
+    );
+
+    return owed;
+  }
+
   private async handleRestitutionRedirect(
     staffId: string,
     newPayment: number,
     actorId: string,
     actorName: string,
   ): Promise<void> {
+    // Match any unsettled loan owed to a guarantor — borrower's new payments
+    // redirect to the guarantor until the offset is fully restituted.
     const restitutionLoan = await this.loanModel.findOne({
       staffId,
-      status: LoanStatus.Defaulted,
+      status: { $in: [LoanStatus.Active, LoanStatus.Defaulted] },
       $expr: { $gt: ['$guarantorRestitutionOwed', '$guarantorRestitutionPaid'] },
     }).exec();
 

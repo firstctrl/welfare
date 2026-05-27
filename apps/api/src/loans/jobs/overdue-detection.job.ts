@@ -89,23 +89,51 @@ export class OverdueDetectionJob {
 
     const outstanding = round2(inst.dueAmount + inst.penaltyAmount - inst.paidAmount);
 
-    const { debited, remaining } = await this.contributionsService.debitGuarantorOffset(
-      loan.guarantorId,
-      outstanding,
-      inst.loanId,
-      'system',
-      'Overdue Detection Job',
-      loan.staffId,
-      inst.instalmentNumber,
-    );
+    const { debited: guarantorDebited, remaining: afterGuarantor } =
+      await this.contributionsService.debitGuarantorOffset(
+        loan.guarantorId,
+        outstanding,
+        inst.loanId,
+        'system',
+        'Overdue Detection Job',
+        loan.staffId,
+        inst.instalmentNumber,
+      );
 
-    if (debited > 0) {
-      inst.paidAmount = round2(inst.paidAmount + debited);
+    // Shortfall not covered by guarantor balance: debit borrower's contributions
+    let borrowerDebited = 0;
+    let finalRemaining = afterGuarantor;
+    if (afterGuarantor > 0) {
+      const { debited, remaining } = await this.contributionsService.debitDefaulterContribution(
+        loan.staffId,
+        afterGuarantor,
+        'system',
+        'Overdue Detection Job',
+        inst.loanId,
+        inst.instalmentNumber,
+      );
+      borrowerDebited = debited;
+      finalRemaining = remaining;
+    }
+
+    const totalDebited = round2(guarantorDebited + borrowerDebited);
+    if (totalDebited > 0) {
+      inst.paidAmount = round2(inst.paidAmount + totalDebited);
       inst.guarantorStaffId = loan.guarantorId;
       inst.source = RepaymentSource.GuarantorOffset;
       inst.paidDate = new Date();
-      inst.status = remaining === 0 ? LoanRepaymentStatus.Paid : LoanRepaymentStatus.Partial;
+      inst.status = finalRemaining === 0 ? LoanRepaymentStatus.Paid : LoanRepaymentStatus.Partial;
       await inst.save();
+
+      // Borrower owes guarantor whatever guarantor lost. Restitution is paid
+      // back to guarantor over time via handleRestitutionRedirect on future
+      // borrower contributions, and any unpaid remainder on loan settlement.
+      if (guarantorDebited > 0) {
+        await this.loanModel.updateOne(
+          { _id: loan._id },
+          { $inc: { guarantorRestitutionOwed: guarantorDebited } },
+        );
+      }
 
       this.auditService.log(
         'system',
@@ -114,7 +142,12 @@ export class OverdueDetectionJob {
         AuditEntity.LoanRepayment,
         inst._id.toString(),
         undefined,
-        { debited, remaining, guarantorId: loan.guarantorId },
+        {
+          guarantorDebited,
+          borrowerDebited,
+          remaining: finalRemaining,
+          guarantorId: loan.guarantorId,
+        },
       );
     }
   }
