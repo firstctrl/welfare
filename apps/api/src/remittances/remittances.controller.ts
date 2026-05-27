@@ -55,9 +55,9 @@ export class RemittancesController {
   @RequirePermission(AppModule.Remittances, 'full')
   create(
     @Body() dto: CreateRemittanceDto,
-    @CurrentUser() user: { sub: string },
+    @CurrentUser() user: { _id: { toString(): string } },
   ) {
-    return this.service.create(dto, user.sub);
+    return this.service.create(dto, user._id.toString());
   }
 
   @Post('import')
@@ -65,10 +65,10 @@ export class RemittancesController {
   @UseInterceptors(FileInterceptor('file'))
   importFile(
     @UploadedFile() file: Express.Multer.File,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
-    return this.importService.processImport(file.buffer, file.originalname, user.sub, user.displayName);
+    return this.importService.processImport(file.buffer, file.originalname, user._id.toString(), user.displayName);
   }
 
   @Get('report')
