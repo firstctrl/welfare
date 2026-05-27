@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { Client as MinioClient } from 'minio';
+import { MINIO_CLIENT } from '../storage/minio.module';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as fs from 'fs';
@@ -46,6 +48,7 @@ export class ReportsService {
     @InjectModel(Staff.name) private readonly staffModel: Model<StaffDocument>,
     @InjectModel(ImportBatch.name) private readonly batchModel: Model<ImportBatchDocument>,
     @InjectModel(Discount.name) private readonly discountModel: Model<DiscountDocument>,
+    @Optional() @Inject(MINIO_CLIENT) private readonly minioClient?: MinioClient,
   ) {}
 
   // ─────────────────────────── CONTRIBUTIONS ───────────────────────────
@@ -1042,6 +1045,286 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
         format: 'A4',
         printBackground: true,
         margin: { top: '15mm', right: '10mm', bottom: '15mm', left: '10mm' },
+      });
+      return Buffer.from(pdf);
+    } finally {
+      await browser.close();
+    }
+  }
+
+  // ─────────────────────────── STAFF RECORD PDF ───────────────────────────
+
+  async generateStaffRecordPdf(staffMongoId: string): Promise<Buffer> {
+    const staff = await this.staffModel.findById(staffMongoId).exec();
+    if (!staff) throw new NotFoundException(`Staff ${staffMongoId} not found`);
+
+    const fmt = (n: number) =>
+      `GHS ${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const fmtDate = (d?: Date | string | null) =>
+      d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const escapeHtml = (s: string) =>
+      String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const escapeAttr = (s: string) =>
+      String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    // Logo + watermark
+    const logoPath = path.join(__dirname, 'assets', 'ncc-logo.png');
+    const logoBase64 = fs.existsSync(logoPath)
+      ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
+      : '';
+
+    // Staff photo (if any)
+    let photoBase64 = '';
+    if (staff.photoKey && this.minioClient) {
+      try {
+        const stream = await this.minioClient.getObject('staff-photos', staff.photoKey);
+        const chunks: Buffer[] = [];
+        for await (const chunk of stream as any) chunks.push(chunk as Buffer);
+        const buf = Buffer.concat(chunks);
+        const ext = staff.photoKey.split('.').pop()?.toLowerCase() ?? 'jpg';
+        const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+        photoBase64 = `data:${mime};base64,${buf.toString('base64')}`;
+      } catch (err) {
+        this.logger.warn(`Could not load staff photo for PDF: ${(err as Error).message}`);
+      }
+    }
+
+    // ─── Section 2: contribution cross-tab ───
+    const { kpis, rows } = await this.getStaffContributionStatement(staffMongoId);
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const statusColor: Record<string, string> = {
+      Paid: '#dcfce7', Partial: '#fef9c3', Missed: '#fee2e2', CarriedForward: '#dbeafe',
+    };
+    const headerCells = MONTHS.map(m => `<th>${m}</th>`).join('') + '<th>Total</th>';
+    const contribBodyRows = rows.map(row => {
+      const cells = Array.from({ length: 12 }, (_, i) => {
+        const c = row.cells[i + 1];
+        const o = row.offsetCells[i + 1];
+        const offsetLine = o && o.totalAmount > 0
+          ? `<br/><span style="color:#dc2626;font-size:9px">−${fmt(o.totalAmount)}</span>`
+          : '';
+        const offsetTitle = o && o.items.length
+          ? escapeAttr(o.items.map(it => `${it.borrowerName} (${it.borrowerStaffNo}): ${fmt(it.amount)}`).join('; '))
+          : '';
+        if (!c) {
+          if (offsetLine) return `<td title="${offsetTitle}">—${offsetLine}</td>`;
+          return `<td class="empty">—</td>`;
+        }
+        const bg = statusColor[c.status] ?? '#fff';
+        const title = offsetTitle ? `${c.status} | Offsets: ${offsetTitle}` : c.status;
+        return `<td style="background:${bg}" title="${escapeAttr(title)}">${fmt(c.paidAmount)}${offsetLine}</td>`;
+      }).join('');
+      const yearTotalCell = row.yearOffsetTotal > 0
+        ? `<td class="total">${fmt(row.yearTotal)}<br/><span style="color:#dc2626;font-size:9px">−${fmt(row.yearOffsetTotal)}</span></td>`
+        : `<td class="total">${fmt(row.yearTotal)}</td>`;
+      return `<tr><td class="year-label">${row.year}</td>${cells}${yearTotalCell}</tr>`;
+    }).join('');
+
+    // ─── Section 3: borrowed loans ───
+    const borrowedLoans = await this.loanModel.find({ staffId: staffMongoId }).sort({ disbursedDate: -1 }).exec();
+    const borrowedIds = borrowedLoans.map(l => l._id.toString());
+    const borrowedRepayments = borrowedIds.length
+      ? await this.repaymentModel.find({ loanId: { $in: borrowedIds } }).exec()
+      : [];
+    const borrowedOutstanding = new Map<string, number>();
+    for (const r of borrowedRepayments) {
+      const cur = borrowedOutstanding.get(r.loanId) ?? 0;
+      borrowedOutstanding.set(r.loanId, cur + Math.max(0, r.dueAmount + r.penaltyAmount - r.paidAmount));
+    }
+    const borrowedRows = borrowedLoans.length
+      ? borrowedLoans.map(l => {
+          const ref = l._id.toString().slice(-6).toUpperCase();
+          const out = Math.round((borrowedOutstanding.get(l._id.toString()) ?? 0) * 100) / 100;
+          return `<tr>
+            <td style="text-align:left;font-family:monospace">${ref}</td>
+            <td>${fmtDate(l.disbursedDate)}</td>
+            <td style="text-align:right">${fmt(l.principalAmount)}</td>
+            <td style="text-align:right">${fmt(l.totalRepayable)}</td>
+            <td>${escapeHtml(l.status)}</td>
+            <td style="text-align:right">${fmt(out)}</td>
+          </tr>`;
+        }).join('')
+      : `<tr><td colspan="6" style="text-align:center;padding:14px;color:#999">No loans on record</td></tr>`;
+
+    // ─── Section 4: guaranteed loans ───
+    const guaranteedLoans = await this.loanModel.find({ guarantorId: staffMongoId }).sort({ disbursedDate: -1 }).exec();
+    const guaranteedIds = guaranteedLoans.map(l => l._id.toString());
+    const guaranteedRepayments = guaranteedIds.length
+      ? await this.repaymentModel.find({ loanId: { $in: guaranteedIds } }).exec()
+      : [];
+    const guaranteedOutstanding = new Map<string, number>();
+    for (const r of guaranteedRepayments) {
+      const cur = guaranteedOutstanding.get(r.loanId) ?? 0;
+      guaranteedOutstanding.set(r.loanId, cur + Math.max(0, r.dueAmount + r.penaltyAmount - r.paidAmount));
+    }
+    const borrowerIds = [...new Set(guaranteedLoans.map(l => l.staffId))];
+    const borrowerDocs = borrowerIds.length
+      ? await this.staffModel.find({ _id: { $in: borrowerIds } }).exec()
+      : [];
+    const borrowerMap = new Map(borrowerDocs.map(s => [s._id.toString(), s]));
+    const guaranteedRows = guaranteedLoans.length
+      ? guaranteedLoans.map(l => {
+          const ref = l._id.toString().slice(-6).toUpperCase();
+          const out = Math.round((guaranteedOutstanding.get(l._id.toString()) ?? 0) * 100) / 100;
+          const b = borrowerMap.get(l.staffId);
+          const borrowerCell = b
+            ? `${escapeHtml(b.fullName)} <span style="color:#6b7280;font-size:9px">(${escapeHtml(b.staffId)})</span>`
+            : `<span style="color:#999">Unknown</span>`;
+          return `<tr>
+            <td style="text-align:left">${borrowerCell}</td>
+            <td style="text-align:left;font-family:monospace">${ref}</td>
+            <td>${fmtDate(l.disbursedDate)}</td>
+            <td style="text-align:right">${fmt(l.principalAmount)}</td>
+            <td style="text-align:right">${fmt(l.totalRepayable)}</td>
+            <td>${escapeHtml(l.status)}</td>
+            <td style="text-align:right">${fmt(out)}</td>
+          </tr>`;
+        }).join('')
+      : `<tr><td colspan="7" style="text-align:center;padding:14px;color:#999">Not guaranteeing any loans</td></tr>`;
+
+    // ─── Section 5: offset history ───
+    const offsetRepayments = await this.repaymentModel
+      .find({ guarantorStaffId: staffMongoId, source: RepaymentSource.GuarantorOffset })
+      .sort({ paidDate: -1 })
+      .exec();
+    const offsetBorrowerIds = [...new Set(offsetRepayments.map(r => r.staffId))];
+    const offsetBorrowerDocs = offsetBorrowerIds.length
+      ? await this.staffModel.find({ _id: { $in: offsetBorrowerIds } }).exec()
+      : [];
+    const offsetBorrowerMap = new Map(offsetBorrowerDocs.map(s => [s._id.toString(), s]));
+    const offsetRows = offsetRepayments.length
+      ? offsetRepayments.map(r => {
+          const b = offsetBorrowerMap.get(r.staffId);
+          const ref = r.loanId.slice(-6).toUpperCase();
+          const borrowerCell = b
+            ? `${escapeHtml(b.fullName)} <span style="color:#6b7280;font-size:9px">(${escapeHtml(b.staffId)})</span>`
+            : `<span style="color:#999">Unknown</span>`;
+          return `<tr>
+            <td>${fmtDate(r.paidDate)}</td>
+            <td style="text-align:left">${borrowerCell}</td>
+            <td style="text-align:left;font-family:monospace">${ref}</td>
+            <td>${r.instalmentNumber}</td>
+            <td style="text-align:right;color:#dc2626">−${fmt(r.paidAmount)}</td>
+          </tr>`;
+        }).join('')
+      : `<tr><td colspan="5" style="text-align:center;padding:14px;color:#999">No offset history</td></tr>`;
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"/>
+<style>
+  body{font-family:Arial,sans-serif;font-size:11px;margin:0;padding:20px;color:#111}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;border-bottom:2px solid #bc4680;padding-bottom:10px}
+  .org{font-size:18px;font-weight:bold;color:#bc4680}
+  .title{font-size:13px;font-weight:bold;margin-top:4px}
+  .meta{color:#666;font-size:10px;margin-top:2px}
+  .section-title{font-size:12px;font-weight:bold;color:#1e293b;margin:18px 0 6px 0;padding-bottom:3px;border-bottom:1px solid #e2e8f0}
+  .staff-card{display:flex;gap:14px;align-items:flex-start;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px}
+  .staff-photo{width:80px;height:80px;border-radius:6px;object-fit:cover;border:1px solid #cbd5e1;background:#e2e8f0}
+  .staff-fields{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 18px;flex:1}
+  .staff-field-label{font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.04em}
+  .staff-field-value{font-size:11px;font-weight:600;color:#1e293b}
+  table{width:100%;border-collapse:collapse;font-size:10px}
+  th{background:#bc4680;color:#fff;padding:5px 6px;text-align:center;white-space:nowrap;font-size:10px}
+  th:first-child{text-align:left}
+  td{padding:4px 6px;border:1px solid #e5e7eb;text-align:center}
+  td.year-label{font-weight:bold;background:#f8fafc;text-align:left}
+  td.total{font-weight:bold;background:#eff6ff}
+  td.empty{color:#ccc}
+  .watermark{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;height:320px;background-image:url('${logoBase64}');background-size:contain;background-repeat:no-repeat;background-position:center;opacity:0.05;z-index:0;pointer-events:none}
+</style></head>
+<body>
+${logoBase64 ? '<div class="watermark"></div>' : ''}
+<div class="header">
+  <div>
+    <div class="org">NACOC Welfare</div>
+    <div class="title">Staff Record — ${escapeHtml(staff.fullName)}</div>
+    <div class="meta">Staff ID: ${escapeHtml(staff.staffId)} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString('en-GB')}</div>
+  </div>
+</div>
+
+<div class="section-title">Staff Details</div>
+<div class="staff-card">
+  ${photoBase64 ? `<img class="staff-photo" src="${photoBase64}" alt="photo"/>` : `<div class="staff-photo" style="display:flex;align-items:center;justify-content:center;font-size:9px;color:#94a3b8">No Photo</div>`}
+  <div class="staff-fields">
+    <div><div class="staff-field-label">Full Name</div><div class="staff-field-value">${escapeHtml(staff.fullName)}</div></div>
+    <div><div class="staff-field-label">Staff ID</div><div class="staff-field-value">${escapeHtml(staff.staffId)}</div></div>
+    <div><div class="staff-field-label">PF Number</div><div class="staff-field-value">${escapeHtml(staff.pfNo ?? '—')}</div></div>
+    <div><div class="staff-field-label">Email</div><div class="staff-field-value">${escapeHtml(staff.email ?? '—')}</div></div>
+    <div><div class="staff-field-label">Phone</div><div class="staff-field-value">${escapeHtml(staff.phoneNumber ?? '—')}</div></div>
+    <div><div class="staff-field-label">Status</div><div class="staff-field-value">${escapeHtml(staff.status)}</div></div>
+    <div><div class="staff-field-label">Date of Employment</div><div class="staff-field-value">${fmtDate(staff.dateOfEmployment)}</div></div>
+    <div><div class="staff-field-label">Date of Birth</div><div class="staff-field-value">${fmtDate(staff.dateOfBirth)}</div></div>
+    <div><div class="staff-field-label">Level</div><div class="staff-field-value">${escapeHtml(staff.level ?? '—')}</div></div>
+  </div>
+</div>
+
+<div class="section-title">Contribution History — Total Paid ${fmt(kpis.totalPaid)} / Expected ${fmt(kpis.totalExpected)} (${kpis.collectionRate}%) ${kpis.totalOffsets > 0 ? `<span style="color:#dc2626;font-weight:normal">· Guarantor Offsets ${fmt(kpis.totalOffsets)}</span>` : ''}</div>
+<table>
+  <thead><tr><th>Year</th>${headerCells}</tr></thead>
+  <tbody>${contribBodyRows || `<tr><td colspan="14" style="text-align:center;padding:14px;color:#999">No contributions on record</td></tr>`}</tbody>
+</table>
+
+<div class="section-title">Borrowed Loans (${borrowedLoans.length})</div>
+<table>
+  <thead><tr>
+    <th style="text-align:left">Loan Ref</th>
+    <th>Disbursed</th>
+    <th style="text-align:right">Principal</th>
+    <th style="text-align:right">Total Repayable</th>
+    <th>Status</th>
+    <th style="text-align:right">Outstanding</th>
+  </tr></thead>
+  <tbody>${borrowedRows}</tbody>
+</table>
+
+<div class="section-title">Guaranteed Loans (${guaranteedLoans.length})</div>
+<table>
+  <thead><tr>
+    <th style="text-align:left">Borrower</th>
+    <th style="text-align:left">Loan Ref</th>
+    <th>Disbursed</th>
+    <th style="text-align:right">Principal</th>
+    <th style="text-align:right">Total Repayable</th>
+    <th>Status</th>
+    <th style="text-align:right">Outstanding</th>
+  </tr></thead>
+  <tbody>${guaranteedRows}</tbody>
+</table>
+
+<div class="section-title">Guarantor Offset History (${offsetRepayments.length})</div>
+<table>
+  <thead><tr>
+    <th>Date</th>
+    <th style="text-align:left">Borrower</th>
+    <th style="text-align:left">Loan Ref</th>
+    <th>Instalment #</th>
+    <th style="text-align:right">Amount Applied</th>
+  </tr></thead>
+  <tbody>${offsetRows}</tbody>
+</table>
+
+</body></html>`;
+
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    });
+    try {
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'domcontentloaded' });
+      const confidentialBand = `
+        <div style="width:100%;font-size:8px;font-family:Arial,sans-serif;color:#b91c1c;
+                    text-align:center;font-weight:bold;letter-spacing:4px;padding:3px 0;">
+          CONFIDENTIAL
+        </div>`;
+      const pdf = await page.pdf({
+        format: 'A4',
+        landscape: true,
+        printBackground: true,
+        displayHeaderFooter: true,
+        headerTemplate: confidentialBand,
+        footerTemplate: confidentialBand,
+        margin: { top: '16mm', right: '10mm', bottom: '16mm', left: '10mm' },
       });
       return Buffer.from(pdf);
     } finally {

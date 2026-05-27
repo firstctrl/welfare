@@ -463,6 +463,21 @@ export class ReportsController {
     };
   }
 
+  @Get('staff-record/pdf')
+  @RequirePermission(AppModule.Staff, 'readonly')
+  async getStaffRecordPdf(
+    @Query('staffId') staffId: string,
+    @Res() res: Response,
+  ) {
+    if (!staffId) throw new BadRequestException('staffId is required');
+    const pdf = await this.reportsService.generateStaffRecordPdf(staffId);
+    const staffDoc = await this.staffModel.findById(staffId).exec();
+    const filename = `staff-record-${staffDoc?.staffId ?? staffId}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.end(pdf);
+  }
+
   @Get('staff/exit')
   @RequirePermission(AppModule.Reports, 'readonly')
   async getExitClearance(@Query() q: ReportQueryDto, @Res({ passthrough: true }) res: Response) {
