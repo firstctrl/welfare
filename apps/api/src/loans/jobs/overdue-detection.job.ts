@@ -95,6 +95,8 @@ export class OverdueDetectionJob {
       inst.loanId,
       'system',
       'Overdue Detection Job',
+      loan.staffId,
+      inst.instalmentNumber,
     );
 
     if (debited > 0) {

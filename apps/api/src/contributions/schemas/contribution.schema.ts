@@ -16,6 +16,9 @@ export class Contribution {
   status!: ContributionStatus;
   @Prop({ required: true, enum: ContributionSource }) source!: ContributionSource;
   @Prop({ default: false }) isDebit!: boolean;
+  @Prop() loanId?: string;
+  @Prop() borrowerStaffId?: string;
+  @Prop() instalmentNumber?: number;
   @Prop() importBatchId?: string;
   @Prop({ required: true }) recordedBy!: string;
 }

@@ -288,9 +288,11 @@ export class ContributionsService {
   async debitGuarantorOffset(
     guarantorId: string,
     amount: number,
-    _loanId: string,
+    loanId: string,
     _actorId: string,
     actorName: string,
+    borrowerStaffId?: string,
+    instalmentNumber?: number,
   ): Promise<{ debited: number; remaining: number }> {
     const balance = await this.getBalance(guarantorId);
     const debited = Math.min(amount, Math.max(0, balance));
@@ -308,6 +310,9 @@ export class ContributionsService {
         isDebit: true,
         status: ContributionStatus.Paid,
         source: ContributionSource.GuarantorOffset,
+        loanId,
+        borrowerStaffId,
+        instalmentNumber,
         recordedBy: actorName,
       });
     }
