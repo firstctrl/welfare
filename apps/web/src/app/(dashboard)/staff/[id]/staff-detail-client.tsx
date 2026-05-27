@@ -101,18 +101,44 @@ export default function StaffDetailClient({ id }: { id: string }) {
   });
 
   const offsetHistory = useMemo(() => {
-    const all: Array<ILoanRepayment & { loanPrincipal: number }> = [];
+    const all: Array<ILoanRepayment & { loanPrincipal: number; borrowerStaffId: string }> = [];
     (guaranteeLoans?.data ?? []).forEach((loan: ILoan, i: number) => {
       const schedule = guaranteeScheduleQueries[i]?.data ?? [];
       schedule
         .filter((r) => r.source === 'GuarantorOffset' && r.guarantorStaffId === id)
-        .forEach((r) => all.push({ ...r, loanPrincipal: loan.principalAmount }));
+        .forEach((r) => all.push({ ...r, loanPrincipal: loan.principalAmount, borrowerStaffId: loan.staffId }));
     });
     return all.sort((a, b) =>
       new Date(b.paidDate ?? b.createdAt).getTime() - new Date(a.paidDate ?? a.createdAt).getTime(),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guaranteeLoans, JSON.stringify(guaranteeScheduleQueries.map((q) => q.status)), id]);
+
+  // Look up borrower staff records for the guaranteed loans (name + staffNo)
+  const borrowerStaffIds = useMemo(() => {
+    const set = new Set<string>();
+    (guaranteeLoans?.data ?? []).forEach((l: ILoan) => set.add(l.staffId));
+    return Array.from(set);
+  }, [guaranteeLoans]);
+
+  const borrowerStaffQueries = useQueries({
+    queries: borrowerStaffIds.map((sid) => ({
+      queryKey: ['staff', sid],
+      queryFn: () => getStaff(sid),
+      enabled: activeTab === 'Guaranteeing' && !!sid,
+      staleTime: 5 * 60 * 1000,
+    })),
+  });
+
+  const borrowerMap = useMemo(() => {
+    const map = new Map<string, IStaff>();
+    borrowerStaffIds.forEach((sid, i) => {
+      const data = borrowerStaffQueries[i]?.data;
+      if (data) map.set(sid, data);
+    });
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [borrowerStaffIds, JSON.stringify(borrowerStaffQueries.map((q) => q.status))]);
 
   const profileForm = useForm<ProfileForm>({ resolver: zodResolver(profileSchema) });
   const statusForm = useForm<StatusForm>({ resolver: zodResolver(statusSchema) });
@@ -600,7 +626,7 @@ export default function StaffDetailClient({ id }: { id: string }) {
                       <thead>
                         <tr className="border-b border-neutral-200 bg-neutral-50">
                           {[
-                            'Borrower ID',
+                            'Borrower',
                             'Principal',
                             'Outstanding',
                             'Disbursed',
@@ -628,10 +654,18 @@ export default function StaffDetailClient({ id }: { id: string }) {
                                 ) * 100,
                               ) / 100
                             : null;
+                          const borrower = borrowerMap.get(loan.staffId);
                           return (
                             <tr key={loan._id} className="hover:bg-neutral-50">
-                              <td className="px-4 py-2 font-mono text-xs text-neutral-500">
-                                {loan.staffId.slice(-8)}
+                              <td className="px-4 py-2">
+                                {borrower ? (
+                                  <Link href={`/staff/${loan.staffId}`} className="hover:underline">
+                                    <span className="text-neutral-900">{borrower.fullName}</span>
+                                    <span className="ml-1.5 text-xs text-neutral-400 font-mono">{borrower.pfNo}</span>
+                                  </Link>
+                                ) : (
+                                  <span className="font-mono text-xs text-neutral-400">{loan.staffId.slice(-8)}</span>
+                                )}
                               </td>
                               <td className="px-4 py-2 font-mono tabular">
                                 {fmtGHS(loan.principalAmount)}
@@ -674,7 +708,7 @@ export default function StaffDetailClient({ id }: { id: string }) {
                       <table className="w-full text-sm border-collapse">
                         <thead>
                           <tr className="border-b border-neutral-200 bg-neutral-50">
-                            {['Date', 'Loan Principal', 'Instalment #', 'Amount Applied'].map(
+                            {['Date', 'Borrower', 'Loan Principal', 'Instalment #', 'Amount Applied'].map(
                               (h) => (
                                 <th
                                   key={h}
@@ -687,10 +721,22 @@ export default function StaffDetailClient({ id }: { id: string }) {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-neutral-100">
-                          {offsetHistory.map((r) => (
+                          {offsetHistory.map((r) => {
+                            const b = borrowerMap.get(r.borrowerStaffId);
+                            return (
                             <tr key={r._id} className="bg-accent-50">
                               <td className="px-4 py-2 font-mono tabular">
                                 {r.paidDate ? fmtDate(r.paidDate) : '—'}
+                              </td>
+                              <td className="px-4 py-2">
+                                {b ? (
+                                  <Link href={`/staff/${r.borrowerStaffId}`} className="hover:underline">
+                                    <span className="text-neutral-900">{b.fullName}</span>
+                                    <span className="ml-1.5 text-xs text-neutral-400 font-mono">{b.pfNo}</span>
+                                  </Link>
+                                ) : (
+                                  <span className="font-mono text-xs text-neutral-400">{r.borrowerStaffId.slice(-8)}</span>
+                                )}
                               </td>
                               <td className="px-4 py-2 font-mono tabular">
                                 {fmtGHS(r.loanPrincipal)}
@@ -700,7 +746,8 @@ export default function StaffDetailClient({ id }: { id: string }) {
                                 {fmtGHS(r.paidAmount)}
                               </td>
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
