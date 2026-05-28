@@ -242,7 +242,7 @@ export class OverdueDetectionJob {
         if (staff?.email) {
           const organisationName = config['EMAIL_FROM_NAME']?.value ?? 'Welfare System';
           const loanRef = loanId.slice(-6).toUpperCase();
-          const html = await renderLoanForfeitureNotice({
+          const html = renderLoanForfeitureNotice({
             staffName: staff.fullName,
             loanRef,
             originalTotal: loan.totalRepayable,

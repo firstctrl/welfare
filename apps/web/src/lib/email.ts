@@ -32,7 +32,7 @@ export async function listEmailLogs(filters: EmailLogFilters = {}): Promise<Pagi
 }
 
 export async function sendContributionStatement(staffId: string, year: number): Promise<void> {
-  await apiClient.post(`/email/contribution-statement/${staffId}`, null, { params: { year } });
+  await apiClient.post(`/email/contribution-statement/${staffId}`, {}, { params: { year } });
 }
 
 export async function sendLoanSchedule(loanId: string): Promise<void> {

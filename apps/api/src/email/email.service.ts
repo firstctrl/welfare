@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Resend } from 'resend';
@@ -63,6 +63,7 @@ export class EmailService {
           host: config['OUTLOOK_HOST']?.value ?? 'smtp.office365.com',
           port: parseInt(config['OUTLOOK_PORT']?.value ?? '587', 10),
           secure: false,
+          requireTLS: true,
           auth: {
             user: config['OUTLOOK_USERNAME']?.value ?? '',
             pass: config['OUTLOOK_PASSWORD']?.value ?? '',
@@ -129,6 +130,7 @@ export class EmailService {
           host: config['OUTLOOK_HOST']?.value ?? 'smtp.office365.com',
           port: parseInt(config['OUTLOOK_PORT']?.value ?? '587', 10),
           secure: false,
+          requireTLS: true,
           auth: {
             user: config['OUTLOOK_USERNAME']?.value ?? '',
             pass: config['OUTLOOK_PASSWORD']?.value ?? '',
@@ -195,7 +197,7 @@ export class EmailService {
   ): Promise<void> {
     const staff = await this.staffModel.findById(staffId).exec();
     if (!staff) throw new NotFoundException(`Staff ${staffId} not found`);
-    if (!staff.email) throw new Error(`Staff ${staffId} has no email address`);
+    if (!staff.email) throw new BadRequestException(`Staff ${staffId} has no email address on record`);
 
     const config = await this.configService.getAll();
     const organisationName = config['EMAIL_FROM_NAME']?.value ?? 'Welfare System';
@@ -213,7 +215,7 @@ export class EmailService {
     const totalMissed = rows.reduce((s: number, r: any) => s + Math.max(0, r.expectedAmount - r.paidAmount), 0);
     const netSurplus = rows.reduce((s: number, r: any) => s + r.surplusCarriedForward, 0);
 
-    const html = await renderContributionStatement({
+    const html = renderContributionStatement({
       staffName: staff.fullName,
       staffNo: staff.staffId,
       year,
@@ -239,7 +241,7 @@ export class EmailService {
     if (!loan) throw new NotFoundException(`Loan ${loanId} not found`);
 
     const staff = await this.staffModel.findById(loan.staffId).exec();
-    if (!staff?.email) throw new Error(`Staff has no email address`);
+    if (!staff?.email) throw new BadRequestException(`Staff has no email address on record`);
 
     const config = await this.configService.getAll();
     const organisationName = config['EMAIL_FROM_NAME']?.value ?? 'Welfare System';
@@ -252,7 +254,7 @@ export class EmailService {
     const totalPaid = schedule.reduce((s, r) => s + r.paidAmount, 0);
     const totalOutstanding = schedule.reduce((s, r) => s + r.dueAmount - r.paidAmount, 0);
 
-    const html = await renderLoanSchedule({
+    const html = renderLoanSchedule({
       staffName: staff.fullName,
       staffNo: staff.staffId,
       loanId,

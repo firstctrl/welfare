@@ -61,7 +61,7 @@ export class PaymentReminderJob {
         if (!staff?.email) continue;
 
         const loanRef = repayment.loanId.slice(-6).toUpperCase();
-        const html = await renderLoanPaymentReminder({
+        const html = renderLoanPaymentReminder({
           staffName: staff.fullName,
           loanRef,
           amountDue: repayment.dueAmount,

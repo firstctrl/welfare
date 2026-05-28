@@ -3,10 +3,7 @@ import { RequirePermission } from '../auth/decorators/require-permission.decorat
 import { AppModule } from '@welfare/shared';
 import { EmailService } from './email.service';
 import { AnnualStatementJob } from './jobs/annual-statement.job';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { SendStatementDto } from './dto/send-statement.dto';
 import { EmailLogStatus, EmailLogType, EmailTriggerSource } from '@welfare/shared';
-import { UserDocument } from '../users/schemas/user.schema';
 
 @Controller('email')
 export class EmailController {
@@ -44,11 +41,12 @@ export class EmailController {
   @RequirePermission(AppModule.EmailLog, 'full')
   async sendContributionStatement(
     @Param('staffId') staffId: string,
-    @Query() dto: SendStatementDto,
+    @Query('year') yearStr?: string,
   ) {
+    const year = yearStr ? parseInt(yearStr, 10) : new Date().getFullYear();
     await this.emailService.sendContributionStatementForStaff(
       staffId,
-      dto.year ?? new Date().getFullYear(),
+      year,
       EmailTriggerSource.Manual,
     );
     return { message: 'Contribution statement sent' };
