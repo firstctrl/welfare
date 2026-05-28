@@ -27,7 +27,7 @@ export function EmailLogClient() {
   const [filters, setFilters] = useState<EmailLogFilters>({ page: 1, limit: 50 });
   const [bulkLoading, setBulkLoading] = useState(false);
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['email-logs', filters],
     queryFn: () => listEmailLogs(filters),
   });
@@ -48,7 +48,7 @@ export function EmailLogClient() {
     <div className="space-y-4">
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-end bg-white px-4 py-3 rounded-md border border-neutral-200">
-        <div className="space-y-1">
+        <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-neutral-600">Type</label>
           <Select
             value={filters.type ?? ''}
@@ -66,7 +66,7 @@ export function EmailLogClient() {
           />
         </div>
 
-        <div className="space-y-1">
+        <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-neutral-600">Status</label>
           <Select
             value={filters.status ?? ''}
@@ -84,7 +84,7 @@ export function EmailLogClient() {
           />
         </div>
 
-        <div className="space-y-1">
+        <div className="flex flex-col gap-1 w-40">
           <label className="text-xs font-medium text-neutral-600">Staff ID</label>
           <Input
             placeholder="Filter by staff ID"
@@ -92,11 +92,16 @@ export function EmailLogClient() {
             onChange={(e) =>
               setFilters((f) => ({ ...f, staffId: e.target.value || undefined, page: 1 }))
             }
-            style={{ width: 160 }}
           />
         </div>
 
-        <Button variant="secondary" size="sm" Icon={RefreshCw} onClick={() => refetch()}>
+        <Button
+          variant="secondary"
+          Icon={RefreshCw}
+          onClick={() => refetch()}
+          loading={isFetching}
+          className="h-[var(--row-default)] self-end"
+        >
           Refresh
         </Button>
 
