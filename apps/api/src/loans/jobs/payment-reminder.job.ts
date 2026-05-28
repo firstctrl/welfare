@@ -78,7 +78,7 @@ export class PaymentReminderJob {
         await this.emailService.send(
           recipient,
           EmailLogType.LoanPaymentReminder,
-          `Loan Payment Reminder — Due ${repayment.dueDate.toLocaleDateString('en-GB')}`,
+          `Loan Payment Reminder - Due ${repayment.dueDate.toLocaleDateString('en-GB')}`,
           html,
           EmailTriggerSource.Cron,
         );

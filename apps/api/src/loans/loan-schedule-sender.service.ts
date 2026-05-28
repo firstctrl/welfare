@@ -65,7 +65,7 @@ export class LoanScheduleSenderService {
     await this.emailService.send(
       { staffId: staff._id.toString(), staffName: staff.fullName, email: staff.email },
       EmailLogType.LoanSchedule,
-      `Your Loan Repayment Schedule — Loan #${loan._id.toString().slice(-6).toUpperCase()}`,
+      `Your Loan Repayment Schedule - Loan #${loan._id.toString().slice(-6).toUpperCase()}`,
       html,
       EmailTriggerSource.Cron,
     );

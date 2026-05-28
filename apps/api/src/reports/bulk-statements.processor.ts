@@ -48,7 +48,7 @@ export class BulkStatementsProcessor extends WorkerHost {
           const pdf = await this.reportsService.generateStatementPdf(staffId);
           await this.emailService.sendWithAttachment(
             { staffId, staffName: staff.fullName, email: staff.email },
-            `Your NACOC Welfare Contribution Statement — ${year}`,
+            `Your NACOC Welfare Contribution Statement - ${year}`,
             `<p>Dear ${staff.fullName},</p><p>Please find attached your welfare contribution statement for ${year}.</p><p>Kind regards,<br/>NACOC Welfare</p>`,
             [{ filename: `statement-${staff.staffId}-${year}.pdf`, content: pdf }],
             triggeredBy === 'cron' ? EmailTriggerSource.Cron : EmailTriggerSource.Manual,

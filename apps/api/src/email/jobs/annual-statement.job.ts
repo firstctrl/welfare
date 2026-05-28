@@ -112,7 +112,7 @@ export class AnnualStatementJob {
         })
         .sort((a, b) => a.paidDate.localeCompare(b.paidDate));
 
-      const subject = `Your Welfare Contribution Statement — ${lastYear}`;
+      const subject = `Your Welfare Contribution Statement - ${lastYear}`;
       const html = await renderContributionStatement({
         staffName: staff.fullName,
         staffNo: staff.staffId,

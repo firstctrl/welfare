@@ -279,7 +279,7 @@ export class EmailService {
     await this.send(
       { staffId: loan.staffId, staffName: staff.fullName, email: staff.email },
       EmailLogType.LoanSchedule,
-      `Your Loan Repayment Schedule — Loan #${loanId.slice(-6).toUpperCase()}`,
+      `Your Loan Repayment Schedule - Loan #${loanId.slice(-6).toUpperCase()}`,
       html,
       triggeredBy,
     );
