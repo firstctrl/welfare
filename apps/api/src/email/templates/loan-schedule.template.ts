@@ -50,7 +50,11 @@ export function renderLoanSchedule(props: LoanScheduleProps): string {
 
   return `<!DOCTYPE html>
 <html>
-<body style="font-family:Arial,sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
+<head>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <style>@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap');</style>
+</head>
+<body style="font-family:'Nunito',Arial,sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;padding:24px 0">
     <tr>
       <td align="center">
@@ -69,7 +73,7 @@ export function renderLoanSchedule(props: LoanScheduleProps): string {
                   <td align="right"><strong>Staff No:</strong> ${staffNo}</td>
                 </tr>
                 <tr>
-                  <td><strong>Loan ID:</strong> <span style="font-family:monospace;font-size:12px">${loanId}</span></td>
+                  <td><strong>Loan ID:</strong> <span style="font-family:'JetBrains Mono',monospace;font-size:12px">${loanId}</span></td>
                   <td align="right"><strong>Disbursed:</strong> ${new Date(disbursedDate).toLocaleDateString('en-GB')}</td>
                 </tr>
                 <tr>
@@ -110,7 +114,7 @@ export function renderLoanSchedule(props: LoanScheduleProps): string {
           </tr>
           <tr>
             <td style="padding:16px 32px;background-color:#f8fafc;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">
-              Generated: ${new Date().toLocaleDateString('en-GB')} | ${organisationName} &mdash; Welfare Department
+              Generated: ${new Date().toLocaleDateString('en-GB')} | ${organisationName}
             </td>
           </tr>
         </table>

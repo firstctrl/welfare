@@ -17,7 +17,11 @@ export function renderLoanForfeitureNotice(props: ForfeitureNoticeProps): string
 
   return `<!DOCTYPE html>
 <html>
-<body style="font-family:Arial,sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
+<head>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <style>@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap');</style>
+</head>
+<body style="font-family:'Nunito',Arial,sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
   <table width="100%" cellpadding="0" cellspacing="0" style="padding:24px 0">
     <tr>
       <td align="center">
@@ -56,7 +60,7 @@ export function renderLoanForfeitureNotice(props: ForfeitureNoticeProps): string
           </tr>
           <tr>
             <td style="padding:12px 32px;background-color:#f8fafc;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">
-              ${organisationName} &mdash; Welfare Department | Generated: ${new Date().toLocaleDateString('en-GB')}
+              Generated: ${new Date().toLocaleDateString('en-GB')} | ${organisationName}
             </td>
           </tr>
         </table>

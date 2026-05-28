@@ -60,7 +60,7 @@ export function renderContributionStatement(props: ContributionStatementProps): 
       <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb">${MONTH_NAMES[row.month - 1]}</td>
       <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb">${fmt(row.expectedAmount)}</td>
       <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb">${fmt(row.paidAmount)}</td>
-      <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb;color:${offset ? '#dc2626' : '#9ca3af'}">${offset ? `&minus;${fmt(offset)}` : '&mdash;'}</td>
+      <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb;color:${offset ? '#dc2626' : '#9ca3af'}">${offset ? `&minus;${fmt(offset)}` : '-'}</td>
       <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb;color:#16a34a">${fmt(row.surplusCarriedForward)}</td>
       <td style="padding:7px 10px;text-align:center;border-bottom:1px solid #e5e7eb;color:${statusColor(row.status)};font-weight:bold;font-size:12px">${row.status}</td>
     </tr>`;
@@ -94,7 +94,11 @@ export function renderContributionStatement(props: ContributionStatementProps): 
 
   return `<!DOCTYPE html>
 <html>
-<body style="font-family:Arial,sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
+<head>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <style>@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap');</style>
+</head>
+<body style="font-family:'Nunito',Arial,sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;padding:24px 0">
     <tr>
       <td align="center">
@@ -102,7 +106,7 @@ export function renderContributionStatement(props: ContributionStatementProps): 
           <tr>
             <td style="background-color:#1e40af;padding:24px 32px;color:#ffffff">
               <p style="margin:0;font-size:20px;font-weight:bold">${organisationName}</p>
-              <p style="margin:4px 0 0;font-size:14px;opacity:0.85">Welfare Contribution Statement &mdash; ${year}</p>
+              <p style="margin:4px 0 0;font-size:14px;opacity:0.85">Welfare Contribution Statement - ${year}</p>
             </td>
           </tr>
           <tr>
@@ -151,7 +155,7 @@ export function renderContributionStatement(props: ContributionStatementProps): 
           ${offsetDetailHtml}
           <tr>
             <td style="padding:16px 32px;background-color:#f8fafc;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">
-              Generated: ${new Date().toLocaleDateString('en-GB')} | ${organisationName} &mdash; Welfare Department
+              Generated: ${new Date().toLocaleDateString('en-GB')} | ${organisationName}
             </td>
           </tr>
         </table>

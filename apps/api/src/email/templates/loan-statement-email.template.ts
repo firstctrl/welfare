@@ -47,20 +47,28 @@ function statusColor(s: LoanRepaymentStatus): string {
 export function renderLoanStatementEmail(props: LoanStatementEmailProps): string {
   const { staffName, staffNo, organisationName, loan, kpis, instalments } = props;
 
-  const rowsHtml = instalments.map((r, i) => `
+  const rowsHtml = instalments
+    .map(
+      (r, i) => `
     <tr style="background-color:${i % 2 === 0 ? '#ffffff' : '#f9fafb'}">
       <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb">${r.instalmentNumber}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb">${new Date(r.dueDate).toLocaleDateString('en-GB')}</td>
       <td style="padding:6px 8px;text-align:right;border-bottom:1px solid #e5e7eb">${fmt(r.dueAmount)}</td>
       <td style="padding:6px 8px;text-align:right;border-bottom:1px solid #e5e7eb">${fmt(r.paidAmount)}</td>
-      <td style="padding:6px 8px;text-align:right;border-bottom:1px solid #e5e7eb">${r.penaltyAmount > 0 ? fmt(r.penaltyAmount) : '&mdash;'}</td>
-      <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb">${r.paidDate ? new Date(r.paidDate).toLocaleDateString('en-GB') : '&mdash;'}</td>
+      <td style="padding:6px 8px;text-align:right;border-bottom:1px solid #e5e7eb">${r.penaltyAmount > 0 ? fmt(r.penaltyAmount) : '-'}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb">${r.paidDate ? new Date(r.paidDate).toLocaleDateString('en-GB') : '-'}</td>
       <td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e5e7eb;color:${statusColor(r.status)};font-weight:bold;font-size:11px">${r.status}</td>
-    </tr>`).join('');
+    </tr>`,
+    )
+    .join('');
 
   return `<!DOCTYPE html>
 <html>
-<body style="font-family:Arial,sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
+<head>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <style>@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap');</style>
+</head>
+<body style="font-family:'Nunito',Arial,sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;padding:24px 0">
     <tr>
       <td align="center">
@@ -125,7 +133,7 @@ export function renderLoanStatementEmail(props: LoanStatementEmailProps): string
           </tr>
           <tr>
             <td style="padding:16px 32px;background-color:#f8fafc;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">
-              Generated: ${new Date().toLocaleDateString('en-GB')} | ${organisationName} &mdash; Welfare Department
+              Generated: ${new Date().toLocaleDateString('en-GB')} | ${organisationName}
             </td>
           </tr>
         </table>
