@@ -1,4 +1,5 @@
 import { ContributionStatus } from '@welfare/shared';
+import { getFontFaceCSS } from './fonts';
 
 interface ContributionRow {
   month: number;
@@ -57,16 +58,18 @@ export function renderContributionStatement(props: ContributionStatementProps): 
   const rowsHtml = rows.map((row, i) => {
     const offset = offsetByMonth.get(row.month);
     return `<tr style="background-color:${i % 2 === 0 ? '#ffffff' : '#f9fafb'}">
-      <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb">${MONTH_NAMES[row.month - 1]}</td>
-      <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb">${fmt(row.expectedAmount)}</td>
-      <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb">${fmt(row.paidAmount)}</td>
-      <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb;color:${offset ? '#dc2626' : '#9ca3af'}">${offset ? `&minus;${fmt(offset)}` : '-'}</td>
-      <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb;color:#16a34a">${fmt(row.surplusCarriedForward)}</td>
-      <td style="padding:7px 10px;text-align:center;border-bottom:1px solid #e5e7eb;color:${statusColor(row.status)};font-weight:bold;font-size:12px">${row.status}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${MONTH_NAMES[row.month - 1]}</td>
+      <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb;font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${fmt(row.expectedAmount)}</td>
+      <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb;font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${fmt(row.paidAmount)}</td>
+      <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb;color:${offset ? '#dc2626' : '#9ca3af'};font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${offset ? `&minus;${fmt(offset)}` : '-'}</td>
+      <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb;color:#16a34a;font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${fmt(row.surplusCarriedForward)}</td>
+      <td style="padding:7px 10px;text-align:center;border-bottom:1px solid #e5e7eb;color:${statusColor(row.status)};font-weight:bold;font-size:12px;font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${row.status}</td>
     </tr>`;
   }).join('');
 
-  const offsetDetailHtml = offsetDetail.length > 0 ? `
+  const offsetDetailHtml =
+    offsetDetail.length > 0
+      ? `
     <tr>
       <td style="padding:0 32px 24px">
         <p style="font-size:12px;color:#6b7280;margin:0 0 8px">The following deductions were applied to your contributions to settle loans you guaranteed:</p>
@@ -80,25 +83,30 @@ export function renderContributionStatement(props: ContributionStatementProps): 
             </tr>
           </thead>
           <tbody>
-            ${offsetDetail.map((od, i) => `
+            ${offsetDetail
+              .map(
+                (od, i) => `
             <tr style="background-color:${i % 2 === 0 ? '#ffffff' : '#fafafa'}">
-              <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">${od.paidDate}</td>
-              <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">${od.borrowerName}</td>
-              <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">${od.loanRef}</td>
-              <td style="padding:6px 10px;text-align:right;border-bottom:1px solid #e5e7eb;color:#dc2626">&minus;${fmt(od.amount)}</td>
-            </tr>`).join('')}
+              <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${od.paidDate}</td>
+              <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${od.borrowerName}</td>
+              <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${od.loanRef}</td>
+              <td style="padding:6px 10px;text-align:right;border-bottom:1px solid #e5e7eb;color:#dc2626;font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">&minus;${fmt(od.amount)}</td>
+            </tr>`,
+              )
+              .join('')}
           </tbody>
         </table>
       </td>
-    </tr>` : '';
+    </tr>`
+      : '';
 
   return `<!DOCTYPE html>
 <html>
 <head>
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
-  <style>@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap');</style>
+  ${getFontFaceCSS()}
+  <style>body,table,td,th,p,span,strong,a{font-family: 'Nunito', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif}</style>
 </head>
-<body style="font-family:'Nunito',Arial,sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
+<body style="font-family: 'Nunito', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;padding:24px 0">
     <tr>
       <td align="center">
@@ -113,11 +121,11 @@ export function renderContributionStatement(props: ContributionStatementProps): 
             <td style="padding:20px 32px;background-color:#f8fafc;border-bottom:1px solid #e5e7eb">
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td><strong>Name:</strong> ${staffName}</td>
-                  <td align="right"><strong>Staff No:</strong> ${staffNo}</td>
+                  <td><strong>Name:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${staffName}</span></td>
+                  <td align="right"><strong>Staff No:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${staffNo}</span></td>
                 </tr>
                 <tr>
-                  <td style="padding-top:4px"><strong>Year:</strong> ${year}</td>
+                  <td style="padding-top:4px"><strong>Year:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${year}</span></td>
                 </tr>
               </table>
             </td>
@@ -126,11 +134,11 @@ export function renderContributionStatement(props: ContributionStatementProps): 
             <td style="padding:20px 32px">
               <table width="100%" cellpadding="8" cellspacing="0" style="background-color:#eff6ff;border-radius:6px;font-size:13px">
                 <tr>
-                  <td><strong>Total Expected:</strong> GHS ${fmt(totalExpected)}</td>
-                  <td><strong>Total Paid:</strong> GHS ${fmt(totalPaid)}</td>
-                  <td><strong>Total Missed:</strong> GHS ${fmt(totalMissed)}</td>
-                  <td><strong>Net Surplus:</strong> GHS ${fmt(netSurplus)}</td>
-                  <td><strong>Loan Deductions:</strong> <span style="color:#dc2626">GHS ${fmt(totalOffsets)}</span></td>
+                  <td><strong>Total Expected:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">GHS ${fmt(totalExpected)}</span></td>
+                  <td><strong>Total Paid:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">GHS ${fmt(totalPaid)}</span></td>
+                  <td><strong>Total Missed:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">GHS ${fmt(totalMissed)}</span></td>
+                  <td><strong>Net Surplus:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">GHS ${fmt(netSurplus)}</span></td>
+                  <td><strong>Loan Deductions:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace;color:#dc2626">GHS ${fmt(totalOffsets)}</span></td>
                 </tr>
               </table>
             </td>
@@ -155,7 +163,7 @@ export function renderContributionStatement(props: ContributionStatementProps): 
           ${offsetDetailHtml}
           <tr>
             <td style="padding:16px 32px;background-color:#f8fafc;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">
-              Generated: ${new Date().toLocaleDateString('en-GB')} | ${organisationName}
+              Generated: <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${new Date().toLocaleDateString('en-GB')}</span> | ${organisationName}
             </td>
           </tr>
         </table>

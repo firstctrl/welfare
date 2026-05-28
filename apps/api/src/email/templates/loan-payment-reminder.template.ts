@@ -1,3 +1,5 @@
+import { getFontFaceCSS } from './fonts';
+
 interface LoanPaymentReminderProps {
   staffName: string;
   loanRef: string;
@@ -16,10 +18,10 @@ export function renderLoanPaymentReminder(props: LoanPaymentReminderProps): stri
   return `<!DOCTYPE html>
 <html>
 <head>
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
-  <style>@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap');</style>
+  ${getFontFaceCSS()}
+  <style>body,table,td,th,p,span,strong,a{font-family: 'Nunito', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif}</style>
 </head>
-<body style="font-family:'Nunito',Arial,sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
+<body style="font-family: 'Nunito', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
   <table width="100%" cellpadding="0" cellspacing="0" style="padding:24px 0">
     <tr>
       <td align="center">
@@ -32,8 +34,8 @@ export function renderLoanPaymentReminder(props: LoanPaymentReminderProps): stri
           </tr>
           <tr>
             <td style="padding:28px 32px">
-              <p style="margin:0 0 16px">Dear ${staffName},</p>
-              <p style="margin:0 0 16px">This is a reminder that your loan instalment of <strong>${fmt(amountDue)}</strong> (Ref: <strong>${loanRef}</strong>) is due in <strong>7 days</strong> on <strong>${new Date(dueDate).toLocaleDateString('en-GB')}</strong>.</p>
+              <p style="margin:0 0 16px">Dear <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${staffName}</span>,</p>
+              <p style="margin:0 0 16px">This is a reminder that your loan instalment of <strong style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${fmt(amountDue)}</strong> (Ref: <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace;font-weight:bold">${loanRef}</span>) is due in <strong>7 days</strong> on <strong style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${new Date(dueDate).toLocaleDateString('en-GB')}</strong>.</p>
               <p style="margin:0 0 16px;padding:12px 16px;background-color:#fef3c7;border-radius:6px;font-size:13px">Please ensure payment is made before the due date to avoid any penalties.</p>
               <p style="margin:0 0 8px;font-size:13px">For enquiries, contact us on: <strong>0244779991 / 0242906159</strong></p>
               <p style="margin:0;color:#6b7280;font-size:13px">If you have already made this payment, please disregard this notice.</p>

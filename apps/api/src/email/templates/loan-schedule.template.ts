@@ -1,4 +1,5 @@
 import { LoanRepaymentStatus } from '@welfare/shared';
+import { getFontFaceCSS } from './fonts';
 
 interface ScheduleRow {
   instalmentNumber: number;
@@ -37,24 +38,29 @@ function statusColor(s: LoanRepaymentStatus): string {
 
 export function renderLoanSchedule(props: LoanScheduleProps): string {
   const { staffName, staffNo, loanId, disbursedDate, principalAmount, interestRate, totalRepayable, organisationName, schedule, totalPaid, totalOutstanding, loanStatus } = props;
+  const JBM = "font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace";
 
-  const rowsHtml = schedule.map((row, i) => `
+  const rowsHtml = schedule
+    .map(
+      (row, i) => `
     <tr style="background-color:${i % 2 === 0 ? '#ffffff' : '#f9fafb'}">
-      <td style="padding:7px 10px;text-align:center;border-bottom:1px solid #e5e7eb">${row.instalmentNumber}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb">${new Date(row.dueDate).toLocaleDateString('en-GB')}</td>
-      <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb">${fmt(row.dueAmount)}</td>
-      <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb;color:#16a34a">${fmt(row.paidAmount)}</td>
-      <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb">${fmt(row.outstanding)}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;color:${statusColor(row.status)};font-weight:bold;font-size:12px">${row.status}</td>
-    </tr>`).join('');
+      <td style="padding:7px 10px;text-align:center;border-bottom:1px solid #e5e7eb;${JBM}">${row.instalmentNumber}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;${JBM}">${new Date(row.dueDate).toLocaleDateString('en-GB')}</td>
+      <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb;${JBM}">${fmt(row.dueAmount)}</td>
+      <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb;color:#16a34a;${JBM}">${fmt(row.paidAmount)}</td>
+      <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e7eb;${JBM}">${fmt(row.outstanding)}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;color:${statusColor(row.status)};font-weight:bold;font-size:12px;${JBM}">${row.status}</td>
+    </tr>`,
+    )
+    .join('');
 
   return `<!DOCTYPE html>
 <html>
 <head>
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
-  <style>@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap');</style>
+  ${getFontFaceCSS()}
+  <style>body,table,td,th,p,span,strong,a{font-family: 'Nunito', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif}</style>
 </head>
-<body style="font-family:'Nunito',Arial,sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
+<body style="font-family: 'Nunito', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;padding:24px 0">
     <tr>
       <td align="center">
@@ -69,20 +75,20 @@ export function renderLoanSchedule(props: LoanScheduleProps): string {
             <td style="padding:20px 32px;background-color:#f8fafc;border-bottom:1px solid #e5e7eb">
               <table width="100%" cellpadding="4" cellspacing="0" style="font-size:13px">
                 <tr>
-                  <td><strong>Name:</strong> ${staffName}</td>
-                  <td align="right"><strong>Staff No:</strong> ${staffNo}</td>
+                  <td><strong>Name:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${staffName}</span></td>
+                  <td align="right"><strong>Staff No:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${staffNo}</span></td>
                 </tr>
                 <tr>
-                  <td><strong>Loan ID:</strong> <span style="font-family:'JetBrains Mono',monospace;font-size:12px">${loanId}</span></td>
-                  <td align="right"><strong>Disbursed:</strong> ${new Date(disbursedDate).toLocaleDateString('en-GB')}</td>
+                  <td><strong>Loan ID:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace;font-size:12px">${loanId}</span></td>
+                  <td align="right"><strong>Disbursed:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${new Date(disbursedDate).toLocaleDateString('en-GB')}</span></td>
                 </tr>
                 <tr>
-                  <td><strong>Principal:</strong> GHS ${fmt(principalAmount)}</td>
-                  <td align="right"><strong>Interest Rate:</strong> ${interestRate}%</td>
+                  <td><strong>Principal:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">GHS ${fmt(principalAmount)}</span></td>
+                  <td align="right"><strong>Interest Rate:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${interestRate}%</span></td>
                 </tr>
                 <tr>
-                  <td><strong>Total Repayable:</strong> GHS ${fmt(totalRepayable)}</td>
-                  <td align="right"><strong>Status:</strong> ${loanStatus}</td>
+                  <td><strong>Total Repayable:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">GHS ${fmt(totalRepayable)}</span></td>
+                  <td align="right"><strong>Status:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${loanStatus}</span></td>
                 </tr>
               </table>
             </td>
@@ -104,8 +110,8 @@ export function renderLoanSchedule(props: LoanScheduleProps): string {
                 <tfoot>
                   <tr style="background-color:#f1f5f9;font-weight:bold">
                     <td colspan="3" style="padding:8px 10px">Total</td>
-                    <td style="padding:8px 10px;text-align:right;color:#16a34a">${fmt(totalPaid)}</td>
-                    <td style="padding:8px 10px;text-align:right">${fmt(totalOutstanding)}</td>
+                    <td style="padding:8px 10px;text-align:right;color:#16a34a;font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${fmt(totalPaid)}</td>
+                    <td style="padding:8px 10px;text-align:right;font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${fmt(totalOutstanding)}</td>
                     <td></td>
                   </tr>
                 </tfoot>
@@ -114,7 +120,7 @@ export function renderLoanSchedule(props: LoanScheduleProps): string {
           </tr>
           <tr>
             <td style="padding:16px 32px;background-color:#f8fafc;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">
-              Generated: ${new Date().toLocaleDateString('en-GB')} | ${organisationName}
+              Generated: <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${new Date().toLocaleDateString('en-GB')}</span> | ${organisationName}
             </td>
           </tr>
         </table>

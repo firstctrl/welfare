@@ -1,3 +1,5 @@
+import { getFontFaceCSS } from './fonts';
+
 interface PaymentReminderProps {
   staffName: string;
   instalmentAmount: number;
@@ -7,7 +9,10 @@ interface PaymentReminderProps {
 }
 
 function fmt(n: number): string {
-  return new Intl.NumberFormat('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+  return new Intl.NumberFormat('en-GH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
 }
 
 export function renderPaymentReminder(props: PaymentReminderProps): string {
@@ -20,10 +25,10 @@ export function renderPaymentReminder(props: PaymentReminderProps): string {
   return `<!DOCTYPE html>
 <html>
 <head>
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
-  <style>@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap');</style>
+  ${getFontFaceCSS()}
+  <style>body,table,td,th,p,span,strong,a{font-family: 'Nunito', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif}</style>
 </head>
-<body style="font-family:'Nunito',Arial,sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
+<body style="font-family: 'Nunito', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
   <table width="100%" cellpadding="0" cellspacing="0" style="padding:24px 0">
     <tr>
       <td align="center">
@@ -36,8 +41,8 @@ export function renderPaymentReminder(props: PaymentReminderProps): string {
           </tr>
           <tr>
             <td style="padding:28px 32px">
-              <p style="margin:0 0 16px">Dear ${staffName},</p>
-              <p style="margin:0 0 16px">This is a reminder that your loan instalment of <strong>GHS ${fmt(instalmentAmount)}</strong> is due on <strong>${new Date(dueDate).toLocaleDateString('en-GB')}</strong>.</p>
+              <p style="margin:0 0 16px">Dear <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${staffName}</span>,</p>
+              <p style="margin:0 0 16px">This is a reminder that your loan instalment of <strong style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">GHS ${fmt(instalmentAmount)}</strong> is due on <strong style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${new Date(dueDate).toLocaleDateString('en-GB')}</strong>.</p>
               ${instructionsHtml}
               <p style="margin:0;color:#6b7280;font-size:13px">If you have already made this payment, please disregard this notice.</p>
             </td>

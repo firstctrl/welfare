@@ -1,4 +1,5 @@
 import { LoanRepaymentStatus } from '@welfare/shared';
+import { getFontFaceCSS } from './fonts';
 
 interface LoanStatementEmailInstalment {
   instalmentNumber: number;
@@ -46,18 +47,19 @@ function statusColor(s: LoanRepaymentStatus): string {
 
 export function renderLoanStatementEmail(props: LoanStatementEmailProps): string {
   const { staffName, staffNo, organisationName, loan, kpis, instalments } = props;
+  const JBM = "font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace";
 
   const rowsHtml = instalments
     .map(
       (r, i) => `
     <tr style="background-color:${i % 2 === 0 ? '#ffffff' : '#f9fafb'}">
-      <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb">${r.instalmentNumber}</td>
-      <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb">${new Date(r.dueDate).toLocaleDateString('en-GB')}</td>
-      <td style="padding:6px 8px;text-align:right;border-bottom:1px solid #e5e7eb">${fmt(r.dueAmount)}</td>
-      <td style="padding:6px 8px;text-align:right;border-bottom:1px solid #e5e7eb">${fmt(r.paidAmount)}</td>
-      <td style="padding:6px 8px;text-align:right;border-bottom:1px solid #e5e7eb">${r.penaltyAmount > 0 ? fmt(r.penaltyAmount) : '-'}</td>
-      <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb">${r.paidDate ? new Date(r.paidDate).toLocaleDateString('en-GB') : '-'}</td>
-      <td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e5e7eb;color:${statusColor(r.status)};font-weight:bold;font-size:11px">${r.status}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;${JBM}">${r.instalmentNumber}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;${JBM}">${new Date(r.dueDate).toLocaleDateString('en-GB')}</td>
+      <td style="padding:6px 8px;text-align:right;border-bottom:1px solid #e5e7eb;${JBM}">${fmt(r.dueAmount)}</td>
+      <td style="padding:6px 8px;text-align:right;border-bottom:1px solid #e5e7eb;${JBM}">${fmt(r.paidAmount)}</td>
+      <td style="padding:6px 8px;text-align:right;border-bottom:1px solid #e5e7eb;${JBM}">${r.penaltyAmount > 0 ? fmt(r.penaltyAmount) : '-'}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;${JBM}">${r.paidDate ? new Date(r.paidDate).toLocaleDateString('en-GB') : '-'}</td>
+      <td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e5e7eb;color:${statusColor(r.status)};font-weight:bold;font-size:11px;${JBM}">${r.status}</td>
     </tr>`,
     )
     .join('');
@@ -65,10 +67,10 @@ export function renderLoanStatementEmail(props: LoanStatementEmailProps): string
   return `<!DOCTYPE html>
 <html>
 <head>
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
-  <style>@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=JetBrains+Mono&display=swap');</style>
+  ${getFontFaceCSS()}
+  <style>body,table,td,th,p,span,strong,a{font-family: 'Nunito', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif}</style>
 </head>
-<body style="font-family:'Nunito',Arial,sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
+<body style="font-family: 'Nunito', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:14px;color:#111827;margin:0;padding:0;background-color:#f9fafb">
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;padding:24px 0">
     <tr>
       <td align="center">
@@ -83,20 +85,20 @@ export function renderLoanStatementEmail(props: LoanStatementEmailProps): string
             <td style="padding:20px 32px;background-color:#f8fafc;border-bottom:1px solid #e5e7eb">
               <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px">
                 <tr>
-                  <td><strong>Name:</strong> ${staffName}</td>
-                  <td align="right"><strong>Staff No:</strong> ${staffNo}</td>
+                  <td><strong>Name:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${staffName}</span></td>
+                  <td align="right"><strong>Staff No:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${staffNo}</span></td>
                 </tr>
                 <tr>
-                  <td style="padding-top:4px"><strong>Principal:</strong> GHS ${fmt(loan.principalAmount)}</td>
-                  <td align="right" style="padding-top:4px"><strong>Total Repayable:</strong> GHS ${fmt(loan.totalRepayable)}</td>
+                  <td style="padding-top:4px"><strong>Principal:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">GHS ${fmt(loan.principalAmount)}</span></td>
+                  <td align="right" style="padding-top:4px"><strong>Total Repayable:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">GHS ${fmt(loan.totalRepayable)}</span></td>
                 </tr>
                 <tr>
-                  <td style="padding-top:4px"><strong>Disbursed:</strong> ${new Date(loan.disbursedDate).toLocaleDateString('en-GB')}</td>
-                  <td align="right" style="padding-top:4px"><strong>Tenure:</strong> ${loan.tenureMonths} months</td>
+                  <td style="padding-top:4px"><strong>Disbursed:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${new Date(loan.disbursedDate).toLocaleDateString('en-GB')}</span></td>
+                  <td align="right" style="padding-top:4px"><strong>Tenure:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${loan.tenureMonths} months</span></td>
                 </tr>
                 <tr>
-                  <td style="padding-top:4px"><strong>Guarantor:</strong> ${loan.guarantorName}</td>
-                  <td align="right" style="padding-top:4px"><strong>Status:</strong> ${loan.status}</td>
+                  <td style="padding-top:4px"><strong>Guarantor:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${loan.guarantorName}</span></td>
+                  <td align="right" style="padding-top:4px"><strong>Status:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${loan.status}</span></td>
                 </tr>
               </table>
             </td>
@@ -105,10 +107,10 @@ export function renderLoanStatementEmail(props: LoanStatementEmailProps): string
             <td style="padding:20px 32px">
               <table width="100%" cellpadding="8" cellspacing="0" style="background-color:#eff6ff;border-radius:6px;font-size:13px">
                 <tr>
-                  <td><strong>Paid:</strong> GHS ${fmt(kpis.totalPaid)}</td>
-                  <td><strong>Outstanding:</strong> GHS ${fmt(kpis.outstanding)}</td>
-                  <td><strong>Penalty:</strong> GHS ${fmt(kpis.penaltyPaid)}</td>
-                  <td><strong>Completion:</strong> ${kpis.completionRate}%</td>
+                  <td><strong>Paid:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">GHS ${fmt(kpis.totalPaid)}</span></td>
+                  <td><strong>Outstanding:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">GHS ${fmt(kpis.outstanding)}</span></td>
+                  <td><strong>Penalty:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">GHS ${fmt(kpis.penaltyPaid)}</span></td>
+                  <td><strong>Completion:</strong> <span style="font-family: 'JetBrains Mono', 'Consolas', 'SFMono-Regular', monospace">${kpis.completionRate}%</span></td>
                 </tr>
               </table>
             </td>
