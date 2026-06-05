@@ -26,4 +26,5 @@ export enum ConfigKey {
   RemittanceChargeRate = 'REMITTANCE_CHARGE_RATE',
   LoanPayOffDiscountRate = 'LOAN_PAYOFF_DISCOUNT_RATE',
   SessionIdleTimeoutMinutes = 'SESSION_IDLE_TIMEOUT_MINUTES',
+  AdLoginEnabled = 'AD_LOGIN_ENABLED',
 }

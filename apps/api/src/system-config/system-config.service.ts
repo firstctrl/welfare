@@ -45,6 +45,7 @@ const SEED_DEFAULTS: Array<{ key: ConfigKey; value: string; description?: string
   { key: ConfigKey.EmailContributionStatementCron, value: '0 9 1 * *' },
   { key: ConfigKey.EmailLoanScheduleEnabled, value: 'false' },
   { key: ConfigKey.SessionIdleTimeoutMinutes, value: '30' },
+  { key: ConfigKey.AdLoginEnabled, value: 'true' },
 ];
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -73,6 +74,11 @@ export class SystemConfigService implements OnModuleInit {
         { upsert: true },
       );
     }
+  }
+
+  async getPublic(): Promise<{ adLoginEnabled: boolean }> {
+    const all = await this.getAll();
+    return { adLoginEnabled: (all[ConfigKey.AdLoginEnabled]?.value ?? 'true') === 'true' };
   }
 
   async getAll(): Promise<ConfigMap> {
@@ -275,6 +281,10 @@ export class SystemConfigService implements OnModuleInit {
         case ConfigKey.EmailLoanScheduleEnabled:
           if (value !== 'true' && value !== 'false')
             throw new UnprocessableEntityException(`EmailLoanScheduleEnabled must be 'true' or 'false'`);
+          break;
+        case ConfigKey.AdLoginEnabled:
+          if (value !== 'true' && value !== 'false')
+            throw new UnprocessableEntityException(`AdLoginEnabled must be 'true' or 'false'`);
           break;
         case ConfigKey.SessionIdleTimeoutMinutes: {
           const mins = parseInt(value, 10);

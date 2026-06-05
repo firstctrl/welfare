@@ -11,6 +11,11 @@ import { AppModule } from '@welfare/shared';
 export class SystemConfigController {
   constructor(private readonly systemConfigService: SystemConfigService) {}
 
+  @Get('public')
+  getPublic() {
+    return this.systemConfigService.getPublic();
+  }
+
   @Get()
   @RequirePermission(AppModule.Settings, 'readonly')
   getAll() {

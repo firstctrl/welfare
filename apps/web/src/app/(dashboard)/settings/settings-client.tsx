@@ -593,6 +593,63 @@ function EmailSection({ cfg, onUpdate, onDirtyChange, canEdit }: { cfg: ConfigMa
   );
 }
 
+// ─── section: Authentication ─────────────────────────────────────────────────
+
+const AUTH_KEYS = ['AD_LOGIN_ENABLED'] as const;
+
+function AuthenticationSection({ cfg, onUpdate, onDirtyChange, canEdit }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void; canEdit: boolean }) {
+  const [adEnabled, setAdEnabled] = useState(cfg['AD_LOGIN_ENABLED']?.value ?? 'true');
+  const [saving, setSaving] = useState(false);
+
+  const [original] = useState(() => cfg['AD_LOGIN_ENABLED']?.value ?? 'true');
+  const dirty = adEnabled !== original;
+  const meta = latestEntry(cfg, [...AUTH_KEYS]);
+
+  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
+
+  async function save() {
+    if (!dirty) return;
+    setSaving(true);
+    try {
+      const next = await updateConfig({ AD_LOGIN_ENABLED: adEnabled });
+      onUpdate(next);
+      onDirtyChange(false);
+      toast.success('Authentication settings saved');
+    } catch {
+      toast.error('Failed to save authentication settings');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <SectionCard title="Authentication" meta={meta} onSave={save} saving={saving} dirty={dirty} canEdit={canEdit}>
+      <Field label="Active Directory Login">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={adEnabled === 'true'}
+            disabled={saving || !canEdit}
+            onClick={() => setAdEnabled(adEnabled === 'true' ? 'false' : 'true')}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${adEnabled === 'true' ? 'bg-blue-600' : 'bg-neutral-300'}`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${adEnabled === 'true' ? 'translate-x-6' : 'translate-x-1'}`}
+            />
+          </button>
+          <span className="text-sm text-neutral-700">
+            {adEnabled === 'true' ? 'Enabled' : 'Disabled'}
+          </span>
+        </div>
+      </Field>
+      <p className="text-xs text-neutral-500">
+        When disabled, the login page shows only the local account form. AD/LDAP credentials will not be accepted.
+      </p>
+    </SectionCard>
+  );
+}
+
 // ─── section: Security ──────────────────────────────────────────────────────
 
 const SECURITY_KEYS = ['SESSION_IDLE_TIMEOUT_MINUTES'] as const;
@@ -717,6 +774,7 @@ export function SettingsClient() {
       <GuarantorsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('guarantors')} canEdit={canEdit} />
       <PaymentsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('payments')} canEdit={canEdit} />
       <EmailSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('email')} canEdit={canEdit} />
+      <AuthenticationSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('authentication')} canEdit={canEdit} />
       <SecuritySection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('security')} canEdit={canEdit} />
     </div>
   );

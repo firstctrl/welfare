@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, FormEvent } from 'react';
+import { Suspense, useState, useEffect, FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import Image from 'next/image';
@@ -12,11 +12,22 @@ type AuthMode = 'ad' | 'local';
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [adEnabled, setAdEnabled] = useState<boolean | null>(null);
   const [mode, setMode] = useState<AuthMode>('ad');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetch('/api/config/public')
+      .then((r) => r.json())
+      .then((d: { adLoginEnabled: boolean }) => {
+        setAdEnabled(d.adLoginEnabled);
+        if (!d.adLoginEnabled) setMode('local');
+      })
+      .catch(() => setAdEnabled(true));
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -39,24 +50,26 @@ function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Mode toggle */}
-      <div className="flex rounded-md border border-neutral-200 p-0.5 bg-neutral-50 gap-0.5">
-        {(['ad', 'local'] as AuthMode[]).map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => setMode(m)}
-            className={cn(
-              'flex-1 py-1.5 text-sm font-medium rounded transition-colors',
-              mode === m
-                ? 'bg-white text-neutral-900 shadow-sm'
-                : 'text-neutral-500 hover:text-neutral-700',
-            )}
-          >
-            {m === 'ad' ? 'Active Directory' : 'Local Account'}
-          </button>
-        ))}
-      </div>
+      {/* Mode toggle — only shown when AD login is enabled */}
+      {adEnabled && (
+        <div className="flex rounded-md border border-neutral-200 p-0.5 bg-neutral-50 gap-0.5">
+          {(['ad', 'local'] as AuthMode[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={cn(
+                'flex-1 py-1.5 text-sm font-medium rounded transition-colors',
+                mode === m
+                  ? 'bg-white text-neutral-900 shadow-sm'
+                  : 'text-neutral-500 hover:text-neutral-700',
+              )}
+            >
+              {m === 'ad' ? 'Active Directory' : 'Local Account'}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
