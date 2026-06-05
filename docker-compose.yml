@@ -130,7 +130,7 @@ services:
       dockerfile: apps/web/Dockerfile
       network: host
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:4000
+        NEXT_PUBLIC_API_URL: https://api.welfarems.internal.nacoc.gov.gh
     container_name: welfare-web
     restart: unless-stopped
     ports:
