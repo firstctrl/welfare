@@ -9,7 +9,7 @@ COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV PUPPETEER_SKIP_DOWNLOAD=1
-RUN npm ci
+RUN --network=host npm ci
 
 # Build shared package
 FROM base AS shared-builder

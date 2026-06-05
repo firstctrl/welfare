@@ -9,7 +9,7 @@ COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV PUPPETEER_SKIP_DOWNLOAD=1
-RUN npm ci
+RUN --network=host npm ci
 
 # Install production-only dependencies
 FROM base AS prod-deps
@@ -18,7 +18,7 @@ COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
 ENV PUPPETEER_SKIP_DOWNLOAD=1
-RUN npm ci --omit=dev
+RUN --network=host npm ci --omit=dev
 
 # Build shared package
 FROM base AS shared-builder
