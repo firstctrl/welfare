@@ -1,11 +1,15 @@
-welfare.local {
+{
+    local_certs
+}
+
+welfarems.internal.nacoc.gov.gh {
     reverse_proxy web:3000
 }
 
-api.welfare.local {
+api.welfarems.internal.nacoc.gov.gh {
     reverse_proxy api:4000
 }
 
-minio.welfare.local {
+minio.welfarems.internal.nacoc.gov.gh {
     reverse_proxy minio:9001
 }
