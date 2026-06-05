@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { SettingsClient } from './settings-client';
 
 export const metadata: Metadata = {
-  title: 'Settings - NACOC Welfare',
+  title: 'Settings - Welfare Department',
 };
 
 export default function SettingsPage() {

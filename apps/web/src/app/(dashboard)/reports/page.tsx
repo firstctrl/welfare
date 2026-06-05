@@ -1,6 +1,6 @@
 import { ReportsClient } from './reports-client';
 
-export const metadata = { title: 'Reports - NACOC Welfare' };
+export const metadata = { title: 'Reports - Welfare Department' };
 
 export default function ReportsPage() {
   return (

@@ -465,7 +465,7 @@ export class ReportsService {
 <head><meta charset="utf-8"/>
 <style>
   body{font-family:Arial,sans-serif;font-size:11px;margin:0;padding:20px;color:#111}
-  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;border-bottom:2px solid #bc4680;padding-bottom:10px}
+  .header{display:flex;justify-content:flex-start;align-items:center;gap:16px;margin-bottom:16px;border-bottom:2px solid #bc4680;padding-bottom:10px}
   .org{font-size:18px;font-weight:bold;color:#bc4680}
   .title{font-size:13px;font-weight:bold;margin-top:4px}
   .meta{color:#666;font-size:10px;margin-top:2px}
@@ -482,13 +482,15 @@ export class ReportsService {
   th:last-child, th:nth-child(8){text-align:left}
   td{padding:4px 6px;border:1px solid #e5e7eb;white-space:nowrap}
   .watermark{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;height:320px;background-image:url('${logoBase64}');background-size:contain;background-repeat:no-repeat;background-position:center;opacity:0.05;z-index:0;pointer-events:none}
+  .logo-img{height:52px;width:auto;object-fit:contain}
 </style>
 </head>
 <body>
 ${logoBase64 ? '<div class="watermark"></div>' : ''}
 <div class="header">
+  ${logoBase64 ? `<img class="logo-img" src="${logoBase64}" alt="logo"/>` : ''}
   <div>
-    <div class="org">NACOC Welfare</div>
+    <div class="org">Welfare Department</div>
     <div class="title">Loan Statement: ${stmt.staff.displayName}</div>
     <div class="meta">Staff ID: ${stmt.staff.staffNo} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString('en-GB')}</div>
   </div>
@@ -923,7 +925,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
 <head><meta charset="utf-8"/>
 <style>
   body{font-family:Arial,sans-serif;font-size:11px;margin:0;padding:20px;color:#111}
-  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;border-bottom:2px solid #bc4680;padding-bottom:12px}
+  .header{display:flex;justify-content:flex-start;align-items:center;gap:16px;margin-bottom:20px;border-bottom:2px solid #bc4680;padding-bottom:12px}
   .org{font-size:18px;font-weight:bold;color:#bc4680}
   .title{font-size:13px;font-weight:bold;margin-top:4px}
   .meta{color:#666;font-size:10px;margin-top:2px}
@@ -942,13 +944,15 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   .leg-item{display:flex;align-items:center;gap:4px}
   .leg-dot{width:10px;height:10px;border-radius:2px;border:1px solid #ccc}
   .watermark{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;height:320px;background-image:url('${logoBase64}');background-size:contain;background-repeat:no-repeat;background-position:center;opacity:0.05;z-index:0;pointer-events:none}
+  .logo-img{height:52px;width:auto;object-fit:contain}
 </style>
 </head>
 <body>
 ${logoBase64 ? '<div class="watermark"></div>' : ''}
 <div class="header">
+  ${logoBase64 ? `<img class="logo-img" src="${logoBase64}" alt="logo"/>` : ''}
   <div>
-    <div class="org">NACOC Welfare</div>
+    <div class="org">Welfare Department</div>
     <div class="title">Contribution Statement - ${staff.fullName}</div>
     <div class="meta">Staff ID: ${staff.staffId} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString('en-GB')}</div>
   </div>
@@ -1037,11 +1041,16 @@ ${offsetDetailHtml}
   td{padding:5px 8px;border-bottom:1px solid #e5e7eb;font-size:11px}
   tr:nth-child(even) td{background:#f9fafb}
   .watermark{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;height:320px;background-image:url('${logoBase64}');background-size:contain;background-repeat:no-repeat;background-position:center;opacity:0.05;z-index:0;pointer-events:none}
+  .pdf-header{display:flex;justify-content:flex-start;align-items:center;gap:16px;margin-bottom:14px;border-bottom:2px solid #bc4680;padding-bottom:10px}
+  .logo-img{height:52px;width:auto;object-fit:contain}
 </style>
 </head>
 <body>
 ${logoBase64 ? '<div class="watermark"></div>' : ''}
-<h1>${title}</h1>
+<div class="pdf-header">
+  ${logoBase64 ? `<img class="logo-img" src="${logoBase64}" alt="logo"/>` : ''}
+  <h1 style="margin:0">${title}</h1>
+</div>
 <div class="meta">Generated: ${new Date().toLocaleString('en-GB')}</div>
 <table>
   <thead><tr>${headers}</tr></thead>
@@ -1239,7 +1248,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
 <html><head><meta charset="utf-8"/>
 <style>
   body{font-family:Arial,sans-serif;font-size:11px;margin:0;padding:20px;color:#111}
-  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;border-bottom:2px solid #bc4680;padding-bottom:10px}
+  .header{display:flex;justify-content:flex-start;align-items:center;gap:16px;margin-bottom:16px;border-bottom:2px solid #bc4680;padding-bottom:10px}
   .org{font-size:18px;font-weight:bold;color:#bc4680}
   .title{font-size:13px;font-weight:bold;margin-top:4px}
   .meta{color:#666;font-size:10px;margin-top:2px}
@@ -1257,12 +1266,14 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   td.total{font-weight:bold;background:#eff6ff}
   td.empty{color:#ccc}
   .watermark{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;height:320px;background-image:url('${logoBase64}');background-size:contain;background-repeat:no-repeat;background-position:center;opacity:0.05;z-index:0;pointer-events:none}
+  .logo-img{height:52px;width:auto;object-fit:contain}
 </style></head>
 <body>
 ${logoBase64 ? '<div class="watermark"></div>' : ''}
 <div class="header">
+  ${logoBase64 ? `<img class="logo-img" src="${logoBase64}" alt="logo"/>` : ''}
   <div>
-    <div class="org">NACOC Welfare</div>
+    <div class="org">Welfare Department</div>
     <div class="title">Staff Record — ${escapeHtml(staff.fullName)}</div>
     <div class="meta">Staff ID: ${escapeHtml(staff.staffId)} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString('en-GB')}</div>
   </div>

@@ -1,6 +1,6 @@
 import { EmailLogClient } from './email-log-client';
 
-export const metadata = { title: 'Email Log - NACOC Welfare' };
+export const metadata = { title: 'Email Log - Welfare Department' };
 
 export default function EmailLogPage() {
   return (

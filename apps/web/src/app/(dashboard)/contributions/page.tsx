@@ -4,7 +4,7 @@ import { Upload, PenLine } from 'lucide-react';
 import ContributionsListClient from './contributions-list-client';
 import { TableSkeleton } from '@/components/ui/skeleton';
 
-export const metadata = { title: 'Contributions - NACOC Welfare' };
+export const metadata = { title: 'Contributions - Welfare Department' };
 
 export default function ContributionsPage() {
   return (

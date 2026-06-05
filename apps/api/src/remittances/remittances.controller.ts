@@ -147,9 +147,14 @@ export class RemittancesController {
   td{padding:5px 8px;border-bottom:1px solid #e5e7eb;font-size:11px}
   tr:nth-child(even) td{background:#f9fafb}
   .watermark{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;height:320px;background-image:url('${logoBase64}');background-size:contain;background-repeat:no-repeat;background-position:center;opacity:0.05;z-index:0;pointer-events:none}
+  .pdf-header{display:flex;justify-content:flex-start;align-items:center;gap:16px;margin-bottom:14px;border-bottom:2px solid #bc4680;padding-bottom:10px}
+  .logo-img{height:52px;width:auto;object-fit:contain}
 </style></head><body>
 ${logoBase64 ? '<div class="watermark"></div>' : ''}
-<h1>Remittances Report</h1>
+<div class="pdf-header">
+  ${logoBase64 ? `<img class="logo-img" src="${logoBase64}" alt="logo"/>` : ''}
+  <h1 style="margin:0">Remittances Report</h1>
+</div>
 <div class="meta">Period: ${fm}/${fy} – ${tm}/${ty} | Generated: ${new Date().toLocaleString('en-GB')}</div>
 <table><thead><tr>${headers}</tr></thead><tbody>${bodyRows}</tbody></table>
 </body></html>`;

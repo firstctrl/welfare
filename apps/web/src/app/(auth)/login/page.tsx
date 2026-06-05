@@ -115,7 +115,7 @@ export default function LoginPage() {
           <Image src="/assets/ncc-logo.png" alt="NCC" fill className="object-contain" priority />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">NACOC Welfare</h1>
+          <h1 className="text-xl font-bold text-gray-900">Welfare Department</h1>
           <p className="text-sm text-gray-500">Sign in to your account</p>
         </div>
       </div>

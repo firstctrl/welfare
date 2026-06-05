@@ -134,8 +134,8 @@ export class ReportsController {
     const pdf = await this.reportsService.generateStatementPdf(staffId);
     await this.emailService.sendWithAttachment(
       { staffId, staffName: staff.fullName, email: staff.email },
-      `Your NACOC Welfare Contribution Statement`,
-      `<p>Dear ${staff.fullName},</p><p>Please find attached your welfare contribution statement.</p><p>NACOC Welfare</p>`,
+      `Your Welfare Department Contribution Statement`,
+      `<p>Dear ${staff.fullName},</p><p>Please find attached your welfare contribution statement.</p><p>Welfare Department</p>`,
       [{ filename: `statement-${staff.staffId}.pdf`, content: pdf }],
       EmailTriggerSource.Manual,
     );
@@ -324,8 +324,8 @@ export class ReportsController {
     const pdf = await this.reportsService.generateLoanStatementPdf(staffId, loanId);
     await this.emailService.sendWithAttachment(
       { staffId, staffName: stmt.staff.displayName, email: staffDoc.email },
-      `Your NACOC Welfare Loan Statement`,
-      `<p>Dear ${stmt.staff.displayName},</p><p>Please find attached your welfare loan statement.</p><p>NACOC Welfare</p>`,
+      `Your Welfare Department Loan Statement`,
+      `<p>Dear ${stmt.staff.displayName},</p><p>Please find attached your welfare loan statement.</p><p>Welfare Department</p>`,
       [{ filename: `loan-statement-${stmt.staff.staffNo}-${stmt.loan.id}.pdf`, content: pdf }],
       EmailTriggerSource.Manual,
     );
