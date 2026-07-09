@@ -128,7 +128,7 @@ export default function LoginPage() {
           <Image src="/assets/ncc-logo.png" alt="NCC" fill className="object-contain" priority />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Welfare Department</h1>
+          <h1 className="text-xl font-bold text-gray-900">Welfare Management System</h1>
           <p className="text-sm text-gray-500">Sign in to your account</p>
         </div>
       </div>
@@ -137,9 +137,7 @@ export default function LoginPage() {
         <LoginForm />
       </Suspense>
 
-      <p className="mt-6 text-xs text-center text-gray-400">
-        Welfare Management System · IT Department
-      </p>
+      <p className="mt-6 text-xs text-center text-gray-400">Welfare Department</p>
     </div>
   );
 }
