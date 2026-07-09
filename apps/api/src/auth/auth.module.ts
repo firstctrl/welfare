@@ -7,12 +7,15 @@ import { AuthController } from './auth.controller';
 import { LocalStrategy } from './strategies/local.strategy';
 import { LdapStrategy } from './strategies/ldap.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { AdLoginEnabledGuard } from './guards/ad-login-enabled.guard';
 import { UsersModule } from '../users/users.module';
+import { SystemConfigModule } from '../system-config/system-config.module';
 
 @Global()
 @Module({
   imports: [
     UsersModule,
+    SystemConfigModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -23,7 +26,7 @@ import { UsersModule } from '../users/users.module';
       }),
     }),
   ],
-  providers: [AuthService, LocalStrategy, LdapStrategy, JwtStrategy],
+  providers: [AuthService, LocalStrategy, LdapStrategy, JwtStrategy, AdLoginEnabledGuard],
   controllers: [AuthController],
   exports: [AuthService, JwtModule],
 })

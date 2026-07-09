@@ -26,7 +26,7 @@ function LoginForm() {
         setAdEnabled(d.adLoginEnabled);
         if (!d.adLoginEnabled) setMode('local');
       })
-      .catch(() => setAdEnabled(true));
+      .catch(() => setAdEnabled(false));
   }, []);
 
   async function handleSubmit(e: FormEvent) {

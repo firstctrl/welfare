@@ -5,6 +5,7 @@ import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { LdapAuthGuard } from './guards/ldap-auth.guard';
+import { AdLoginEnabledGuard } from './guards/ad-login-enabled.guard';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { UserDocument } from '../users/schemas/user.schema';
@@ -26,7 +27,7 @@ export class AuthController {
   @Public()
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('login/ldap')
-  @UseGuards(LdapAuthGuard)
+  @UseGuards(AdLoginEnabledGuard, LdapAuthGuard)
   @HttpCode(HttpStatus.OK)
   async loginLdap(@CurrentUser() ldapUser: { username: string; displayName: string; email?: string }, @Body() _body: LoginDto) {
     return this.authService.loginWithLdap(ldapUser);
