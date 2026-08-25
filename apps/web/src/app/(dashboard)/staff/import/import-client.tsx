@@ -127,9 +127,9 @@ export default function StaffImportClient() {
                     {[
                       'Staff ID',
                       'Full Name',
+                      'Date of Birth',
                       'Email',
                       'Phone',
-                      'Date of Birth',
                       'Date of Employment',
                     ].map((h) => (
                       <th
