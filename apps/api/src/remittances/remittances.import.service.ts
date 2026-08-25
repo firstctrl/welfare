@@ -4,11 +4,12 @@ import { Model } from 'mongoose';
 import * as XLSX from 'xlsx';
 import { RemittanceImportBatch, RemittanceImportBatchDocument } from './schemas/remittance-import-batch.schema';
 import { RemittancesService } from './remittances.service';
+import { normalizeExcelDate } from '../common/utils/excel-date.util';
 
 interface RemittanceExcelRow {
   Month?: number;
   Year?: number;
-  'Receipt Date'?: string;
+  'Receipt Date'?: string | number | Date;
 }
 
 @Injectable()
@@ -25,7 +26,7 @@ export class RemittancesImportService {
     actorId: string,
     actorName: string,
   ): Promise<{ batchId: string; imported: number; flagged: number; total: number }> {
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json<RemittanceExcelRow>(sheet);
 
@@ -47,7 +48,7 @@ export class RemittancesImportService {
       const row = rows[i];
       const month = Number(row.Month ?? 0);
       const year = Number(row.Year ?? 0);
-      const receiptDate = String(row['Receipt Date'] ?? '').trim();
+      const receiptDate = normalizeExcelDate(row['Receipt Date']);
 
       if (!month || month < 1 || month > 12) {
         flaggedRows.push({ rowNumber: i + 2, month, year, flagReason: 'Invalid or missing Month (must be 1–12)' });
@@ -59,6 +60,10 @@ export class RemittancesImportService {
       }
       if (!receiptDate) {
         flaggedRows.push({ rowNumber: i + 2, month, year, flagReason: 'Missing Receipt Date' });
+        continue;
+      }
+      if (isNaN(new Date(receiptDate).getTime())) {
+        flaggedRows.push({ rowNumber: i + 2, month, year, flagReason: 'Invalid Receipt Date' });
         continue;
       }
 

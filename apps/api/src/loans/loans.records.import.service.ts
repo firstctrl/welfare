@@ -7,13 +7,14 @@ import { LoanRecordsImportBatch, LoanRecordsImportBatchDocument } from './schema
 import { LoansService } from './loans.service';
 import { StaffService } from '../staff/staff.service';
 import { AuditService } from '../audit/audit.service';
+import { normalizeExcelDate } from '../common/utils/excel-date.util';
 
 interface ImportRow {
   'Staff ID'?: string;
   'Guarantor Staff ID'?: string;
   'Principal Amount'?: number;
   'Tenure Months'?: number;
-  'Disbursed Date'?: string;
+  'Disbursed Date'?: string | number | Date;
   'Cheque No'?: string;
   'PV No'?: string;
 }
@@ -41,7 +42,7 @@ export class LoansRecordsImportService {
     actorId: string,
     actorName: string,
   ): Promise<LoanRecordsImportResult> {
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json<ImportRow>(sheet);
 
@@ -64,7 +65,7 @@ export class LoansRecordsImportService {
       const rawGuarantorId = String(row['Guarantor Staff ID'] ?? '').trim();
       const principalAmount = Number(row['Principal Amount'] ?? 0);
       const tenureMonths   = Number(row['Tenure Months']     ?? 0);
-      const disbursedDateRaw = String(row['Disbursed Date']  ?? '').trim();
+      const disbursedDateRaw = normalizeExcelDate(row['Disbursed Date']);
       const chequeNo       = String(row['Cheque No']         ?? '').trim();
       const pvNo           = String(row['PV No']             ?? '').trim();
 

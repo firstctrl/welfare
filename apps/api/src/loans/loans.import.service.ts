@@ -15,13 +15,14 @@ import { LoanImportBatch, LoanImportBatchDocument } from './schemas/loan-import-
 import { LoansService } from './loans.service';
 import { StaffService } from '../staff/staff.service';
 import { AuditService } from '../audit/audit.service';
+import { normalizeExcelDate } from '../common/utils/excel-date.util';
 
 interface ImportRow {
   'Staff ID'?: string;
   'Staff Name'?: string;
   'Loan ID'?: string;
   Amount?: number;
-  'Paid Date'?: string;
+  'Paid Date'?: string | number | Date;
   Notes?: string;
 }
 
@@ -49,7 +50,7 @@ export class LoansImportService {
     actorId: string,
     actorName: string,
   ): Promise<ImportRepaymentResult> {
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json<ImportRow>(sheet);
 
@@ -72,7 +73,7 @@ export class LoansImportService {
       const staffName   = String(row['Staff Name'] ?? '').trim();
       const rawLoanId   = String(row['Loan ID']    ?? '').trim();
       const amount      = Number(row.Amount ?? 0);
-      const paidDateRaw = String(row['Paid Date']  ?? '').trim();
+      const paidDateRaw = normalizeExcelDate(row['Paid Date']);
       const notes       = String(row.Notes        ?? '').trim() || undefined;
 
       const flag = (reason: string) =>

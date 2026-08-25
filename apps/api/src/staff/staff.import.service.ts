@@ -6,16 +6,17 @@ import { AuditAction, AuditEntity, ImportBatchStatus, PaginatedResult } from '@w
 import { StaffImportBatch, StaffImportBatchDocument } from './schemas/staff-import-batch.schema';
 import { StaffService } from './staff.service';
 import { AuditService } from '../audit/audit.service';
+import { normalizeExcelDate } from '../common/utils/excel-date.util';
 
 interface ImportRow {
   'Staff ID'?: string;
   'Full Name'?: string;
   'PF No'?: string;
-  'Date of Birth'?: string;
+  'Date of Birth'?: string | number | Date;
   'Phone'?: string;
   'Email'?: string;
-  'Date of Employment'?: string;
-  'Date of First Contribution'?: string;
+  'Date of Employment'?: string | number | Date;
+  'Date of First Contribution'?: string | number | Date;
   'Level'?: string;
   'Point'?: number;
 }
@@ -64,11 +65,11 @@ export class StaffImportService {
       const staffId    = String(row['Staff ID']    ?? '').trim();
       const fullName   = String(row['Full Name']   ?? '').trim();
       const pfNo       = String(row['PF No']       ?? '').trim() || undefined;
-      const dob        = String(row['Date of Birth']            ?? '').trim();
+      const dob        = normalizeExcelDate(row['Date of Birth']);
       const phone      = String(row['Phone']                    ?? '').trim();
       const email      = String(row['Email']                    ?? '').trim();
-      const dateOfEmp  = String(row['Date of Employment']       ?? '').trim();
-      const dateOfFC   = String(row['Date of First Contribution'] ?? '').trim() || undefined;
+      const dateOfEmp  = normalizeExcelDate(row['Date of Employment']);
+      const dateOfFC   = normalizeExcelDate(row['Date of First Contribution']) || undefined;
       const level      = String(row['Level']       ?? '').trim() || undefined;
       const point      = row['Point'] !== undefined ? Number(row['Point']) : undefined;
 

@@ -4,12 +4,13 @@ import { Model } from 'mongoose';
 import * as XLSX from 'xlsx';
 import { InvestmentImportBatch, InvestmentImportBatchDocument } from './schemas/investment-import-batch.schema';
 import { InvestmentsService } from './investments.service';
+import { normalizeExcelDate } from '../common/utils/excel-date.util';
 
 interface InvestmentExcelRow {
-  'Purchase Date'?: any;
+  'Purchase Date'?: string | number | Date;
   Description?: string;
   Cost?: number;
-  'Maturity Date'?: any;
+  'Maturity Date'?: string | number | Date;
   'Face Value'?: number;
   Instruction?: string;
 }
@@ -52,8 +53,8 @@ export class InvestmentsImportService {
       const cost = Number(row.Cost ?? 0);
       const faceValue = Number(row['Face Value'] ?? 0);
       const instruction = String(row.Instruction ?? '').trim() as 'One-Time' | 'Roll-Over';
-      const purchaseDateRaw = row['Purchase Date'];
-      const maturityDateRaw = row['Maturity Date'];
+      const purchaseDateRaw = normalizeExcelDate(row['Purchase Date']);
+      const maturityDateRaw = normalizeExcelDate(row['Maturity Date']);
 
       if (!description) {
         flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Missing Description' });
@@ -75,21 +76,22 @@ export class InvestmentsImportService {
         flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Missing Maturity Date' });
         continue;
       }
+      if (isNaN(new Date(purchaseDateRaw).getTime())) {
+        flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Invalid Purchase Date' });
+        continue;
+      }
+      if (isNaN(new Date(maturityDateRaw).getTime())) {
+        flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Invalid Maturity Date' });
+        continue;
+      }
       if (!['One-Time', 'Roll-Over'].includes(instruction)) {
         flaggedRows.push({ rowNumber: i + 2, description, flagReason: `Invalid Instruction: "${instruction}" (must be One-Time or Roll-Over)` });
         continue;
       }
 
       try {
-        const purchaseDate = purchaseDateRaw instanceof Date
-          ? purchaseDateRaw.toISOString()
-          : String(purchaseDateRaw);
-        const maturityDate = maturityDateRaw instanceof Date
-          ? maturityDateRaw.toISOString()
-          : String(maturityDateRaw);
-
         await this.investmentsService.create(
-          { purchaseDate, description, cost, maturityDate, faceValue, instruction },
+          { purchaseDate: purchaseDateRaw, description, cost, maturityDate: maturityDateRaw, faceValue, instruction },
           actorId,
         );
         imported++;
