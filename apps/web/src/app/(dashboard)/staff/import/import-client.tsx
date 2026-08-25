@@ -23,9 +23,14 @@ const statusKind: Record<ImportBatchStatus, 'success' | 'warning' | 'info'> = {
 interface PreviewRow {
   staffId: string;
   fullName: string;
+  dateOfBirth: string;
   email: string;
   phone: string;
   dateOfEmployment: string;
+}
+
+function maskDate(value: string): string {
+  return value.replace(/\d/g, '•');
 }
 
 export default function StaffImportClient() {
@@ -61,13 +66,16 @@ export default function StaffImportClient() {
       const wb = XLSX.read(e.target?.result, { type: 'array' });
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
-      setPreview(rows.map((r) => ({
-        staffId:          String(r['Staff ID']            ?? ''),
-        fullName:         String(r['Full Name']           ?? ''),
-        email:            String(r['Email']               ?? ''),
-        phone:            String(r['Phone']               ?? ''),
-        dateOfEmployment: String(r['Date of Employment']  ?? ''),
-      })));
+      setPreview(
+        rows.map((r) => ({
+          staffId: String(r['Staff ID'] ?? ''),
+          fullName: String(r['Full Name'] ?? ''),
+          dateOfBirth: String(r['Date of Birth'] ?? ''),
+          email: String(r['Email'] ?? ''),
+          phone: String(r['Phone'] ?? ''),
+          dateOfEmployment: String(r['Date of Employment'] ?? ''),
+        })),
+      );
     };
     reader.readAsArrayBuffer(f);
   }
@@ -88,7 +96,11 @@ export default function StaffImportClient() {
             )}
             onClick={() => fileRef.current?.click()}
             onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFileChange(f); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const f = e.dataTransfer.files[0];
+              if (f) handleFileChange(f);
+            }}
           >
             <input
               ref={fileRef}
@@ -99,7 +111,9 @@ export default function StaffImportClient() {
             />
             <Upload size={32} strokeWidth={1.5} className="mx-auto text-neutral-300 mb-3" />
             {file ? (
-              <p className="text-sm text-neutral-700 font-medium">{file.name} — {preview.length} rows parsed</p>
+              <p className="text-sm text-neutral-700 font-medium">
+                {file.name} — {preview.length} rows parsed
+              </p>
             ) : (
               <p className="text-sm text-neutral-400">Drop .xlsx file here or click to browse</p>
             )}
@@ -110,16 +124,33 @@ export default function StaffImportClient() {
               <table className="w-full text-xs border-collapse">
                 <thead className="bg-neutral-50 sticky top-0">
                   <tr>
-                    {['Staff ID', 'Full Name', 'Email', 'Phone', 'Date of Employment'].map((h) => (
-                      <th key={h} className="px-3 py-2 text-left font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
+                    {[
+                      'Staff ID',
+                      'Full Name',
+                      'Email',
+                      'Phone',
+                      'Date of Birth',
+                      'Date of Employment',
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        className="px-3 py-2 text-left font-semibold text-neutral-500 uppercase tracking-wide"
+                      >
+                        {h}
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
                   {preview.slice(0, 50).map((row, i) => (
                     <tr key={i} className="hover:bg-neutral-50">
-                      <td className="px-3 py-1.5 font-mono text-neutral-600">{row.staffId || '—'}</td>
+                      <td className="px-3 py-1.5 font-mono text-neutral-600">
+                        {row.staffId || '—'}
+                      </td>
                       <td className="px-3 py-1.5 text-neutral-700">{row.fullName || '—'}</td>
+                      <td className="px-3 py-1.5 font-mono tracking-wide">
+                        {row.dateOfBirth ? maskDate(row.dateOfBirth) : '—'}
+                      </td>
                       <td className="px-3 py-1.5 text-neutral-500">{row.email || '—'}</td>
                       <td className="px-3 py-1.5 font-mono text-xs">{row.phone || '—'}</td>
                       <td className="px-3 py-1.5">{row.dateOfEmployment || '—'}</td>
@@ -127,7 +158,7 @@ export default function StaffImportClient() {
                   ))}
                   {preview.length > 50 && (
                     <tr>
-                      <td colSpan={5} className="px-3 py-2 text-center text-neutral-400">
+                      <td colSpan={6} className="px-3 py-2 text-center text-neutral-400">
                         …and {preview.length - 50} more rows
                       </td>
                     </tr>
@@ -181,7 +212,12 @@ export default function StaffImportClient() {
                 <thead>
                   <tr className="border-b border-neutral-200 bg-neutral-50">
                     {['Row', 'Staff ID', 'Full Name', 'Reason'].map((h) => (
-                      <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
+                      <th
+                        key={h}
+                        className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide"
+                      >
+                        {h}
+                      </th>
                     ))}
                   </tr>
                 </thead>
@@ -189,7 +225,9 @@ export default function StaffImportClient() {
                   {activeBatch.flaggedEntries.map((entry) => (
                     <tr key={entry.rowNumber} className="hover:bg-neutral-50">
                       <td className="px-4 py-2 text-neutral-400 text-xs">{entry.rowNumber}</td>
-                      <td className="px-4 py-2 font-mono text-xs text-neutral-600">{entry.staffId || '—'}</td>
+                      <td className="px-4 py-2 font-mono text-xs text-neutral-600">
+                        {entry.staffId || '—'}
+                      </td>
                       <td className="px-4 py-2 text-neutral-700">{entry.fullName || '—'}</td>
                       <td className="px-4 py-2 text-xs text-danger-600">{entry.reason}</td>
                     </tr>
@@ -213,17 +251,30 @@ export default function StaffImportClient() {
                 <thead>
                   <tr className="border-b border-neutral-200 bg-neutral-50">
                     {['File', 'Date', 'Created', 'Flagged', 'Status', ''].map((h) => (
-                      <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
+                      <th
+                        key={h}
+                        className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide"
+                      >
+                        {h}
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
                   {batchHistory.data.map((batch) => (
                     <tr key={batch._id} className="hover:bg-neutral-50">
-                      <td className="px-4 py-2 text-neutral-700 truncate max-w-xs">{batch.fileName}</td>
-                      <td className="px-4 py-2 text-neutral-500 text-xs font-mono">{fmtDate(batch.createdAt)}</td>
-                      <td className="px-4 py-2 text-success-700 font-medium">{batch.matchedRows}</td>
-                      <td className="px-4 py-2 text-warning-700 font-medium">{batch.flaggedRows}</td>
+                      <td className="px-4 py-2 text-neutral-700 truncate max-w-xs">
+                        {batch.fileName}
+                      </td>
+                      <td className="px-4 py-2 text-neutral-500 text-xs font-mono">
+                        {fmtDate(batch.createdAt)}
+                      </td>
+                      <td className="px-4 py-2 text-success-700 font-medium">
+                        {batch.matchedRows}
+                      </td>
+                      <td className="px-4 py-2 text-warning-700 font-medium">
+                        {batch.flaggedRows}
+                      </td>
                       <td className="px-4 py-2">
                         <Badge kind={statusKind[batch.status]}>{batch.status}</Badge>
                       </td>
