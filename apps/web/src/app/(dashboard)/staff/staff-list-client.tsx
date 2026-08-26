@@ -6,7 +6,9 @@ import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
+  getSortedRowModel,
   useReactTable,
+  type SortingState,
 } from '@tanstack/react-table';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -22,7 +24,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/field';
-import { Pagination } from '@/components/ui/data-table';
+import { Pagination, SortableTh } from '@/components/ui/data-table';
 import { Avatar } from '@/components/ui/avatar';
 import { Modal } from '@/components/ui/modal';
 import { fmtDate } from '@/lib/format';
@@ -41,8 +43,8 @@ export default function StaffListClient() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
-
-  const limit = 20;
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [limit, setLimit] = useState(20);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['staff', { page, status, level, q }],
@@ -83,6 +85,7 @@ export default function StaffListClient() {
   const columns = [
     ...(permission === 'full' ? [col.display({
       id: 'select',
+      enableSorting: false,
       header: ({ table }) => (
         <input
           type="checkbox"
@@ -105,6 +108,7 @@ export default function StaffListClient() {
     col.display({
       id: 'avatar',
       header: '',
+      enableSorting: false,
       cell: (info) => <Avatar name={info.row.original.fullName} size="sm" />,
     }),
     col.accessor('fullName', { header: 'Full Name' }),
@@ -124,12 +128,14 @@ export default function StaffListClient() {
     data: data?.data ?? [],
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     manualPagination: true,
     pageCount: data ? Math.ceil(data.total / limit) : 0,
     getRowId: (row) => row._id,
     enableRowSelection: permission === 'full',
     onRowSelectionChange: setRowSelection,
-    state: { pagination: { pageIndex: page - 1, pageSize: limit }, rowSelection },
+    onSortingChange: setSorting,
+    state: { pagination: { pageIndex: page - 1, pageSize: limit }, rowSelection, sorting },
     onPaginationChange: (updater) => {
       if (typeof updater === 'function') {
         const next = updater({ pageIndex: page - 1, pageSize: limit });
@@ -213,13 +219,7 @@ export default function StaffListClient() {
               {table.getHeaderGroups().map((hg) => (
                 <tr key={hg.id} className="border-b border-neutral-200 bg-neutral-50">
                   {hg.headers.map((h) => (
-                    <th
-                      key={h.id}
-                      className="px-4 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide whitespace-nowrap"
-                      style={{ height: 'var(--row-default)' }}
-                    >
-                      {flexRender(h.column.columnDef.header, h.getContext())}
-                    </th>
+                    <SortableTh key={h.id} header={h} />
                   ))}
                 </tr>
               ))}
@@ -264,8 +264,14 @@ export default function StaffListClient() {
           </table>
         </div>
 
-        {data && data.total > limit && (
-          <Pagination page={page} total={data.total} limit={limit} onPageChange={setPage} />
+        {data && (
+          <Pagination
+            page={page}
+            total={data.total}
+            limit={limit}
+            onPageChange={setPage}
+            onLimitChange={(n) => { setLimit(n); setPage(1); }}
+          />
         )}
       </div>
 

@@ -8,7 +8,9 @@ import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
+  getSortedRowModel,
   useReactTable,
+  type SortingState,
 } from '@tanstack/react-table';
 import { X, Plus, Upload, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -22,7 +24,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { StatusBadge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
-import { Pagination } from '@/components/ui/data-table';
+import { Pagination, SortableTh } from '@/components/ui/data-table';
 import { Modal } from '@/components/ui/modal';
 import { fmtGHS, fmtDate } from '@/lib/format';
 
@@ -39,10 +41,11 @@ export function LoansListClient() {
   const [filterYear, setFilterYear]   = useState('');
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
-  const limit = 20;
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [limit, setLimit] = useState(20);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['loans', { page, status }],
+    queryKey: ['loans', { page, status, limit }],
     queryFn: () => listLoans({ page, limit, status: status || undefined }),
   });
 
@@ -105,6 +108,7 @@ export function LoansListClient() {
   const columns = useMemo(() => [
     ...(permission === 'full' ? [col.display({
       id: 'select',
+      enableSorting: false,
       header: ({ table }) => (
         <input
           type="checkbox"
@@ -168,10 +172,12 @@ export function LoansListClient() {
     data: filtered,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     getRowId: (row) => row._id,
     enableRowSelection: permission === 'full',
     onRowSelectionChange: setRowSelection,
-    state: { rowSelection },
+    onSortingChange: setSorting,
+    state: { rowSelection, sorting },
   });
 
   if (error) return <p className="text-sm text-danger-600">Failed to load loans.</p>;
@@ -268,13 +274,7 @@ export function LoansListClient() {
               {table.getHeaderGroups().map((hg) => (
                 <tr key={hg.id} className="border-b border-neutral-200 bg-neutral-50">
                   {hg.headers.map((h) => (
-                    <th
-                      key={h.id}
-                      className="px-4 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide whitespace-nowrap"
-                      style={{ height: 'var(--row-default)' }}
-                    >
-                      {flexRender(h.column.columnDef.header, h.getContext())}
-                    </th>
+                    <SortableTh key={h.id} header={h} />
                   ))}
                 </tr>
               ))}
@@ -318,8 +318,14 @@ export function LoansListClient() {
             </tbody>
           </table>
         </div>
-        {data && data.total > limit && (
-          <Pagination page={page} total={data.total} limit={limit} onPageChange={setPage} />
+        {data && (
+          <Pagination
+            page={page}
+            total={data.total}
+            limit={limit}
+            onPageChange={setPage}
+            onLimitChange={(n) => { setLimit(n); setPage(1); }}
+          />
         )}
       </div>
 

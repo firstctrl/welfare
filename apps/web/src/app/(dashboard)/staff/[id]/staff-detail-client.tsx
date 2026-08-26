@@ -54,7 +54,7 @@ const statusSchema = z.object({
 });
 type StatusForm = z.infer<typeof statusSchema>;
 
-function toDateInput(d: string) { return d.substring(0, 10); }
+function toDateInput(d?: string) { return d ? d.substring(0, 10) : ''; }
 
 export default function StaffDetailClient({ id }: { id: string }) {
   const qc = useQueryClient();

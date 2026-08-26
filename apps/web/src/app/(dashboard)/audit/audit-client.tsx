@@ -8,7 +8,7 @@ import { TableSkeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Select, Input } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
-import { Pagination } from '@/components/ui/data-table';
+import { Pagination, SortIcon } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { fmtDateTime } from '@/lib/format';
 
@@ -118,10 +118,12 @@ export default function AuditClient() {
   const [action, setAction] = useState<AuditAction | ''>('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const limit = 50;
+  const [limit, setLimit] = useState(50);
+  const [sortKey, setSortKey] = useState<'createdAt' | 'actorName' | 'action' | 'entity' | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['audit', { page, entity, action, from, to }],
+    queryKey: ['audit', { page, entity, action, from, to, limit }],
     queryFn: () =>
       listAuditLogs({
         page,
@@ -134,8 +136,24 @@ export default function AuditClient() {
     staleTime: 30_000,
   });
 
-  const totalPages = data ? Math.ceil(data.total / limit) : 0;
   const hasFilters = !!(entity || action || from || to);
+
+  function toggleSort(key: 'createdAt' | 'actorName' | 'action' | 'entity') {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
+
+  const sortedLogs = [...(data?.data ?? [])].sort((a, b) => {
+    if (!sortKey) return 0;
+    const av = String(a[sortKey as keyof AuditLog] ?? '');
+    const bv = String(b[sortKey as keyof AuditLog] ?? '');
+    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
 
   return (
     <div className="space-y-4">
@@ -213,12 +231,31 @@ export default function AuditClient() {
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="border-b border-neutral-200 bg-neutral-50">
-                {['Timestamp', 'Actor', 'Action', 'Module', 'Changes'].map((h) => (
+                {(
+                  [
+                    ['Timestamp', 'createdAt'],
+                    ['Actor', 'actorName'],
+                    ['Action', 'action'],
+                    ['Module', 'entity'],
+                    ['Changes', null],
+                  ] as const
+                ).map(([h, key]) => (
                   <th
                     key={h}
                     className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide whitespace-nowrap"
                   >
-                    {h}
+                    {key ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleSort(key)}
+                        className="inline-flex items-center gap-1 hover:text-neutral-800 transition-colors duration-fast"
+                      >
+                        {h}
+                        <SortIcon dir={sortKey === key ? sortDir : false} />
+                      </button>
+                    ) : (
+                      h
+                    )}
                   </th>
                 ))}
               </tr>
@@ -244,7 +281,7 @@ export default function AuditClient() {
                   </td>
                 </tr>
               ) : (
-                data.data.map((log: AuditLog) => (
+                sortedLogs.map((log: AuditLog) => (
                   <tr
                     key={log._id}
                     className="hover:bg-neutral-50"
@@ -268,9 +305,16 @@ export default function AuditClient() {
           </table>
         </div>
 
-        {data && totalPages > 1 && (
+        {data && (
           <div className="px-4 py-3 border-t border-neutral-200">
-            <Pagination page={page} total={data.total} limit={limit} onPageChange={setPage} />
+            <Pagination
+              page={page}
+              total={data.total}
+              limit={limit}
+              onPageChange={setPage}
+              onLimitChange={(n) => { setLimit(n); setPage(1); }}
+              limitOptions={[10, 20, 50, 100, 200]}
+            />
           </div>
         )}
       </div>

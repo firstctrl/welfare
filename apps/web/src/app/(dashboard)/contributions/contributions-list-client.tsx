@@ -6,7 +6,9 @@ import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
+  getSortedRowModel,
   useReactTable,
+  type SortingState,
 } from '@tanstack/react-table';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -18,7 +20,7 @@ import { TableSkeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Select, Input } from '@/components/ui/field';
-import { Pagination } from '@/components/ui/data-table';
+import { Pagination, SortableTh } from '@/components/ui/data-table';
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { fmtGHS } from '@/lib/format';
@@ -36,8 +38,6 @@ type ContributionRow = IContribution & {
   staffInfo?: { staffId: string; fullName: string };
 };
 
-const LIMIT = 20;
-
 export default function ContributionsListClient() {
   const qc = useQueryClient();
   const permission = usePermission(AppModule.Contributions);
@@ -49,12 +49,14 @@ export default function ContributionsListClient() {
   const [deleteTarget, setDeleteTarget] = useState<ContributionRow | null>(null);
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [limit, setLimit] = useState(20);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['contributions', { page, status, month, year, staffId }],
+    queryKey: ['contributions', { page, status, month, year, staffId, limit }],
     queryFn: () => listContributions({
       page,
-      limit: LIMIT,
+      limit,
       status: status || undefined,
       month: month ? parseInt(month, 10) : undefined,
       year:  year  ? parseInt(year, 10)  : undefined,
@@ -155,15 +157,17 @@ export default function ContributionsListClient() {
     data: (data?.data ?? []) as ContributionRow[],
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     manualPagination: true,
-    pageCount: data ? Math.ceil(data.total / LIMIT) : 0,
+    pageCount: data ? Math.ceil(data.total / limit) : 0,
     getRowId: (row) => row._id,
     enableRowSelection: permission === 'full',
     onRowSelectionChange: setRowSelection,
-    state: { pagination: { pageIndex: page - 1, pageSize: LIMIT }, rowSelection },
+    onSortingChange: setSorting,
+    state: { pagination: { pageIndex: page - 1, pageSize: limit }, rowSelection, sorting },
     onPaginationChange: (updater) => {
       if (typeof updater === 'function') {
-        const next = updater({ pageIndex: page - 1, pageSize: LIMIT });
+        const next = updater({ pageIndex: page - 1, pageSize: limit });
         setPage(next.pageIndex + 1);
       }
     },
@@ -224,13 +228,7 @@ export default function ContributionsListClient() {
               {table.getHeaderGroups().map((hg) => (
                 <tr key={hg.id} className="border-b border-neutral-200 bg-neutral-50">
                   {hg.headers.map((h) => (
-                    <th
-                      key={h.id}
-                      className="px-4 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide whitespace-nowrap"
-                      style={{ height: 'var(--row-default)' }}
-                    >
-                      {flexRender(h.column.columnDef.header, h.getContext())}
-                    </th>
+                    <SortableTh key={h.id} header={h} />
                   ))}
                 </tr>
               ))}
@@ -270,8 +268,14 @@ export default function ContributionsListClient() {
           </table>
         </div>
 
-        {data && data.total > LIMIT && (
-          <Pagination page={page} total={data.total} limit={LIMIT} onPageChange={setPage} />
+        {data && (
+          <Pagination
+            page={page}
+            total={data.total}
+            limit={limit}
+            onPageChange={setPage}
+            onLimitChange={(n) => { setLimit(n); setPage(1); }}
+          />
         )}
       </div>
 
