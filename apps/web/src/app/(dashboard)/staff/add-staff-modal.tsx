@@ -53,11 +53,7 @@ export default function AddStaffModal({ onClose, onSuccess }: Props) {
           <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button
-            variant="primary"
-            loading={isSubmitting}
-            onClick={handleSubmit(onSubmit)}
-          >
+          <Button variant="primary" loading={isSubmitting} onClick={handleSubmit(onSubmit)}>
             Add Staff
           </Button>
         </>
@@ -77,7 +73,13 @@ export default function AddStaffModal({ onClose, onSuccess }: Props) {
           <Input {...register('level')} placeholder="e.g. GL 10" error={!!errors.level} />
         </Field>
         <Field label="Point" error={errors.point?.message}>
-          <Input {...register('point')} type="number" min="0" defaultValue="0" error={!!errors.point} />
+          <Input
+            {...register('point')}
+            type="number"
+            min="0"
+            placeholder="0"
+            error={!!errors.point}
+          />
         </Field>
         <Field label="PF Number" error={errors.pfNo?.message}>
           <Input {...register('pfNo')} error={!!errors.pfNo} />
@@ -92,7 +94,11 @@ export default function AddStaffModal({ onClose, onSuccess }: Props) {
           <Input {...register('dateOfEmployment')} type="date" error={!!errors.dateOfEmployment} />
         </Field>
         <Field label="Date of First Contribution" error={errors.dateOfFirstContribution?.message}>
-          <Input {...register('dateOfFirstContribution')} type="date" error={!!errors.dateOfFirstContribution} />
+          <Input
+            {...register('dateOfFirstContribution')}
+            type="date"
+            error={!!errors.dateOfFirstContribution}
+          />
         </Field>
       </form>
     </Modal>
