@@ -47,7 +47,7 @@ export default function StaffListClient() {
   const [limit, setLimit] = useState(20);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['staff', { page, status, level, q }],
+    queryKey: ['staff', { page, status, level, q, limit }],
     queryFn: () =>
       q
         ? searchStaff(q, {
