@@ -79,21 +79,27 @@ export function IconButton({
   label,
   onClick,
   danger = false,
+  disabled = false,
+  title,
   className,
 }: {
   icon: LucideIcon;
   label: string;
   onClick?: () => void;
   danger?: boolean;
+  disabled?: boolean;
+  title?: string;
   className?: string;
 }) {
   return (
     <button
       type="button"
       aria-label={label}
+      title={title ?? label}
       onClick={onClick}
+      disabled={disabled}
       className={cn(
-        'w-7 h-7 rounded-xs border-none inline-flex items-center justify-center text-neutral-500 cursor-pointer transition-colors duration-fast',
+        'w-7 h-7 rounded-xs border-none inline-flex items-center justify-center text-neutral-500 cursor-pointer transition-colors duration-fast disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent',
         danger
           ? 'hover:bg-danger-50 hover:text-danger-700'
           : 'hover:bg-neutral-100 hover:text-neutral-700',
