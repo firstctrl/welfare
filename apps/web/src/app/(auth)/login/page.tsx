@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect, FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import Image from 'next/image';
+import Link from 'next/link';
 import { login } from '../../../lib/auth';
 import { cn } from '@/lib/utils';
 
@@ -108,6 +109,14 @@ function LoginForm() {
           className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
         />
       </div>
+
+      {mode === 'local' && (
+        <div className="text-right -mt-2">
+          <Link href="/forgot-password" className="text-xs text-blue-600 hover:underline">
+            Forgot password?
+          </Link>
+        </div>
+      )}
 
       <button
         type="submit"
