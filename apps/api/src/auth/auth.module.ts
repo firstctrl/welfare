@@ -10,12 +10,14 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { AdLoginEnabledGuard } from './guards/ad-login-enabled.guard';
 import { UsersModule } from '../users/users.module';
 import { SystemConfigModule } from '../system-config/system-config.module';
+import { PasswordResetModule } from '../password-reset/password-reset.module';
 
 @Global()
 @Module({
   imports: [
     UsersModule,
     SystemConfigModule,
+    PasswordResetModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

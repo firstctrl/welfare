@@ -6,6 +6,7 @@ import { timingSafeEqual } from 'crypto';
 import { UsersService } from '../users/users.service';
 import { UserDocument } from '../users/schemas/user.schema';
 import { JwtPayload } from './strategies/jwt.strategy';
+import { PasswordResetService } from '../password-reset/password-reset.service';
 import * as crypto from 'crypto';
 
 const REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
@@ -14,6 +15,7 @@ const REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
+    private readonly passwordResetService: PasswordResetService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
@@ -79,5 +81,15 @@ export class AuthService {
 
   async logout(userId: string): Promise<void> {
     await this.redis.del(`refresh:${userId}`);
+  }
+
+  async forgotPassword(email: string): Promise<void> {
+    const user = await this.usersService.findByEmail(email);
+    if (!user || !user.email) return;
+    await this.passwordResetService.requestReset(user, { triggeredByAdmin: false });
+  }
+
+  async resetPassword(token: string, password: string): Promise<void> {
+    await this.passwordResetService.consumeToken(token, password);
   }
 }
