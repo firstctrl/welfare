@@ -4,15 +4,23 @@ import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { User, UserDocument } from './schemas/user.schema';
 import { UserRole } from '@welfare/shared';
+import { PasswordResetService } from '../password-reset/password-reset.service';
 
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
-  constructor(@InjectModel(User.name) private readonly userModel: Model<UserDocument>) {}
+  constructor(
+    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+    private readonly passwordResetService: PasswordResetService,
+  ) {}
 
   async findByUsername(username: string): Promise<UserDocument | null> {
     return this.userModel.findOne({ username }).exec();
+  }
+
+  async findByEmail(email: string): Promise<UserDocument | null> {
+    return this.userModel.findOne({ email, source: 'local' }).exec();
   }
 
   async findByUsernameWithPassword(username: string): Promise<UserDocument | null> {
@@ -77,14 +85,16 @@ export class UsersService {
     return user;
   }
 
-  async resetPassword(id: string, newPassword: string): Promise<void> {
-    const user = await this.userModel.findById(id).select('+passwordHash').exec();
+  async sendResetLink(id: string): Promise<void> {
+    const user = await this.userModel.findById(id).exec();
     if (!user) throw new NotFoundException('User not found');
     if (user.source === 'ldap') {
       throw new BadRequestException('Cannot reset password for an Active Directory account');
     }
-    user.passwordHash = await bcrypt.hash(newPassword, 12);
-    await user.save();
+    if (!user.email) {
+      throw new BadRequestException('User has no email address on record');
+    }
+    await this.passwordResetService.requestReset(user, { triggeredByAdmin: true });
   }
 
   async validatePassword(user: UserDocument, password: string): Promise<boolean> {

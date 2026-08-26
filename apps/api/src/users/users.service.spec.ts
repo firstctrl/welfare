@@ -3,28 +3,14 @@ import { getModelToken } from '@nestjs/mongoose';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User } from './schemas/user.schema';
-import { UserRole } from '@welfare/shared';
-import * as bcrypt from 'bcrypt';
-
-const mockUser = (overrides = {}) => ({
-  _id: { toString: () => 'user-id-1' },
-  username: 'jdoe',
-  displayName: 'John Doe',
-  role: UserRole.WelfareOfficer,
-  source: 'local',
-  isActive: true,
-  passwordHash: 'hashed',
-  save: jest.fn().mockResolvedValue(undefined),
-  toObject: jest.fn(function () { return { ...this }; }),
-  ...overrides,
-});
+import { PasswordResetService } from '../password-reset/password-reset.service';
 
 const mockUserModel = {
-  findById: jest.fn(),
-  findByIdAndUpdate: jest.fn(),
   findOne: jest.fn(),
-  countDocuments: jest.fn(),
+  findById: jest.fn(),
 };
+
+const mockPasswordResetService = { requestReset: jest.fn().mockResolvedValue(undefined) };
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -34,56 +20,48 @@ describe('UsersService', () => {
       providers: [
         UsersService,
         { provide: getModelToken(User.name), useValue: mockUserModel },
+        { provide: PasswordResetService, useValue: mockPasswordResetService },
       ],
     }).compile();
     service = module.get<UsersService>(UsersService);
     jest.clearAllMocks();
   });
 
-  describe('updateRole', () => {
-    it('updates role and returns updated user', async () => {
-      const updated = mockUser({ role: UserRole.WelfareManager });
-      mockUserModel.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(updated) });
-      const result = await service.updateRole('user-id-1', UserRole.WelfareManager);
-      expect(mockUserModel.findByIdAndUpdate).toHaveBeenCalledWith(
-        'user-id-1',
-        { $set: { role: UserRole.WelfareManager } },
-        { new: true },
-      );
-      expect(result.role).toBe(UserRole.WelfareManager);
-    });
-
-    it('throws NotFoundException when user not found', async () => {
-      mockUserModel.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
-      await expect(service.updateRole('bad-id', UserRole.Admin)).rejects.toThrow(NotFoundException);
+  describe('findByEmail', () => {
+    it('queries by email scoped to local accounts', async () => {
+      mockUserModel.findOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+      await service.findByEmail('someone@example.com');
+      expect(mockUserModel.findOne).toHaveBeenCalledWith({ email: 'someone@example.com', source: 'local' });
     });
   });
 
-  describe('resetPassword', () => {
-    it('hashes and saves new password for local user', async () => {
-      const user = mockUser({ source: 'local' });
-      mockUserModel.findById.mockReturnValue({
-        select: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(user) }),
-      });
-      await service.resetPassword('user-id-1', 'NewPass@123');
-      expect(user.save).toHaveBeenCalled();
-      const valid = await bcrypt.compare('NewPass@123', user.passwordHash as string);
-      expect(valid).toBe(true);
+  describe('sendResetLink', () => {
+    it('requests a reset for a local user with an email on file', async () => {
+      const user = { _id: { toString: () => 'u1' }, source: 'local', email: 'u1@example.com' };
+      mockUserModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(user) });
+
+      await service.sendResetLink('u1');
+
+      expect(mockPasswordResetService.requestReset).toHaveBeenCalledWith(user, { triggeredByAdmin: true });
     });
 
-    it('throws BadRequestException for LDAP user', async () => {
-      const ldapUser = mockUser({ source: 'ldap' });
-      mockUserModel.findById.mockReturnValue({
-        select: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(ldapUser) }),
-      });
-      await expect(service.resetPassword('user-id-1', 'NewPass@123')).rejects.toThrow(BadRequestException);
+    it('throws NotFoundException when the user does not exist', async () => {
+      mockUserModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+      await expect(service.sendResetLink('missing')).rejects.toThrow(NotFoundException);
     });
 
-    it('throws NotFoundException when user not found', async () => {
-      mockUserModel.findById.mockReturnValue({
-        select: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(null) }),
-      });
-      await expect(service.resetPassword('bad-id', 'NewPass@123')).rejects.toThrow(NotFoundException);
+    it('throws BadRequestException for an LDAP account', async () => {
+      const user = { _id: { toString: () => 'u1' }, source: 'ldap', email: 'u1@example.com' };
+      mockUserModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(user) });
+      await expect(service.sendResetLink('u1')).rejects.toThrow(BadRequestException);
+      expect(mockPasswordResetService.requestReset).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when the user has no email', async () => {
+      const user = { _id: { toString: () => 'u1' }, source: 'local', email: undefined };
+      mockUserModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(user) });
+      await expect(service.sendResetLink('u1')).rejects.toThrow(BadRequestException);
+      expect(mockPasswordResetService.requestReset).not.toHaveBeenCalled();
     });
   });
 });

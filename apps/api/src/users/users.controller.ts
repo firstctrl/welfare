@@ -2,7 +2,6 @@ import { Controller, Get, Post, Patch, Body, Param, HttpCode, HttpStatus, Req } 
 import { Request } from 'express';
 import { UsersService } from './users.service';
 import { UpdateRoleDto } from './dto/update-role.dto';
-import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -68,16 +67,15 @@ export class UsersController {
     return updated;
   }
 
-  @Post(':id/reset-password')
+  @Post(':id/send-reset-link')
   @HttpCode(HttpStatus.NO_CONTENT)
   @Roles(UserRole.Admin, UserRole.WelfareManager)
-  async resetPassword(
+  async sendResetLink(
     @Param('id') id: string,
-    @Body() dto: ResetPasswordDto,
     @CurrentUser() actor: UserDocument,
     @Req() req: Request,
   ) {
-    await this.usersService.resetPassword(id, dto.password);
+    await this.usersService.sendResetLink(id);
     await this.auditService.log(
       actor._id.toString(),
       actor.displayName,
@@ -85,7 +83,7 @@ export class UsersController {
       AuditEntity.User,
       id,
       undefined,
-      { passwordReset: true },
+      { passwordResetLinkSent: true },
       req.ip,
     );
   }
