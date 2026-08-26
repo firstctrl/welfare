@@ -44,6 +44,6 @@ export async function updateUserRole(id: string, role: UserRole): Promise<UserRe
   return data;
 }
 
-export async function resetUserPassword(id: string, password: string): Promise<void> {
-  await apiClient.post(`/users/${id}/reset-password`, { password });
+export async function sendResetLink(id: string): Promise<void> {
+  await apiClient.post(`/users/${id}/send-reset-link`);
 }

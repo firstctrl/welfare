@@ -1,4 +1,5 @@
 import { useAuthStore } from '../store/auth.store';
+import { apiClient } from './api-client';
 
 interface LoginCredentials {
   username: string;
@@ -50,4 +51,13 @@ export async function refreshAccessToken(): Promise<string | null> {
   const data = await res.json() as { accessToken: string };
   useAuthStore.getState().setTokenAndUser(data.accessToken);
   return data.accessToken;
+}
+
+export async function requestPasswordReset(email: string): Promise<{ message: string }> {
+  const { data } = await apiClient.post('/auth/forgot-password', { email });
+  return data;
+}
+
+export async function confirmPasswordReset(token: string, password: string): Promise<void> {
+  await apiClient.post('/auth/reset-password', { token, password });
 }
