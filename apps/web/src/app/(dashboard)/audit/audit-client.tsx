@@ -2,13 +2,21 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import {
+  createColumnHelper,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type SortingState,
+} from '@tanstack/react-table';
 import { AuditEntity, AuditAction } from '@welfare/shared';
 import { listAuditLogs, type AuditLog } from '@/lib/audit';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Select, Input } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
-import { Pagination, SortIcon } from '@/components/ui/data-table';
+import { Pagination, SortableTh } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import { fmtDateTime } from '@/lib/format';
 
@@ -112,6 +120,37 @@ function DiffCell({
   );
 }
 
+const col = createColumnHelper<AuditLog>();
+
+const columns = [
+  col.accessor('createdAt', {
+    header: 'Timestamp',
+    cell: (info) => (
+      <span className="text-xs text-neutral-600 whitespace-nowrap font-mono tabular">
+        {fmtDateTime(new Date(info.getValue()))}
+      </span>
+    ),
+  }),
+  col.accessor('actorName', {
+    header: 'Actor',
+    cell: (info) => <span className="text-neutral-700">{info.getValue()}</span>,
+  }),
+  col.accessor('action', {
+    header: 'Action',
+    cell: (info) => <Badge kind="info">{fmtLabel(info.getValue())}</Badge>,
+  }),
+  col.accessor('entity', {
+    header: 'Module',
+    cell: (info) => <span className="text-neutral-700">{fmtLabel(info.getValue())}</span>,
+  }),
+  col.display({
+    id: 'changes',
+    header: 'Changes',
+    enableSorting: false,
+    cell: (info) => <DiffCell before={info.row.original.before} after={info.row.original.after} />,
+  }),
+];
+
 export default function AuditClient() {
   const [page, setPage] = useState(1);
   const [entity, setEntity] = useState<AuditEntity | ''>('');
@@ -119,8 +158,7 @@ export default function AuditClient() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [limit, setLimit] = useState(50);
-  const [sortKey, setSortKey] = useState<'createdAt' | 'actorName' | 'action' | 'entity' | null>(null);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [sorting, setSorting] = useState<SortingState>([]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['audit', { page, entity, action, from, to, limit }],
@@ -138,21 +176,14 @@ export default function AuditClient() {
 
   const hasFilters = !!(entity || action || from || to);
 
-  function toggleSort(key: 'createdAt' | 'actorName' | 'action' | 'entity') {
-    if (sortKey === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortKey(key);
-      setSortDir('asc');
-    }
-  }
-
-  const sortedLogs = [...(data?.data ?? [])].sort((a, b) => {
-    if (!sortKey) return 0;
-    const av = String(a[sortKey as keyof AuditLog] ?? '');
-    const bv = String(b[sortKey as keyof AuditLog] ?? '');
-    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-    return sortDir === 'asc' ? cmp : -cmp;
+  const table = useReactTable({
+    data: data?.data ?? [],
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getRowId: (row) => row._id,
+    onSortingChange: setSorting,
+    state: { sorting },
   });
 
   return (
@@ -230,46 +261,24 @@ export default function AuditClient() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
-              <tr className="border-b border-neutral-200 bg-neutral-50">
-                {(
-                  [
-                    ['Timestamp', 'createdAt'],
-                    ['Actor', 'actorName'],
-                    ['Action', 'action'],
-                    ['Module', 'entity'],
-                    ['Changes', null],
-                  ] as const
-                ).map(([h, key]) => (
-                  <th
-                    key={h}
-                    className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide whitespace-nowrap"
-                  >
-                    {key ? (
-                      <button
-                        type="button"
-                        onClick={() => toggleSort(key)}
-                        className="inline-flex items-center gap-1 hover:text-neutral-800 transition-colors duration-fast"
-                      >
-                        {h}
-                        <SortIcon dir={sortKey === key ? sortDir : false} />
-                      </button>
-                    ) : (
-                      h
-                    )}
-                  </th>
-                ))}
-              </tr>
+              {table.getHeaderGroups().map((hg) => (
+                <tr key={hg.id} className="border-b border-neutral-200 bg-neutral-50">
+                  {hg.headers.map((h) => (
+                    <SortableTh key={h.id} header={h} />
+                  ))}
+                </tr>
+              ))}
             </thead>
             <tbody className="divide-y divide-neutral-100">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="p-2">
-                    <TableSkeleton rows={8} cols={5} />
+                  <td colSpan={columns.length} className="p-2">
+                    <TableSkeleton rows={8} cols={columns.length} />
                   </td>
                 </tr>
-              ) : !data?.data.length ? (
+              ) : table.getRowModel().rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5}>
+                  <td colSpan={columns.length}>
                     <EmptyState
                       heading="No audit logs found"
                       body={
@@ -281,23 +290,17 @@ export default function AuditClient() {
                   </td>
                 </tr>
               ) : (
-                sortedLogs.map((log: AuditLog) => (
+                table.getRowModel().rows.map((row) => (
                   <tr
-                    key={log._id}
+                    key={row.id}
                     className="hover:bg-neutral-50"
                     style={{ height: 'var(--row-default)' }}
                   >
-                    <td className="px-4 py-2 text-xs text-neutral-600 whitespace-nowrap font-mono tabular">
-                      {fmtDateTime(new Date(log.createdAt))}
-                    </td>
-                    <td className="px-4 py-2 text-neutral-700">{log.actorName}</td>
-                    <td className="px-4 py-2">
-                      <Badge kind="info">{fmtLabel(log.action)}</Badge>
-                    </td>
-                    <td className="px-4 py-2 text-neutral-700">{fmtLabel(log.entity)}</td>
-                    <td className="px-4 py-2">
-                      <DiffCell before={log.before} after={log.after} />
-                    </td>
+                    {row.getVisibleCells().map((cell) => (
+                      <td key={cell.id} className="px-4 py-2 text-neutral-800">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
                   </tr>
                 ))
               )}
