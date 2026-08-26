@@ -3,24 +3,27 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useQuery, useQueries } from '@tanstack/react-query';
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { X, Plus, Upload } from 'lucide-react';
+import { X, Plus, Upload, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { LoanStatus, AppModule } from '@welfare/shared';
 import type { ILoan } from '@welfare/shared';
 import { usePermission } from '@/hooks/use-permission';
-import { listLoans, getLoanSchedule } from '@/lib/loans';
+import { listLoans, getLoanSchedule, bulkDeleteLoans } from '@/lib/loans';
 import { listStaff } from '@/lib/staff';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusBadge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/field';
+import { Button } from '@/components/ui/button';
 import { Pagination } from '@/components/ui/data-table';
+import { Modal } from '@/components/ui/modal';
 import { fmtGHS, fmtDate } from '@/lib/format';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -28,11 +31,14 @@ const col = createColumnHelper<ILoan>();
 
 export function LoansListClient() {
   const router = useRouter();
+  const qc = useQueryClient();
   const permission = usePermission(AppModule.Loans);
   const [page, setPage]               = useState(1);
   const [status, setStatus]           = useState<LoanStatus | ''>('');
   const [filterMonth, setFilterMonth] = useState('');
   const [filterYear, setFilterYear]   = useState('');
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const limit = 20;
 
   const { data, isLoading, error } = useQuery({
@@ -83,7 +89,41 @@ export function LoansListClient() {
     });
   }, [data, filterMonth, filterYear]);
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) => bulkDeleteLoans(ids),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['loans'] });
+      setRowSelection({});
+      setConfirmBulkDelete(false);
+      toast.success(`${result.deleted} loan${result.deleted === 1 ? '' : 's'} deleted`);
+    },
+    onError: () => toast.error('Failed to delete selected loans'),
+  });
+
+  const selectedIds = Object.keys(rowSelection).filter((id) => rowSelection[id]);
+
   const columns = useMemo(() => [
+    ...(permission === 'full' ? [col.display({
+      id: 'select',
+      header: ({ table }) => (
+        <input
+          type="checkbox"
+          className="accent-primary-600"
+          checked={table.getIsAllPageRowsSelected()}
+          ref={(el) => { if (el) el.indeterminate = table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected(); }}
+          onChange={table.getToggleAllPageRowsSelectedHandler()}
+        />
+      ),
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          className="accent-primary-600"
+          checked={row.getIsSelected()}
+          onChange={row.getToggleSelectedHandler()}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ),
+    })] : []),
     col.accessor('staffId', {
       header: 'Staff',
       cell: (info) => (
@@ -122,9 +162,17 @@ export function LoansListClient() {
       header: 'Status',
       cell: (info) => <StatusBadge status={info.getValue()} />,
     }),
-  ], [staffMap, outstandingMap]);
+  ], [staffMap, outstandingMap, permission]);
 
-  const table = useReactTable({ data: filtered, columns, getCoreRowModel: getCoreRowModel() });
+  const table = useReactTable({
+    data: filtered,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getRowId: (row) => row._id,
+    enableRowSelection: permission === 'full',
+    onRowSelectionChange: setRowSelection,
+    state: { rowSelection },
+  });
 
   if (error) return <p className="text-sm text-danger-600">Failed to load loans.</p>;
 
@@ -133,7 +181,15 @@ export function LoansListClient() {
 
   return (
     <div className="space-y-4">
-      {permission === 'full' && (
+      {selectedIds.length > 0 && (
+        <div className="flex items-center gap-3 justify-end">
+          <span className="text-sm text-neutral-600">{selectedIds.length} selected</span>
+          <Button variant="danger" Icon={Trash2} onClick={() => setConfirmBulkDelete(true)}>
+            Delete Selected
+          </Button>
+        </div>
+      )}
+      {permission === 'full' && selectedIds.length === 0 && (
         <div className="flex gap-2 justify-end">
           <Link
             href="/loans/records-import"
@@ -266,6 +322,31 @@ export function LoansListClient() {
           <Pagination page={page} total={data.total} limit={limit} onPageChange={setPage} />
         )}
       </div>
+
+      {confirmBulkDelete && (
+        <Modal
+          open
+          onClose={() => setConfirmBulkDelete(false)}
+          title="Delete Loans"
+          size="sm"
+          iconKind="danger"
+        >
+          <p className="mt-2 text-sm text-neutral-600">
+            Delete <strong>{selectedIds.length}</strong> selected loan{selectedIds.length === 1 ? '' : 's'}?
+            Active loans with recorded payments cannot be deleted. This cannot be undone.
+          </p>
+          <div className="mt-4 flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => setConfirmBulkDelete(false)}>Cancel</Button>
+            <Button
+              variant="danger"
+              loading={bulkDeleteMutation.isPending}
+              onClick={() => bulkDeleteMutation.mutate(selectedIds)}
+            >
+              Delete
+            </Button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

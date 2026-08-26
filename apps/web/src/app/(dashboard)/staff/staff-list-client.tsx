@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   createColumnHelper,
   flexRender,
@@ -11,11 +11,11 @@ import {
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Search, Upload, UserPlus } from 'lucide-react';
+import { Search, Upload, UserPlus, Trash2 } from 'lucide-react';
 import type { IStaff } from '@welfare/shared';
 import { StaffStatus, AppModule } from '@welfare/shared';
 import { usePermission } from '@/hooks/use-permission';
-import { listStaff, searchStaff } from '@/lib/staff';
+import { listStaff, searchStaff, bulkDeleteStaff } from '@/lib/staff';
 import AddStaffModal from './add-staff-modal';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -24,31 +24,14 @@ import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/field';
 import { Pagination } from '@/components/ui/data-table';
 import { Avatar } from '@/components/ui/avatar';
+import { Modal } from '@/components/ui/modal';
 import { fmtDate } from '@/lib/format';
 
 const col = createColumnHelper<IStaff>();
 
-const columns = [
-  col.display({
-    id: 'avatar',
-    header: '',
-    cell: (info) => <Avatar name={info.row.original.fullName} size="sm" />,
-  }),
-  col.accessor('fullName', { header: 'Full Name' }),
-  col.accessor('staffId', { header: 'Staff ID' }),
-  col.accessor('level', { header: 'Level' }),
-  col.accessor('status', {
-    header: 'Status',
-    cell: (info) => <StatusBadge status={info.getValue()} />,
-  }),
-  col.accessor('dateOfEmployment', {
-    header: 'Employed',
-    cell: (info) => <span className="font-mono tabular">{fmtDate(info.getValue())}</span>,
-  }),
-];
-
 export default function StaffListClient() {
   const router = useRouter();
+  const qc = useQueryClient();
   const permission = usePermission(AppModule.Staff);
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<StaffStatus | ''>('');
@@ -56,6 +39,8 @@ export default function StaffListClient() {
   const [q, setQ] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   const limit = 20;
 
@@ -82,13 +67,69 @@ export default function StaffListClient() {
     setPage(1);
   }, [searchInput]);
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) => bulkDeleteStaff(ids),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['staff'] });
+      setRowSelection({});
+      setConfirmBulkDelete(false);
+      toast.success(`${result.deleted} staff record${result.deleted === 1 ? '' : 's'} deleted`);
+    },
+    onError: () => toast.error('Failed to delete selected staff records'),
+  });
+
+  const selectedIds = Object.keys(rowSelection).filter((id) => rowSelection[id]);
+
+  const columns = [
+    ...(permission === 'full' ? [col.display({
+      id: 'select',
+      header: ({ table }) => (
+        <input
+          type="checkbox"
+          className="accent-primary-600"
+          checked={table.getIsAllPageRowsSelected()}
+          ref={(el) => { if (el) el.indeterminate = table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected(); }}
+          onChange={table.getToggleAllPageRowsSelectedHandler()}
+        />
+      ),
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          className="accent-primary-600"
+          checked={row.getIsSelected()}
+          onChange={row.getToggleSelectedHandler()}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ),
+    })] : []),
+    col.display({
+      id: 'avatar',
+      header: '',
+      cell: (info) => <Avatar name={info.row.original.fullName} size="sm" />,
+    }),
+    col.accessor('fullName', { header: 'Full Name' }),
+    col.accessor('staffId', { header: 'Staff ID' }),
+    col.accessor('level', { header: 'Level' }),
+    col.accessor('status', {
+      header: 'Status',
+      cell: (info) => <StatusBadge status={info.getValue()} />,
+    }),
+    col.accessor('dateOfEmployment', {
+      header: 'Employed',
+      cell: (info) => <span className="font-mono tabular">{fmtDate(info.getValue())}</span>,
+    }),
+  ];
+
   const table = useReactTable({
     data: data?.data ?? [],
     columns,
     getCoreRowModel: getCoreRowModel(),
     manualPagination: true,
     pageCount: data ? Math.ceil(data.total / limit) : 0,
-    state: { pagination: { pageIndex: page - 1, pageSize: limit } },
+    getRowId: (row) => row._id,
+    enableRowSelection: permission === 'full',
+    onRowSelectionChange: setRowSelection,
+    state: { pagination: { pageIndex: page - 1, pageSize: limit }, rowSelection },
     onPaginationChange: (updater) => {
       if (typeof updater === 'function') {
         const next = updater({ pageIndex: page - 1, pageSize: limit });
@@ -140,7 +181,15 @@ export default function StaffListClient() {
             <Search size={16} strokeWidth={1.75} />
           </button>
         </span>
-        {permission === 'full' && (
+        {selectedIds.length > 0 && (
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-sm text-neutral-600">{selectedIds.length} selected</span>
+            <Button variant="danger" Icon={Trash2} onClick={() => setConfirmBulkDelete(true)}>
+              Delete Selected
+            </Button>
+          </div>
+        )}
+        {permission === 'full' && selectedIds.length === 0 && (
           <div className="ml-auto flex gap-2">
             <Link
               href="/staff/import"
@@ -225,6 +274,31 @@ export default function StaffListClient() {
           onClose={() => setShowAddModal(false)}
           onSuccess={() => setShowAddModal(false)}
         />
+      )}
+
+      {confirmBulkDelete && (
+        <Modal
+          open
+          onClose={() => setConfirmBulkDelete(false)}
+          title="Delete Staff Records"
+          size="sm"
+          iconKind="danger"
+        >
+          <p className="mt-2 text-sm text-neutral-600">
+            Delete <strong>{selectedIds.length}</strong> selected staff record{selectedIds.length === 1 ? '' : 's'}?
+            Staff with associated loan records cannot be deleted. This cannot be undone.
+          </p>
+          <div className="mt-4 flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => setConfirmBulkDelete(false)}>Cancel</Button>
+            <Button
+              variant="danger"
+              loading={bulkDeleteMutation.isPending}
+              onClick={() => bulkDeleteMutation.mutate(selectedIds)}
+            >
+              Delete
+            </Button>
+          </div>
+        </Modal>
       )}
     </div>
   );

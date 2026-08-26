@@ -207,6 +207,13 @@ export class ContributionsService {
     );
   }
 
+  async bulkDeleteContributions(ids: string[], actorId: string, actorName: string): Promise<{ deleted: number }> {
+    for (const id of ids) {
+      await this.deleteContribution(id, actorId, actorName);
+    }
+    return { deleted: ids.length };
+  }
+
   async findByStaff(staffId: string): Promise<ContributionDocument[]> {
     return this.contributionModel.find({ staffId }).sort({ year: -1, month: -1 }).exec();
   }

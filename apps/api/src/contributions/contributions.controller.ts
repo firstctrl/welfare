@@ -8,6 +8,7 @@ import { ImportService } from './import.service';
 import { ManualEntryDto } from './dto/manual-entry.dto';
 import { ResolveFlaggedDto } from './dto/resolve-flagged.dto';
 import { ContributionQueryDto } from './dto/contribution-query.dto';
+import { BulkDeleteDto } from './dto/bulk-delete.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { AppModule } from '@welfare/shared';
@@ -93,6 +94,16 @@ export class ContributionsController {
   @RequirePermission(AppModule.Contributions, 'readonly')
   findAll(@Query() query: ContributionQueryDto) {
     return this.contributionsService.findAll(query);
+  }
+
+  @Delete('bulk')
+  @RequirePermission(AppModule.Contributions, 'full')
+  @HttpCode(HttpStatus.OK)
+  bulkDelete(
+    @Body() dto: BulkDeleteDto,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.contributionsService.bulkDeleteContributions(dto.ids, user.sub, user.displayName);
   }
 
   @Delete(':id')

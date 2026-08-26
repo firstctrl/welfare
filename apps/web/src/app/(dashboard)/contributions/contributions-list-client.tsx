@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import type { IContribution } from '@welfare/shared';
 import { ContributionStatus, AppModule } from '@welfare/shared';
 import { usePermission } from '@/hooks/use-permission';
-import { listContributions, deleteContribution } from '@/lib/contributions';
+import { listContributions, deleteContribution, bulkDeleteContributions } from '@/lib/contributions';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +47,8 @@ export default function ContributionsListClient() {
   const [year, setYear]       = useState('');
   const [staffId, setStaffId] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<ContributionRow | null>(null);
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['contributions', { page, status, month, year, staffId }],
@@ -70,10 +72,44 @@ export default function ContributionsListClient() {
     onError: () => toast.error('Failed to delete contribution'),
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) => bulkDeleteContributions(ids),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['contributions'] });
+      setRowSelection({});
+      setConfirmBulkDelete(false);
+      toast.success(`${result.deleted} contribution${result.deleted === 1 ? '' : 's'} deleted`);
+    },
+    onError: () => toast.error('Failed to delete selected contributions'),
+  });
+
   if (error) toast.error('Failed to load contributions');
+
+  const selectedIds = Object.keys(rowSelection).filter((id) => rowSelection[id]);
 
   const col = createColumnHelper<ContributionRow>();
   const columns = [
+    ...(permission === 'full' ? [col.display({
+      id: 'select',
+      header: ({ table }) => (
+        <input
+          type="checkbox"
+          className="accent-primary-600"
+          checked={table.getIsAllPageRowsSelected()}
+          ref={(el) => { if (el) el.indeterminate = table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected(); }}
+          onChange={table.getToggleAllPageRowsSelectedHandler()}
+        />
+      ),
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          className="accent-primary-600"
+          checked={row.getIsSelected()}
+          onChange={row.getToggleSelectedHandler()}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ),
+    })] : []),
     col.display({
       id: 'staff',
       header: 'Staff',
@@ -121,7 +157,10 @@ export default function ContributionsListClient() {
     getCoreRowModel: getCoreRowModel(),
     manualPagination: true,
     pageCount: data ? Math.ceil(data.total / LIMIT) : 0,
-    state: { pagination: { pageIndex: page - 1, pageSize: LIMIT } },
+    getRowId: (row) => row._id,
+    enableRowSelection: permission === 'full',
+    onRowSelectionChange: setRowSelection,
+    state: { pagination: { pageIndex: page - 1, pageSize: LIMIT }, rowSelection },
     onPaginationChange: (updater) => {
       if (typeof updater === 'function') {
         const next = updater({ pageIndex: page - 1, pageSize: LIMIT });
@@ -165,7 +204,14 @@ export default function ContributionsListClient() {
           ]}
           style={{ width: 150 }}
         />
-        {data && (
+        {selectedIds.length > 0 ? (
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-sm text-neutral-600">{selectedIds.length} selected</span>
+            <Button variant="danger" Icon={Trash2} onClick={() => setConfirmBulkDelete(true)}>
+              Delete Selected
+            </Button>
+          </div>
+        ) : data && (
           <span className="ml-auto text-xs text-neutral-400">{data.total.toLocaleString()} records</span>
         )}
       </div>
@@ -250,6 +296,32 @@ export default function ContributionsListClient() {
               variant="danger"
               loading={deleteMutation.isPending}
               onClick={() => deleteMutation.mutate(deleteTarget._id)}
+            >
+              Delete
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Bulk delete confirmation */}
+      {confirmBulkDelete && (
+        <Modal
+          open
+          onClose={() => setConfirmBulkDelete(false)}
+          title="Delete Contributions"
+          size="sm"
+          iconKind="danger"
+        >
+          <p className="mt-2 text-sm text-neutral-600">
+            Delete <strong>{selectedIds.length}</strong> selected contribution{selectedIds.length === 1 ? '' : 's'}?
+            This cannot be undone.
+          </p>
+          <div className="mt-4 flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => setConfirmBulkDelete(false)}>Cancel</Button>
+            <Button
+              variant="danger"
+              loading={bulkDeleteMutation.isPending}
+              onClick={() => bulkDeleteMutation.mutate(selectedIds)}
             >
               Delete
             </Button>

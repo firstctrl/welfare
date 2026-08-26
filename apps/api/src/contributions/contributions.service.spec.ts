@@ -15,6 +15,9 @@ const mockCountDocuments = jest.fn();
 const mockAggregate = jest.fn();
 const mockCreate = jest.fn();
 
+const mockFindById = jest.fn();
+const mockFindByIdAndDelete = jest.fn();
+
 const mockContributionModel = {
   findOne: mockFindOne,
   findOneAndUpdate: mockFindOneAndUpdate,
@@ -22,6 +25,8 @@ const mockContributionModel = {
   countDocuments: mockCountDocuments,
   aggregate: mockAggregate,
   create: mockCreate,
+  findById: mockFindById,
+  findByIdAndDelete: mockFindByIdAndDelete,
 };
 
 const mockLoanFindOne = jest.fn();
@@ -273,6 +278,29 @@ describe('ContributionsService', () => {
       await service.processPayment('staff-1', 1, 2026, 3000, ContributionSource.ManualEntry, 'actor-id', 'Actor');
 
       expect(mockCreate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('bulkDeleteContributions', () => {
+    it('deletes each contribution by id and reports the count', async () => {
+      const c1 = { _id: 'c1', toObject: () => ({ id: 'c1' }) };
+      const c2 = { _id: 'c2', toObject: () => ({ id: 'c2' }) };
+      mockFindById
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(c1) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(c2) });
+      mockFindByIdAndDelete.mockReturnValue({ exec: jest.fn().mockResolvedValue(undefined) });
+
+      const result = await service.bulkDeleteContributions(['c1', 'c2'], 'actor-id', 'Actor');
+
+      expect(result).toEqual({ deleted: 2 });
+      expect(mockFindByIdAndDelete).toHaveBeenCalledTimes(2);
+      expect(mockAuditService.log).toHaveBeenCalledTimes(2);
+    });
+
+    it('throws NotFoundException and stops when an id does not exist', async () => {
+      mockFindById.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+
+      await expect(service.bulkDeleteContributions(['missing'], 'actor-id', 'Actor')).rejects.toThrow('Contribution missing not found');
     });
   });
 });

@@ -586,6 +586,13 @@ export class LoansService implements OnModuleInit {
     this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.Loan, loanId, undefined, { deleted: true });
   }
 
+  async bulkDeleteLoans(loanIds: string[], actorId: string, actorName: string): Promise<{ deleted: number }> {
+    for (const id of loanIds) {
+      await this.deleteLoan(id, actorId, actorName);
+    }
+    return { deleted: loanIds.length };
+  }
+
   async deleteRepayment(
     loanId: string,
     repaymentId: string,

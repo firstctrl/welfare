@@ -32,6 +32,7 @@ const mockStaffModel = {
   findOne: jest.fn(),
   findById: jest.fn(),
   findByIdAndUpdate: jest.fn(),
+  findByIdAndDelete: jest.fn(),
   countDocuments: jest.fn(),
 };
 
@@ -44,7 +45,8 @@ const mockConfigService = {
   }),
 };
 const mockAddDocuments = jest.fn().mockResolvedValue({});
-const mockMeiliIndex = jest.fn(() => ({ addDocuments: mockAddDocuments, updateSettings: jest.fn().mockResolvedValue({}) }));
+const mockDeleteDocument = jest.fn().mockResolvedValue({});
+const mockMeiliIndex = jest.fn(() => ({ addDocuments: mockAddDocuments, deleteDocument: mockDeleteDocument, updateSettings: jest.fn().mockResolvedValue({}) }));
 const mockMeilisearchClient = { index: mockMeiliIndex };
 const mockMinioClient = {
   presignedGetObject: jest.fn().mockResolvedValue('https://minio/presigned'),
@@ -68,8 +70,49 @@ describe('StaffService', () => {
     }).compile();
     service = module.get<StaffService>(StaffService);
     jest.clearAllMocks();
-    mockMeiliIndex.mockReturnValue({ addDocuments: mockAddDocuments, updateSettings: jest.fn().mockResolvedValue({}) });
+    mockMeiliIndex.mockReturnValue({ addDocuments: mockAddDocuments, deleteDocument: mockDeleteDocument, updateSettings: jest.fn().mockResolvedValue({}) });
     mockAddDocuments.mockResolvedValue({});
+    mockDeleteDocument.mockResolvedValue({});
+  });
+
+  describe('deleteStaff', () => {
+    it('deletes staff with no loan records', async () => {
+      mockStaffModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue({ ...baseStaff }) });
+      mockLoanModel.countDocuments.mockReturnValue({ exec: jest.fn().mockResolvedValue(0) });
+      mockStaffModel.findByIdAndDelete.mockReturnValue({ exec: jest.fn().mockResolvedValue(undefined) });
+
+      await service.deleteStaff('staff-id-1', 'actor-id', 'Actor');
+
+      expect(mockStaffModel.findByIdAndDelete).toHaveBeenCalledWith('staff-id-1');
+      expect(mockAuditService.log).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws BadRequestException when staff has loan records', async () => {
+      mockStaffModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue({ ...baseStaff }) });
+      mockLoanModel.countDocuments.mockReturnValue({ exec: jest.fn().mockResolvedValue(1) });
+
+      await expect(service.deleteStaff('staff-id-1', 'actor-id', 'Actor')).rejects.toThrow(BadRequestException);
+      expect(mockStaffModel.findByIdAndDelete).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when staff does not exist', async () => {
+      mockStaffModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+
+      await expect(service.deleteStaff('missing-id', 'actor-id', 'Actor')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('bulkDeleteStaff', () => {
+    it('deletes each staff id and reports the count', async () => {
+      mockStaffModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue({ ...baseStaff }) });
+      mockLoanModel.countDocuments.mockReturnValue({ exec: jest.fn().mockResolvedValue(0) });
+      mockStaffModel.findByIdAndDelete.mockReturnValue({ exec: jest.fn().mockResolvedValue(undefined) });
+
+      const result = await service.bulkDeleteStaff(['s1', 's2'], 'actor-id', 'Actor');
+
+      expect(result).toEqual({ deleted: 2 });
+      expect(mockStaffModel.findByIdAndDelete).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('create', () => {

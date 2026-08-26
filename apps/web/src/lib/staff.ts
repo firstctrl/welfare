@@ -114,6 +114,11 @@ export async function getStaffImportBatch(batchId: string): Promise<IStaffImport
   return data;
 }
 
+export async function bulkDeleteStaff(ids: string[]): Promise<{ deleted: number }> {
+  const { data } = await apiClient.delete('/staff/bulk', { data: { ids } });
+  return data;
+}
+
 export async function getLoanEligibility(
   id: string,
 ): Promise<{ eligible: boolean; reason?: string }> {

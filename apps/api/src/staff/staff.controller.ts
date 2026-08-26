@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -18,6 +21,7 @@ import { CreateStaffDto } from './dto/create-staff.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
 import { ChangeStatusDto } from './dto/change-status.dto';
 import { StaffQueryDto } from './dto/staff-query.dto';
+import { BulkDeleteDto } from './dto/bulk-delete.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { AppModule } from '@welfare/shared';
@@ -69,6 +73,16 @@ export class StaffController {
   @RequirePermission(AppModule.Staff, 'readonly')
   findAll(@Query() query: StaffQueryDto) {
     return this.staffService.findAll(query);
+  }
+
+  @Delete('bulk')
+  @RequirePermission(AppModule.Staff, 'full')
+  @HttpCode(HttpStatus.OK)
+  bulkDelete(
+    @Body() dto: BulkDeleteDto,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.staffService.bulkDeleteStaff(dto.ids, user.sub, user.displayName);
   }
 
   @Get(':id')

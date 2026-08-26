@@ -197,6 +197,27 @@ export class StaffService implements OnModuleInit {
     return { eligible: true };
   }
 
+  async deleteStaff(id: string, actorId: string, actorName: string): Promise<void> {
+    const staff = await this.findById(id);
+    const loanCount = await this.loanModel.countDocuments({ staffId: id }).exec();
+    if (loanCount > 0) {
+      throw new BadRequestException('Cannot delete staff with associated loan records');
+    }
+    await this.staffModel.findByIdAndDelete(id).exec();
+    this.meiliClient.index('staff').deleteDocument(id).catch(() => { /* non-fatal */ });
+    this.auditService.log(
+      actorId, actorName, AuditAction.Delete, AuditEntity.Staff,
+      id, staff.toObject() as unknown as Record<string, unknown>, undefined,
+    );
+  }
+
+  async bulkDeleteStaff(ids: string[], actorId: string, actorName: string): Promise<{ deleted: number }> {
+    for (const id of ids) {
+      await this.deleteStaff(id, actorId, actorName);
+    }
+    return { deleted: ids.length };
+  }
+
   async uploadPhoto(id: string, buffer: Buffer, mimetype: string): Promise<StaffDocument> {
     if (!ALLOWED_IMAGE_TYPES.includes(mimetype)) {
       throw new BadRequestException('Only JPEG, PNG, and WebP images are allowed');

@@ -50,6 +50,7 @@ describe('LoansService', () => {
 
   beforeEach(async () => {
     loanModel = {
+      findByIdAndDelete: jest.fn(),
       findOne: jest.fn(),
       findById: jest.fn(),
       create: jest.fn(),
@@ -63,6 +64,8 @@ describe('LoansService', () => {
       find: jest.fn(),
       findByIdAndUpdate: jest.fn(),
       countDocuments: jest.fn(),
+      exists: jest.fn(),
+      deleteMany: jest.fn(),
     };
     staffService = { findById: jest.fn().mockResolvedValue(activeStaff('staff-123')) };
     configService = { getAll: jest.fn() };
@@ -86,7 +89,7 @@ describe('LoansService', () => {
         { provide: ContributionsService, useValue: contributionsService },
         { provide: MINIO_CLIENT, useValue: minioClient },
         { provide: LoanScheduleSenderService, useValue: { sendForLoan: jest.fn().mockResolvedValue(undefined) } },
-        { provide: MEILISEARCH_CLIENT, useValue: { index: jest.fn().mockReturnValue({ addDocuments: jest.fn().mockResolvedValue(undefined), updateSettings: jest.fn().mockResolvedValue(undefined) }) } },
+        { provide: MEILISEARCH_CLIENT, useValue: { index: jest.fn().mockReturnValue({ addDocuments: jest.fn().mockResolvedValue(undefined), deleteDocument: jest.fn().mockResolvedValue(undefined), updateSettings: jest.fn().mockResolvedValue(undefined) }) } },
       ],
     }).compile();
 
@@ -431,6 +434,32 @@ describe('LoansService', () => {
         }),
         { new: true },
       );
+    });
+  });
+
+  describe('bulkDeleteLoans', () => {
+    it('deletes each loan by id and reports the count', async () => {
+      const loan1 = { _id: { toString: () => 'l1' }, status: LoanStatus.Completed };
+      const loan2 = { _id: { toString: () => 'l2' }, status: LoanStatus.Completed };
+      loanModel.findById
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(loan1) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(loan2) });
+      repaymentModel.deleteMany.mockReturnValue({ exec: jest.fn().mockResolvedValue(undefined) });
+      loanModel.findByIdAndDelete.mockReturnValue({ exec: jest.fn().mockResolvedValue(undefined) });
+
+      const result = await service.bulkDeleteLoans(['l1', 'l2'], 'actor-id', 'Actor');
+
+      expect(result).toEqual({ deleted: 2 });
+      expect(loanModel.findByIdAndDelete).toHaveBeenCalledTimes(2);
+    });
+
+    it('stops and throws when an active loan has recorded payments', async () => {
+      const loan1 = { _id: { toString: () => 'l1' }, status: LoanStatus.Active };
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan1) });
+      repaymentModel.exists.mockReturnValue({ exec: jest.fn().mockResolvedValue(true) });
+
+      await expect(service.bulkDeleteLoans(['l1'], 'actor-id', 'Actor')).rejects.toThrow(BadRequestException);
+      expect(loanModel.findByIdAndDelete).not.toHaveBeenCalled();
     });
   });
 });

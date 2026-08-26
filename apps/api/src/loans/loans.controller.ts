@@ -24,6 +24,7 @@ import { RecordPaymentDto } from './dto/record-payment.dto';
 import { ExitSettlementDto } from './dto/exit-settlement.dto';
 import { LoanQueryDto } from './dto/loan-query.dto';
 import { ProcessPayOffDto } from './dto/process-payoff.dto';
+import { BulkDeleteDto } from './dto/bulk-delete.dto';
 
 @Controller('loans')
 export class LoansController {
@@ -139,6 +140,16 @@ export class LoansController {
   @RequirePermission(AppModule.Loans, 'readonly')
   getLoanRecordsImportBatch(@Param('batchId') batchId: string) {
     return this.recordsImportService.getBatch(batchId);
+  }
+
+  @Delete('bulk')
+  @RequirePermission(AppModule.Loans, 'full')
+  @HttpCode(HttpStatus.OK)
+  bulkDelete(
+    @Body() dto: BulkDeleteDto,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.loansService.bulkDeleteLoans(dto.ids, user.sub, user.displayName);
   }
 
   // ── param routes ──

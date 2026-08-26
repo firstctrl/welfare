@@ -90,6 +90,11 @@ export async function deleteContribution(id: string): Promise<void> {
   await apiClient.delete(`/contributions/${id}`);
 }
 
+export async function bulkDeleteContributions(ids: string[]): Promise<{ deleted: number }> {
+  const { data } = await apiClient.delete('/contributions/bulk', { data: { ids } });
+  return data;
+}
+
 export async function manualContribution(payload: {
   staffId: string;
   amount: number;
