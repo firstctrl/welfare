@@ -10,7 +10,7 @@ import {
   createUser,
   updateUser,
   updateUserRole,
-  resetUserPassword,
+  sendResetLink,
   type UserRecord,
   type CreateUserDto,
 } from '@/lib/users';
@@ -250,69 +250,41 @@ function EditUserModal({ user, open, onClose, currentUserRole }: EditUserModalPr
   );
 }
 
-interface ResetPasswordModalProps {
+interface SendResetLinkModalProps {
   user: UserRecord;
   open: boolean;
   onClose: () => void;
 }
 
-function ResetPasswordModal({ user, open, onClose }: ResetPasswordModalProps) {
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-
+function SendResetLinkModal({ user, open, onClose }: SendResetLinkModalProps) {
   const mutation = useMutation({
-    mutationFn: () => resetUserPassword(user._id, password),
+    mutationFn: () => sendResetLink(user._id),
     onSuccess: () => {
-      toast.success('Password reset');
+      toast.success(`Reset link sent to ${user.email}`);
       onClose();
-      setPassword('');
-      setConfirm('');
     },
-    onError: (e: Error) => toast.error(e.message || 'Failed to reset password'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to send reset link'),
   });
 
-  const mismatch = confirm.length > 0 && password !== confirm;
-
   return (
-    <Modal open={open} onClose={onClose} title="Reset Password" size="sm"
+    <Modal open={open} onClose={onClose} title="Send Reset Link" size="sm"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
           <Button
             variant="primary"
             loading={mutation.isPending}
-            disabled={!password || mismatch}
             onClick={() => mutation.mutate()}
           >
-            Reset
+            Send Link
           </Button>
         </>
       }
     >
-      <div className="mt-1 space-y-4">
-        <p className="text-sm text-neutral-600">
-          Reset password for <span className="font-medium text-neutral-900">{user.displayName}</span>
-        </p>
-        <Field label="New Password" required>
-          <Input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="new-password"
-            required
-          />
-        </Field>
-        <Field label="Confirm Password" required error={mismatch ? 'Passwords do not match' : undefined}>
-          <Input
-            type="password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            autoComplete="new-password"
-            error={mismatch}
-            required
-          />
-        </Field>
-      </div>
+      <p className="text-sm text-neutral-600 mt-1">
+        Send a password reset link to <span className="font-medium text-neutral-900">{user.displayName}</span>{' '}
+        at <span className="font-mono text-neutral-900">{user.email}</span>?
+      </p>
     </Modal>
   );
 }
@@ -369,7 +341,7 @@ function ToggleActiveModal({ user, open, onClose }: ToggleActiveModalProps) {
 type ActiveModal =
   | { type: 'create' }
   | { type: 'editUser'; user: UserRecord }
-  | { type: 'resetPassword'; user: UserRecord }
+  | { type: 'sendResetLink'; user: UserRecord }
   | { type: 'toggleActive'; user: UserRecord }
   | null;
 
@@ -459,8 +431,10 @@ export function UsersListClient() {
                         {canManageRoles && u.source === 'local' && (
                           <IconButton
                             icon={KeyRound}
-                            label="Reset password"
-                            onClick={() => setModal({ type: 'resetPassword', user: u })}
+                            label="Send reset link"
+                            disabled={!u.email}
+                            title={u.email ? 'Send reset link' : 'No email on file'}
+                            onClick={() => setModal({ type: 'sendResetLink', user: u })}
                           />
                         )}
                         {permission === 'full' && (
@@ -495,8 +469,8 @@ export function UsersListClient() {
         />
       )}
 
-      {modal?.type === 'resetPassword' && (
-        <ResetPasswordModal
+      {modal?.type === 'sendResetLink' && (
+        <SendResetLinkModal
           user={modal.user}
           open
           onClose={() => setModal(null)}
