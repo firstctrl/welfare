@@ -118,6 +118,17 @@ export async function resolveLoanFlaggedEntry(
   return data;
 }
 
+export async function resolveLoanByStaffId(
+  originalStaffId: string,
+  resolvedLoanId: string,
+): Promise<{ resolvedCount: number; batchesUpdated: number }> {
+  const { data } = await apiClient.patch('/loans/import/resolve-by-staff-id', {
+    originalStaffId,
+    resolvedLoanId,
+  });
+  return data;
+}
+
 export interface LoanRecordsImportResult {
   batchId: string;
   created: number;
