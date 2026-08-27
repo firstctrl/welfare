@@ -1,5 +1,5 @@
 import { apiClient } from './api-client';
-import type { IRemittanceReport } from '@welfare/shared';
+import type { IRemittanceReport, IRemittanceImportBatch, PaginatedResult } from '@welfare/shared';
 
 export interface RemittanceRecord {
   _id: string;
@@ -75,6 +75,28 @@ export async function importRemittances(
   if (jobId) form.append('jobId', jobId);
   const { data } = await apiClient.post('/remittances/import', form);
   return data;
+}
+
+export async function listRemittanceImportBatches(
+  page = 1,
+  limit = 20,
+): Promise<PaginatedResult<IRemittanceImportBatch>> {
+  const { data } = await apiClient.get('/remittances/import', { params: { page, limit } });
+  return data;
+}
+
+export async function getRemittanceImportBatch(batchId: string): Promise<IRemittanceImportBatch> {
+  const { data } = await apiClient.get(`/remittances/import/${batchId}`);
+  return data;
+}
+
+export async function dismissRemittanceFlaggedEntry(batchId: string, index: number): Promise<IRemittanceImportBatch> {
+  const { data } = await apiClient.patch(`/remittances/import/${batchId}/dismiss`, { index });
+  return data;
+}
+
+export async function deleteRemittanceImportBatch(batchId: string): Promise<void> {
+  await apiClient.delete(`/remittances/import/${batchId}`);
 }
 
 export async function getRemittancesReport(params: RemittanceReportParams): Promise<IRemittanceReport> {

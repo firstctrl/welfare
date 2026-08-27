@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Upload, CheckCircle, AlertTriangle } from 'lucide-react';
 import { importRemittances } from '@/lib/remittances';
@@ -11,9 +11,11 @@ import { Button } from '@/components/ui/button';
 import { genJobId } from '@/lib/job-id';
 import { useImportProgress } from '@/hooks/use-import-progress';
 import { ImportProgressBar } from '@/components/ui/import-progress-bar';
+import { ImportHistory } from './import-history';
 
 export function RemittancesImportClient() {
   const router = useRouter();
+  const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<{ batchId: string; imported: number; flagged: number; total: number } | null>(null);
@@ -27,6 +29,7 @@ export function RemittancesImportClient() {
     },
     onSuccess: (data) => {
       setResult(data);
+      qc.invalidateQueries({ queryKey: ['remittance-import-batches'] });
       if (data.flagged === 0) toast.success(`${data.imported} remittances imported successfully`);
       else toast.warning(`${data.imported} imported, ${data.flagged} flagged`);
     },
@@ -98,6 +101,8 @@ export function RemittancesImportClient() {
           )}
         </CardBody>
       </Card>
+
+      <ImportHistory />
     </div>
   );
 }
