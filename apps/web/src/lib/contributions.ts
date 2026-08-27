@@ -99,6 +99,15 @@ export async function resolveContributionsByStaffId(
   return data;
 }
 
+export async function dismissContributionFlaggedEntry(batchId: string, index: number): Promise<IImportBatch> {
+  const { data } = await apiClient.patch(`/contributions/import/${batchId}/dismiss`, { index });
+  return data;
+}
+
+export async function deleteContributionImportBatch(batchId: string): Promise<void> {
+  await apiClient.delete(`/contributions/import/${batchId}`);
+}
+
 export async function deleteContribution(id: string): Promise<void> {
   await apiClient.delete(`/contributions/${id}`);
 }

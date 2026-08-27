@@ -7,12 +7,13 @@ import { toast } from 'sonner';
 import { Upload, CheckCircle, AlertTriangle } from 'lucide-react';
 import { ImportBatchStatus } from '@welfare/shared';
 import type { IImportBatch } from '@welfare/shared';
-import { importContributions, listImportBatches, resolveFlaggedEntry, resolveContributionsByStaffId } from '@/lib/contributions';
+import { importContributions, listImportBatches, resolveFlaggedEntry, resolveContributionsByStaffId, dismissContributionFlaggedEntry, deleteContributionImportBatch } from '@/lib/contributions';
 import { searchStaff } from '@/lib/staff';
 import { Card, CardHeader, CardBody } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/field';
 import { Modal } from '@/components/ui/modal';
+import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { Badge } from '@/components/ui/badge';
 import { fmtGHS } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -47,6 +48,7 @@ export default function ImportClient() {
   const [bulkResolveTarget, setBulkResolveTarget] = useState<string | null>(null);
   const [staffSearch, setStaffSearch] = useState('');
   const [staffOptions, setStaffOptions] = useState<{ _id: string; fullName: string; staffId: string }[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<{ batchId: string; fileName: string } | null>(null);
 
   const { data: batchHistory } = useQuery({ queryKey: ['import-batches'], queryFn: () => listImportBatches() });
 
@@ -122,6 +124,31 @@ export default function ImportClient() {
     },
     onError: (err: unknown) => {
       toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Resolve failed');
+    },
+  });
+
+  const dismissMutation = useMutation({
+    mutationFn: (index: number) => dismissContributionFlaggedEntry(activeBatch!._id, index),
+    onSuccess: (updated) => {
+      setActiveBatch(updated);
+      qc.invalidateQueries({ queryKey: ['import-batches'] });
+      toast.success('Entry dismissed');
+    },
+    onError: (err: unknown) => {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Dismiss failed');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (batchId: string) => deleteContributionImportBatch(batchId),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      if (activeBatch && deleteTarget?.batchId === activeBatch._id) setActiveBatch(null);
+      qc.invalidateQueries({ queryKey: ['import-batches'] });
+      toast.success('Import deleted');
+    },
+    onError: (err: unknown) => {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Delete failed');
     },
   });
 
@@ -265,9 +292,18 @@ export default function ImportClient() {
                       <td className="px-4 py-2 font-mono tabular">{fmtGHS(Number(entry.amount))}</td>
                       <td className="px-4 py-2 text-xs text-danger-600">{entry.reason}</td>
                       <td className="px-4 py-2">
-                        <button onClick={() => setResolveTarget(entry.staffId)} className="text-primary-600 hover:underline text-xs font-medium">
-                          Map to Staff
-                        </button>
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => setResolveTarget(entry.staffId)} className="text-primary-600 hover:underline text-xs font-medium">
+                            Map to Staff
+                          </button>
+                          <button
+                            onClick={() => dismissMutation.mutate(activeBatch!.flaggedEntries.indexOf(entry))}
+                            disabled={dismissMutation.isPending}
+                            className="text-neutral-500 hover:text-danger-600 hover:underline text-xs font-medium"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -338,11 +374,19 @@ export default function ImportClient() {
                       <td className="px-4 py-2 text-warning-700 font-medium">{batch.flaggedRows}</td>
                       <td className="px-4 py-2"><Badge kind={statusKind[batch.status]}>{batch.status}</Badge></td>
                       <td className="px-4 py-2">
-                        {batch.flaggedRows > 0 && (
-                          <button onClick={() => setActiveBatch(batch)} className="text-primary-600 hover:underline text-xs font-medium">
-                            Resolve
+                        <div className="flex items-center gap-3">
+                          {batch.flaggedRows > 0 && (
+                            <button onClick={() => setActiveBatch(batch)} className="text-primary-600 hover:underline text-xs font-medium">
+                              Resolve
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setDeleteTarget({ batchId: batch._id, fileName: batch.fileName })}
+                            className="text-neutral-500 hover:text-danger-600 hover:underline text-xs font-medium"
+                          >
+                            Delete
                           </button>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -422,6 +466,16 @@ export default function ImportClient() {
           </div>
         </Modal>
       )}
+
+      <ConfirmModal
+        open={!!deleteTarget}
+        title="Delete this import?"
+        body={`This permanently removes "${deleteTarget?.fileName}" from Import History, including its flagged entries. Contributions already recorded from this import are not affected.`}
+        confirmLabel="Delete"
+        isPending={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate(deleteTarget!.batchId)}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
