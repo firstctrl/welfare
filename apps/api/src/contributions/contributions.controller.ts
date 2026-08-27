@@ -8,6 +8,7 @@ import { ImportService } from './import.service';
 import { ManualEntryDto } from './dto/manual-entry.dto';
 import { ResolveFlaggedDto } from './dto/resolve-flagged.dto';
 import { ResolveByStaffIdDto } from './dto/resolve-by-staff-id.dto';
+import { DismissFlaggedEntryDto } from './dto/dismiss-flagged-entry.dto';
 import { ContributionQueryDto } from './dto/contribution-query.dto';
 import { BulkDeleteDto } from './dto/bulk-delete.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -79,6 +80,26 @@ export class ContributionsController {
     return this.importService.resolveByStaffId(
       dto.originalStaffId, dto.resolvedStaffMongoId, user.sub, user.displayName,
     );
+  }
+
+  @Patch('import/:batchId/dismiss')
+  @RequirePermission(AppModule.Contributions, 'full')
+  dismissFlaggedEntry(
+    @Param('batchId') batchId: string,
+    @Body() dto: DismissFlaggedEntryDto,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.importService.dismissFlaggedEntry(batchId, dto.index, user.sub, user.displayName);
+  }
+
+  @Delete('import/:batchId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermission(AppModule.Contributions, 'full')
+  async deleteImportBatch(
+    @Param('batchId') batchId: string,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    await this.importService.deleteBatch(batchId, user.sub, user.displayName);
   }
 
   @Post('manual')
