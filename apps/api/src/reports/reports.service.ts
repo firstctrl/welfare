@@ -36,6 +36,24 @@ import { Staff, StaffDocument } from '../staff/schemas/staff.schema';
 import { ImportBatch, ImportBatchDocument } from '../contributions/schemas/import-batch.schema';
 import { Discount, DiscountDocument } from '../loans/schemas/discount.schema';
 
+const EXITED_STATUSES: StaffStatus[] = [
+  StaffStatus.Resigned,
+  StaffStatus.Retired,
+  StaffStatus.Dismissed,
+  StaffStatus.Deceased,
+];
+
+function enumerateMonths(start: Date, end: Date): Array<{ month: number; year: number }> {
+  const months: Array<{ month: number; year: number }> = [];
+  let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  const last = new Date(end.getFullYear(), end.getMonth(), 1);
+  while (cursor <= last) {
+    months.push({ month: cursor.getMonth() + 1, year: cursor.getFullYear() });
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+  }
+  return months;
+}
+
 @Injectable()
 export class ReportsService {
   private readonly logger = new Logger(ReportsService.name);
@@ -49,6 +67,93 @@ export class ReportsService {
     @InjectModel(Discount.name) private readonly discountModel: Model<DiscountDocument>,
     @Optional() @Inject(MINIO_CLIENT) private readonly minioClient?: MinioClient,
   ) {}
+
+  // ─────────────────────────── MISSED-MONTH ELIGIBILITY ───────────────────────────
+
+  /**
+   * Per-month missed count across all staff, for a Y/fromMonth..toMonth range.
+   * A staff-month only counts as "missed" if it's eligible: on/after the staff's
+   * dateOfFirstContribution (falling back to dateOfEmployment), on/before an exited
+   * staff's exit month, and not in the future.
+   */
+  private async computeMissedCounts(
+    year: number,
+    fromMonth: number,
+    toMonth: number,
+  ): Promise<Map<string, number>> {
+    const [staffDocs, contribs] = await Promise.all([
+      this.staffModel
+        .find()
+        .select('_id dateOfFirstContribution dateOfEmployment status updatedAt')
+        .lean()
+        .exec(),
+      this.contribModel
+        .find({ year, month: { $gte: fromMonth, $lte: toMonth }, isDebit: { $ne: true } })
+        .select('staffId month')
+        .lean()
+        .exec(),
+    ]);
+
+    const docsByMonth = new Map<number, Set<string>>();
+    for (const c of contribs as any[]) {
+      const set = docsByMonth.get(c.month) ?? new Set<string>();
+      set.add(c.staffId);
+      docsByMonth.set(c.month, set);
+    }
+
+    const now = new Date();
+    const result = new Map<string, number>();
+    for (let m = fromMonth; m <= toMonth; m++) {
+      const monthStart = new Date(year, m - 1, 1);
+      const monthEnd = new Date(year, m, 0, 23, 59, 59);
+      if (monthEnd > now) {
+        result.set(`${year}-${m}`, 0);
+        continue;
+      }
+      const withDoc = docsByMonth.get(m) ?? new Set<string>();
+      let missed = 0;
+      for (const s of staffDocs as any[]) {
+        const start = s.dateOfFirstContribution ?? s.dateOfEmployment;
+        if (!start || new Date(start) > monthEnd) continue;
+        if (EXITED_STATUSES.includes(s.status) && s.updatedAt && new Date(s.updatedAt) < monthStart) continue;
+        const sid = s._id.toString();
+        if (!withDoc.has(sid)) missed++;
+      }
+      result.set(`${year}-${m}`, missed);
+    }
+    return result;
+  }
+
+  /**
+   * Missed and Partial month counts for one staff member over [start, end],
+   * bounded by their contribution eligibility window (start) and today or their
+   * exit date (end), whichever the caller passes in.
+   */
+  private async getMissedAndPartialCounts(
+    staffId: string,
+    start: Date | undefined,
+    end: Date,
+  ): Promise<{ missedCount: number; partialCount: number }> {
+    if (!start || start > end) return { missedCount: 0, partialCount: 0 };
+    const months = enumerateMonths(start, end);
+    if (!months.length) return { missedCount: 0, partialCount: 0 };
+
+    const docs = await this.contribModel
+      .find({ staffId, isDebit: { $ne: true }, $or: months.map(m => ({ month: m.month, year: m.year })) })
+      .select('month year status')
+      .lean()
+      .exec();
+    const byKey = new Map((docs as any[]).map(d => [`${d.year}-${d.month}`, d.status]));
+
+    let missedCount = 0;
+    let partialCount = 0;
+    for (const m of months) {
+      const status = byKey.get(`${m.year}-${m.month}`);
+      if (!status) missedCount++;
+      else if (status === ContributionStatus.Partial) partialCount++;
+    }
+    return { missedCount, partialCount };
+  }
 
   // ─────────────────────────── CONTRIBUTIONS ───────────────────────────
 
@@ -577,20 +682,11 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
         outstandingLoanBalance += pending.reduce((s, r) => s + r.dueAmount - r.paidAmount, 0);
       }
 
-      const missedAgg = await this.contribModel
-        .aggregate([
-          {
-            $match: {
-              staffId: sid,
-              status: { $in: [ContributionStatus.Missed, ContributionStatus.Partial] },
-              isDebit: { $ne: true },
-            },
-          },
-          { $count: 'count' },
-        ])
-        .exec();
-
-      const missedContributionsCount = missedAgg[0]?.count ?? 0;
+      const start = (staff as any).dateOfFirstContribution ?? staff.dateOfEmployment;
+      const now = new Date();
+      const end = (staff as any).updatedAt && (staff as any).updatedAt < now ? (staff as any).updatedAt : now;
+      const { missedCount, partialCount } = await this.getMissedAndPartialCounts(sid, start, end);
+      const missedContributionsCount = missedCount + partialCount;
       const outstandingRounded = Math.round(outstandingLoanBalance * 100) / 100;
 
       if (outstandingRounded > 0 || missedContributionsCount > 0) {
@@ -653,22 +749,16 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
       .find({ status: LoanRepaymentStatus.Overdue })
       .exec();
 
-    // Members in arrears this month
-    const arrearsAgg = await this.contribModel
+    // Members in arrears this month: eligible staff with no contribution doc, plus Partial docs
+    const missedThisMonth = (await this.computeMissedCounts(year, month, month)).get(`${year}-${month}`) ?? 0;
+    const partialAgg = await this.contribModel
       .aggregate([
-        {
-          $match: {
-            month,
-            year,
-            status: { $in: [ContributionStatus.Missed, ContributionStatus.Partial] },
-            isDebit: { $ne: true },
-          },
-        },
+        { $match: { month, year, status: ContributionStatus.Partial, isDebit: { $ne: true } } },
         { $group: { _id: '$staffId' } },
         { $count: 'count' },
       ])
       .exec();
-    const membersInArrears = arrearsAgg[0]?.count ?? 0;
+    const membersInArrears = missedThisMonth + (partialAgg[0]?.count ?? 0);
 
     // Monthly trend (last 12 months)
     const months: Array<{ year: number; month: number }> = [];
@@ -836,7 +926,12 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
     const totalPaid = contribs.reduce((s, c) => s + c.paidAmount, 0);
     const totalExpected = contribs.reduce((s, c) => s + c.expectedAmount, 0);
     const totalSurplus = contribs.reduce((s, c) => s + c.surplusCarriedForward, 0);
-    const missedMonths = contribs.filter(c => c.status === ContributionStatus.Missed || c.status === ContributionStatus.Partial).length;
+    const missedStart = (staff as any).dateOfFirstContribution ?? staff.dateOfEmployment;
+    const now = new Date();
+    const staffUpdatedAt = (staff as any).updatedAt;
+    const missedEnd = EXITED_STATUSES.includes(staff.status) && staffUpdatedAt && staffUpdatedAt < now ? staffUpdatedAt : now;
+    const { missedCount, partialCount } = await this.getMissedAndPartialCounts(staffMongoId, missedStart, missedEnd);
+    const missedMonths = missedCount + partialCount;
     const collectionRate = totalExpected > 0 ? Math.round((totalPaid / totalExpected) * 100) : 0;
     const totalOffsets = offsetDebits.reduce((s, d) => s + d.paidAmount, 0);
 
@@ -1396,7 +1491,6 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
               _id: { month: '$month', year: '$year' },
               totalExpected: { $sum: '$expectedAmount' },
               totalCollected: { $sum: '$paidAmount' },
-              missedCount: { $sum: { $cond: [{ $eq: ['$status', 'Missed'] }, 1, 0] } },
               partialCount: { $sum: { $cond: [{ $eq: ['$status', 'Partial'] }, 1, 0] } },
             },
           },
@@ -1555,12 +1649,13 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
     ]);
 
     // ── Contribution summary ──
+    const missedCounts = await this.computeMissedCounts(year, fromMonth, toMonth);
     const contributionBreakdown: IFundSummaryContributionBreakdownRow[] = (contribRows as any[]).map(r => ({
       month:          r._id.month,
       year:           r._id.year,
       totalExpected:  r.totalExpected,
       totalCollected: r.totalCollected,
-      missedCount:    r.missedCount,
+      missedCount:    missedCounts.get(`${r._id.year}-${r._id.month}`) ?? 0,
       partialCount:   r.partialCount,
     }));
     const totalExpected  = contributionBreakdown.reduce((s, r) => s + r.totalExpected, 0);

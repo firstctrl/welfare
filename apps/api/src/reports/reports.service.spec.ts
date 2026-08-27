@@ -35,6 +35,14 @@ const mockBatchModel = { find: mockBatchFind };
 const mockDiscountAggregate = jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
 const mockDiscountModel = { aggregate: mockDiscountAggregate };
 
+// Supports both `.exec()` directly and `.select().lean().exec()` chains.
+const chainable = (docs: any[]) => ({
+  exec: jest.fn().mockResolvedValue(docs),
+  select: jest.fn().mockReturnValue({
+    lean: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(docs) }),
+  }),
+});
+
 beforeEach(() => jest.clearAllMocks());
 
 describe('ReportsService', () => {
@@ -290,7 +298,15 @@ describe('ReportsService', () => {
     it('returns non-active staff with outstanding balances', async () => {
       mockStaffFind.mockReturnValue({
         exec: jest.fn().mockResolvedValue([
-          { _id: { toString: () => 'staff3' }, fullName: 'Charlie', staffId: 'GL003', status: StaffStatus.Resigned },
+          {
+            _id: { toString: () => 'staff3' },
+            fullName: 'Charlie',
+            staffId: 'GL003',
+            status: StaffStatus.Resigned,
+            dateOfFirstContribution: new Date('2024-01-01'),
+            dateOfEmployment: new Date('2023-01-01'),
+            updatedAt: new Date('2024-03-01'), // exited end of March: eligible Jan/Feb/Mar
+          },
         ]),
       });
       mockLoanFind.mockReturnValue({
@@ -303,9 +319,8 @@ describe('ReportsService', () => {
           { dueAmount: 500, paidAmount: 200, status: LoanRepaymentStatus.Overdue },
         ]),
       });
-      mockContribAggregate.mockReturnValue({
-        exec: jest.fn().mockResolvedValue([{ count: 2 }]),
-      });
+      // Only January has a contribution doc; Feb and March are missed.
+      mockContribFind.mockReturnValue(chainable([{ month: 1, year: 2024, status: ContributionStatus.Paid }]));
 
       const result = await service.getExitClearanceReport();
       expect(result).toHaveLength(1);
@@ -353,7 +368,8 @@ describe('ReportsService', () => {
           limit: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }),
         }),
       });
-      mockStaffFind.mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+      mockStaffFind.mockReturnValue(chainable([]));
+      mockContribFind.mockReturnValue(chainable([]));
 
       const result = await service.getDashboardStats();
       expect(result.thisMonth.month).toBe(now.getMonth() === 0 ? 12 : now.getMonth());
@@ -449,7 +465,13 @@ describe('ReportsService', () => {
       mockStaffFind
         .mockReturnValueOnce(staffSelectLeanExec([{ _id: 's1' }, { _id: 's2' }, { _id: 's3' }]))
         .mockReturnValueOnce(staffSelectLeanExec([{ _id: 's4' }]))
-        .mockReturnValueOnce(staffSelectLeanExec([]));
+        .mockReturnValueOnce(staffSelectLeanExec([]))
+        // [computeMissedCounts] all-staff eligibility snapshot: s1 eligible from Jan 2025
+        .mockReturnValueOnce(staffSelectLeanExec([
+          { _id: 's1', dateOfFirstContribution: new Date('2025-01-01'), status: StaffStatus.Active },
+        ]));
+      // [computeMissedCounts] existing docs: only month 2 has one, so month 1 is missed
+      mockContribFind.mockReturnValue(staffSelectLeanExec([{ staffId: 's1', month: 2 }]));
     });
 
     it('returns period with correct year and months', async () => {
@@ -503,6 +525,13 @@ describe('ReportsService', () => {
       expect(result.contributionBreakdown[0].totalCollected).toBe(4800);
     });
 
+    it('derives missedCount per month from staff eligibility, not the (unused) status field', async () => {
+      const result = await service.getFundSummary(year, fromMonth, toMonth);
+      // s1 is eligible from Jan 2025; has a doc for Feb but not Jan.
+      expect(result.contributionBreakdown[0].missedCount).toBe(1); // Jan: no doc
+      expect(result.contributionBreakdown[1].missedCount).toBe(0); // Feb: has doc
+    });
+
     it('returns defaultDetails rows', async () => {
       const result = await service.getFundSummary(year, fromMonth, toMonth);
       expect(result.defaultDetails).toHaveLength(1);
@@ -525,12 +554,45 @@ describe('ReportsService', () => {
         .mockReset()
         .mockReturnValueOnce(staffSelectLeanExec([]))
         .mockReturnValueOnce(staffSelectLeanExec([]))
+        .mockReturnValueOnce(staffSelectLeanExec([]))
         .mockReturnValueOnce(staffSelectLeanExec([]));
+      mockContribFind.mockReturnValue(staffSelectLeanExec([]));
 
       const result = await service.getFundSummary(year, fromMonth, toMonth);
       expect(result.contributions.collectionRate).toBe(0);
       expect(result.contributionBreakdown).toEqual([]);
       expect(result.defaultDetails).toEqual([]);
+    });
+  });
+
+  describe('getStaffContributionStatement', () => {
+    it('counts missed and partial months from eligibility, bounded by exit date', async () => {
+      mockStaffFindById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: { toString: () => 'staffA' },
+          fullName: 'Dora',
+          staffId: 'GL010',
+          email: 'dora@example.com',
+          status: StaffStatus.Resigned,
+          dateOfFirstContribution: new Date('2024-01-01'),
+          dateOfEmployment: new Date('2023-01-01'),
+          updatedAt: new Date('2024-04-01'), // eligible Jan–Apr 2024
+        }),
+      });
+      mockContribFind
+        // [1] all contribs for the year-by-month grid / KPIs
+        .mockReturnValueOnce({ sort: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }) })
+        // [2] offset debits (guarantor/defaulter)
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) })
+        // [3] eligibility-window docs: Jan=Paid, Feb=Partial, Mar=Paid, Apr=missing
+        .mockReturnValueOnce(chainable([
+          { month: 1, year: 2024, status: ContributionStatus.Paid },
+          { month: 2, year: 2024, status: ContributionStatus.Partial },
+          { month: 3, year: 2024, status: ContributionStatus.Paid },
+        ]));
+
+      const result = await service.getStaffContributionStatement('staffA');
+      expect(result.kpis.missedMonths).toBe(2); // 1 missed (Apr) + 1 partial (Feb)
     });
   });
 
