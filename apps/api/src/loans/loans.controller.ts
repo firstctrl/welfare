@@ -26,6 +26,7 @@ import { LoanQueryDto } from './dto/loan-query.dto';
 import { ProcessPayOffDto } from './dto/process-payoff.dto';
 import { BulkDeleteDto } from './dto/bulk-delete.dto';
 import { ResolveLoanByStaffIdDto } from './dto/resolve-loan-by-staff-id.dto';
+import { DismissFlaggedEntryDto } from './dto/dismiss-flagged-entry.dto';
 
 @Controller('loans')
 export class LoansController {
@@ -126,6 +127,26 @@ export class LoansController {
     return this.importService.resolveByStaffId(
       dto.originalStaffId, dto.resolvedLoanId, user.sub, user.displayName,
     );
+  }
+
+  @Patch('import/:batchId/dismiss')
+  @RequirePermission(AppModule.Loans, 'full')
+  dismissFlaggedEntry(
+    @Param('batchId') batchId: string,
+    @Body() dto: DismissFlaggedEntryDto,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.importService.dismissFlaggedEntry(batchId, dto.index, user.sub, user.displayName);
+  }
+
+  @Delete('import/:batchId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermission(AppModule.Loans, 'full')
+  async deleteImportBatch(
+    @Param('batchId') batchId: string,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    await this.importService.deleteBatch(batchId, user.sub, user.displayName);
   }
 
   // ── loan records import routes ──

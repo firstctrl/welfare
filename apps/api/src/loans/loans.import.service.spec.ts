@@ -123,3 +123,67 @@ describe('LoansImportService — resolveByStaffId', () => {
     expect(mockLoansService.recordPaymentInternal).not.toHaveBeenCalled();
   });
 });
+
+describe('LoansImportService — dismiss/delete', () => {
+  let service: LoansImportService;
+  const mockFindById = jest.fn();
+  const mockFindByIdAndDelete = jest.fn();
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        LoansImportService,
+        { provide: getModelToken(Loan.name), useValue: mockLoanModel },
+        {
+          provide: getModelToken(LoanImportBatch.name),
+          useValue: {
+            create: mockCreate, findByIdAndUpdate: mockFindByIdAndUpdate, find: mockFind,
+            findById: mockFindById, findByIdAndDelete: mockFindByIdAndDelete,
+          },
+        },
+        { provide: LoansService, useValue: mockLoansService },
+        { provide: StaffService, useValue: mockStaffService },
+        { provide: AuditService, useValue: mockAuditService },
+        { provide: ImportProgressService, useValue: mockProgressService },
+      ],
+    }).compile();
+    service = module.get(LoansImportService);
+    jest.clearAllMocks();
+  });
+
+  it('dismissFlaggedEntry removes the entry at the given index and decrements the count', async () => {
+    const batch: any = {
+      _id: 'b1',
+      status: 'Pending',
+      flaggedRows: 2,
+      flaggedEntries: [
+        { rowNumber: 2, staffId: 'S1', staffName: 'A', loanId: '', amount: 100, paidDate: '2026-01-01T00:00:00.000Z', reason: 'Staff ID not found' },
+        { rowNumber: 3, staffId: 'S2', staffName: 'B', loanId: '', amount: 200, paidDate: '2026-01-01T00:00:00.000Z', reason: 'Staff ID not found' },
+      ],
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    mockFindById.mockReturnValue({ exec: jest.fn().mockResolvedValue(batch) });
+
+    const result = await service.dismissFlaggedEntry('b1', 0, 'actor-1', 'Actor');
+
+    expect(result.flaggedEntries).toHaveLength(1);
+    expect(result.flaggedEntries[0].staffId).toBe('S2');
+    expect(result.flaggedRows).toBe(1);
+    expect(batch.save).toHaveBeenCalled();
+  });
+
+  it('dismissFlaggedEntry throws BadRequestException on an out-of-range index', async () => {
+    const batch: any = { _id: 'b1', flaggedRows: 1, flaggedEntries: [{ rowNumber: 2, staffId: 'S1', staffName: 'A', loanId: '', amount: 1, paidDate: '', reason: 'x' }], save: jest.fn() };
+    mockFindById.mockReturnValue({ exec: jest.fn().mockResolvedValue(batch) });
+
+    await expect(service.dismissFlaggedEntry('b1', 5, 'actor-1', 'Actor')).rejects.toThrow('Flagged entry index 5 out of range');
+  });
+
+  it('deleteBatch deletes and throws NotFoundException when missing', async () => {
+    mockFindByIdAndDelete.mockReturnValue({ exec: jest.fn().mockResolvedValue({ _id: 'b1' }) });
+    await expect(service.deleteBatch('b1', 'actor-1', 'Actor')).resolves.toBeUndefined();
+
+    mockFindByIdAndDelete.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+    await expect(service.deleteBatch('missing', 'actor-1', 'Actor')).rejects.toThrow('Import batch missing not found');
+  });
+});
