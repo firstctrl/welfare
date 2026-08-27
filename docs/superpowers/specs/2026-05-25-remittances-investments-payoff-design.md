@@ -449,7 +449,7 @@ Added to `reports-client.tsx` SECTIONS:
 ### 6.2 Fund Summary Additions
 
 **All-Time KPI block** — add new line item:
-- Label: `Total Discounts Given`
+- Label: `Total Discounts`
 - Value: sum of `discountAmount` where `cancelled = false` across all `discounts` records
 
 **Period Summary — Discount Breakdown table** (new section alongside Contribution/Loan breakdowns):

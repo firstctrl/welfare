@@ -1388,137 +1388,170 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
       periodDiscounts,
     ] = await Promise.all([
       // 1. Per-month contribution breakdown
-      this.contribModel.aggregate([
-        { $match: { year, month: { $gte: fromMonth, $lte: toMonth }, isDebit: { $ne: true } } },
-        {
-          $group: {
-            _id: { month: '$month', year: '$year' },
-            totalExpected:  { $sum: '$expectedAmount' },
-            totalCollected: { $sum: '$paidAmount' },
-            missedCount:    { $sum: { $cond: [{ $eq: ['$status', 'Missed'] }, 1, 0] } },
-            partialCount:   { $sum: { $cond: [{ $eq: ['$status', 'Partial'] }, 1, 0] } },
+      this.contribModel
+        .aggregate([
+          { $match: { year, month: { $gte: fromMonth, $lte: toMonth }, isDebit: { $ne: true } } },
+          {
+            $group: {
+              _id: { month: '$month', year: '$year' },
+              totalExpected: { $sum: '$expectedAmount' },
+              totalCollected: { $sum: '$paidAmount' },
+              missedCount: { $sum: { $cond: [{ $eq: ['$status', 'Missed'] }, 1, 0] } },
+              partialCount: { $sum: { $cond: [{ $eq: ['$status', 'Partial'] }, 1, 0] } },
+            },
           },
-        },
-        { $sort: { '_id.month': 1 } },
-      ]).exec(),
+          { $sort: { '_id.month': 1 } },
+        ])
+        .exec(),
 
       // 2. Loan counts/amounts by status (disbursed in period)
-      this.loanModel.aggregate([
-        { $match: { disbursedDate: { $gte: periodStart, $lte: periodEnd } } },
-        {
-          $group: {
-            _id: '$status',
-            count:       { $sum: 1 },
-            totalAmount: { $sum: '$principalAmount' },
+      this.loanModel
+        .aggregate([
+          { $match: { disbursedDate: { $gte: periodStart, $lte: periodEnd } } },
+          {
+            $group: {
+              _id: '$status',
+              count: { $sum: 1 },
+              totalAmount: { $sum: '$principalAmount' },
+            },
           },
-        },
-      ]).exec(),
+        ])
+        .exec(),
 
       // 3. Recovery from defaulted/written-off/bad-debt loans disbursed in period
-      this.loanModel.aggregate([
-        {
-          $match: {
-            disbursedDate: { $gte: periodStart, $lte: periodEnd },
-            status: { $in: [LoanStatus.Defaulted, LoanStatus.WrittenOff, LoanStatus.BadDebt] },
+      this.loanModel
+        .aggregate([
+          {
+            $match: {
+              disbursedDate: { $gte: periodStart, $lte: periodEnd },
+              status: { $in: [LoanStatus.Defaulted, LoanStatus.WrittenOff, LoanStatus.BadDebt] },
+            },
           },
-        },
-        {
-          $group: {
-            _id: null,
-            totalRecovered:   { $sum: { $add: ['$exitDeductionAmount', '$guarantorOffsetAmount'] } },
-            totalUnrecovered: { $sum: '$badDebtAmount' },
+          {
+            $group: {
+              _id: null,
+              totalRecovered: {
+                $sum: { $add: ['$exitDeductionAmount', '$guarantorOffsetAmount'] },
+              },
+              totalUnrecovered: { $sum: '$badDebtAmount' },
+            },
           },
-        },
-      ]).exec(),
+        ])
+        .exec(),
 
       // 4a. All-time total contributions collected (non-debit)
-      this.contribModel.aggregate([
-        { $match: { isDebit: { $ne: true } } },
-        { $group: { _id: null, total: { $sum: '$paidAmount' } } },
-      ]).exec(),
+      this.contribModel
+        .aggregate([
+          { $match: { isDebit: { $ne: true } } },
+          { $group: { _id: null, total: { $sum: '$paidAmount' } } },
+        ])
+        .exec(),
 
       // 4b. All-time total loans disbursed
-      this.loanModel.aggregate([
-        { $group: { _id: null, total: { $sum: '$principalAmount' } } },
-      ]).exec(),
+      this.loanModel
+        .aggregate([{ $group: { _id: null, total: { $sum: '$principalAmount' } } }])
+        .exec(),
 
       // 5a. Active staff count
       this.staffModel.find({ status: StaffStatus.Active }).select('_id').lean().exec(),
 
       // 5b. Joiners in period
-      this.staffModel.find({ createdAt: { $gte: periodStart, $lte: periodEnd } }).select('_id').lean().exec(),
+      this.staffModel
+        .find({ createdAt: { $gte: periodStart, $lte: periodEnd } })
+        .select('_id')
+        .lean()
+        .exec(),
 
       // 5c. Exits in period (non-Active status with updatedAt in period)
-      this.staffModel.find({
-        status: { $in: [StaffStatus.Resigned, StaffStatus.Retired, StaffStatus.Dismissed, StaffStatus.Deceased] },
-        updatedAt: { $gte: periodStart, $lte: periodEnd },
-      }).select('_id').lean().exec(),
+      this.staffModel
+        .find({
+          status: {
+            $in: [
+              StaffStatus.Resigned,
+              StaffStatus.Retired,
+              StaffStatus.Dismissed,
+              StaffStatus.Deceased,
+            ],
+          },
+          updatedAt: { $gte: periodStart, $lte: periodEnd },
+        })
+        .select('_id')
+        .lean()
+        .exec(),
 
       // 6. Defaulted loan detail rows
-      this.loanModel.aggregate([
-        {
-          $match: {
-            disbursedDate: { $gte: periodStart, $lte: periodEnd },
-            status: { $in: [LoanStatus.Defaulted, LoanStatus.WrittenOff, LoanStatus.BadDebt] },
+      this.loanModel
+        .aggregate([
+          {
+            $match: {
+              disbursedDate: { $gte: periodStart, $lte: periodEnd },
+              status: { $in: [LoanStatus.Defaulted, LoanStatus.WrittenOff, LoanStatus.BadDebt] },
+            },
           },
-        },
-        {
-          $lookup: {
-            from: 'staff',
-            let: { sid: '$staffId' },
-            pipeline: [{ $match: { $expr: { $eq: [{ $toString: '$_id' }, '$$sid'] } } }],
-            as: 'staffDoc',
+          {
+            $lookup: {
+              from: 'staff',
+              let: { sid: '$staffId' },
+              pipeline: [{ $match: { $expr: { $eq: [{ $toString: '$_id' }, '$$sid'] } } }],
+              as: 'staffDoc',
+            },
           },
-        },
-        { $unwind: { path: '$staffDoc', preserveNullAndEmptyArrays: true } },
-        {
-          $project: {
-            loanId:          { $toString: '$_id' },
-            staffName:       { $ifNull: ['$staffDoc.fullName', 'Unknown'] },
-            principalAmount: 1,
-            totalRecovered:  { $add: ['$exitDeductionAmount', '$guarantorOffsetAmount'] },
-            badDebtAmount:   1,
-            settledAt:       1,
+          { $unwind: { path: '$staffDoc', preserveNullAndEmptyArrays: true } },
+          {
+            $project: {
+              loanId: { $toString: '$_id' },
+              staffName: { $ifNull: ['$staffDoc.fullName', 'Unknown'] },
+              principalAmount: 1,
+              totalRecovered: { $add: ['$exitDeductionAmount', '$guarantorOffsetAmount'] },
+              badDebtAmount: 1,
+              settledAt: 1,
+            },
           },
-        },
-        { $sort: { settledAt: -1 } },
-      ]).exec(),
+          { $sort: { settledAt: -1 } },
+        ])
+        .exec(),
 
-      // 7. All-time total discounts given
-      this.discountModel.aggregate([
-        { $match: { cancelled: false } },
-        { $group: { _id: null, total: { $sum: '$discountAmount' } } },
-      ]).exec(),
+      // 7. All-time total discounts
+      this.discountModel
+        .aggregate([
+          { $match: { cancelled: false } },
+          { $group: { _id: null, total: { $sum: '$discountAmount' } } },
+        ])
+        .exec(),
 
       // 8. Period discount breakdown with staff name
-      this.discountModel.aggregate([
-        {
-          $match: {
-            cancelled: false,
-            dateGranted: { $gte: periodStart, $lte: periodEnd },
+      this.discountModel
+        .aggregate([
+          {
+            $match: {
+              cancelled: false,
+              dateGranted: { $gte: periodStart, $lte: periodEnd },
+            },
           },
-        },
-        {
-          $lookup: {
-            from: 'staff',
-            let: { sid: '$staffId' },
-            pipeline: [{ $match: { $expr: { $eq: [{ $toString: '$_id' }, '$$sid'] } } }],
-            as: 'staffDoc',
+          {
+            $lookup: {
+              from: 'staff',
+              let: { sid: '$staffId' },
+              pipeline: [{ $match: { $expr: { $eq: [{ $toString: '$_id' }, '$$sid'] } } }],
+              as: 'staffDoc',
+            },
           },
-        },
-        { $unwind: { path: '$staffDoc', preserveNullAndEmptyArrays: true } },
-        {
-          $project: {
-            staffName: { $ifNull: ['$staffDoc.fullName', 'Unknown'] },
-            loanReference: { $substr: ['$loanId', { $subtract: [{ $strLenCP: '$loanId' }, 6] }, 6] },
-            discountType: 1,
-            rate: '$discountRate',
-            amount: '$discountAmount',
-            dateGranted: 1,
+          { $unwind: { path: '$staffDoc', preserveNullAndEmptyArrays: true } },
+          {
+            $project: {
+              staffName: { $ifNull: ['$staffDoc.fullName', 'Unknown'] },
+              loanReference: {
+                $substr: ['$loanId', { $subtract: [{ $strLenCP: '$loanId' }, 6] }, 6],
+              },
+              discountType: 1,
+              rate: '$discountRate',
+              amount: '$discountAmount',
+              dateGranted: 1,
+            },
           },
-        },
-        { $sort: { dateGranted: -1 } },
-      ]).exec(),
+          { $sort: { dateGranted: -1 } },
+        ])
+        .exec(),
     ]);
 
     // ── Contribution summary ──

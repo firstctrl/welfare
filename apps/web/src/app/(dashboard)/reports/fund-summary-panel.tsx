@@ -200,7 +200,7 @@ export function FundSummaryPanel() {
               iconKind="primary"
             />
             <KpiCard
-              label="Total Discounts Given"
+              label="Total Discounts"
               value={fmtGHSShort(data.totalDiscountsGiven ?? 0)}
               title={fmtGHS(data.totalDiscountsGiven ?? 0)}
               icon={AlertCircle}
@@ -375,7 +375,10 @@ export function FundSummaryPanel() {
             <Section
               title="Contributions Breakdown"
               downloadLinks={[
-                { label: 'CSV', onClick: () => downloadFundSummaryFile('contributions', params, 'csv') },
+                {
+                  label: 'CSV',
+                  onClick: () => downloadFundSummaryFile('contributions', params, 'csv'),
+                },
               ]}
             >
               <SummaryTable columns={COLS_CONTRIB} data={data.contributionBreakdown} />

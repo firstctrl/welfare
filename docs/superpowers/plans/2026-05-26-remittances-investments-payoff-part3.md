@@ -56,7 +56,7 @@ Add to constructor after `batchModel`:
 In `apps/api/src/reports/reports.service.ts`, in `getFundSummary`, add two queries to the existing `Promise.all` array (after the `defaultRows` query):
 
 ```ts
-      // 7. All-time total discounts given
+      // 7. All-time total discounts
       this.discountModel.aggregate([
         { $match: { cancelled: false } },
         { $group: { _id: null, total: { $sum: '$discountAmount' } } },
@@ -1385,12 +1385,12 @@ const COLS_DISCOUNTS = [
 ];
 ```
 
-- [ ] **Step 3: Add Total Discounts Given KPI to all-time block**
+- [ ] **Step 3: Add Total Discounts KPI to all-time block**
 
 In `FundSummaryPanel`, in the "All-Time Fund Overview" grid, add a 5th KpiCard after Active Members:
 ```tsx
 <KpiCard
-  label="Total Discounts Given"
+  label="Total Discounts"
   value={fmtGHSShort(data.totalDiscountsGiven ?? 0)}
   title={fmtGHS(data.totalDiscountsGiven ?? 0)}
   icon={AlertCircle}
