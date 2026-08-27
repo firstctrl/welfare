@@ -177,6 +177,26 @@ export class LoansController {
     return this.recordsImportService.getBatch(batchId);
   }
 
+  @Patch('records-import/:batchId/dismiss')
+  @RequirePermission(AppModule.Loans, 'full')
+  dismissLoanRecordsFlaggedEntry(
+    @Param('batchId') batchId: string,
+    @Body() dto: DismissFlaggedEntryDto,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.recordsImportService.dismissFlaggedEntry(batchId, dto.index, user.sub, user.displayName);
+  }
+
+  @Delete('records-import/:batchId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermission(AppModule.Loans, 'full')
+  async deleteLoanRecordsImportBatch(
+    @Param('batchId') batchId: string,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    await this.recordsImportService.deleteBatch(batchId, user.sub, user.displayName);
+  }
+
   @Delete('bulk')
   @RequirePermission(AppModule.Loans, 'full')
   @HttpCode(HttpStatus.OK)

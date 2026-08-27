@@ -150,4 +150,25 @@ export class LoansRecordsImportService {
     if (!batch) throw new NotFoundException(`Import batch ${batchId} not found`);
     return batch;
   }
+
+  async dismissFlaggedEntry(
+    batchId: string, index: number, actorId: string, actorName: string,
+  ): Promise<LoanRecordsImportBatchDocument> {
+    const batch = await this.getBatch(batchId);
+    if (index < 0 || index >= batch.flaggedEntries.length) {
+      throw new BadRequestException(`Flagged entry index ${index} out of range`);
+    }
+    batch.flaggedEntries.splice(index, 1);
+    batch.flaggedRows -= 1;
+    batch.status = batch.flaggedEntries.length === 0 ? ImportBatchStatus.Completed : ImportBatchStatus.Pending;
+    await batch.save();
+    this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.Loan, batchId);
+    return batch;
+  }
+
+  async deleteBatch(batchId: string, actorId: string, actorName: string): Promise<void> {
+    const result = await this.batchModel.findByIdAndDelete(batchId).exec();
+    if (!result) throw new NotFoundException(`Import batch ${batchId} not found`);
+    this.auditService.log(actorId, actorName, AuditAction.Delete, AuditEntity.Loan, batchId);
+  }
 }
