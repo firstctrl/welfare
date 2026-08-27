@@ -9,7 +9,8 @@ import { ImportProgressService } from '../common/import-progress.service';
 
 const mockCreate = jest.fn();
 const mockFindByIdAndUpdate = jest.fn();
-const mockBatchModel = { create: mockCreate, findByIdAndUpdate: mockFindByIdAndUpdate };
+const mockFind = jest.fn();
+const mockBatchModel = { create: mockCreate, findByIdAndUpdate: mockFindByIdAndUpdate, find: mockFind };
 
 const mockContributionsService = { processPayment: jest.fn().mockResolvedValue(undefined) };
 const mockStaffService = { findByStaffId: jest.fn() };
@@ -78,5 +79,80 @@ describe('ImportService (contributions) — progress tracking', () => {
     ).rejects.toThrow('boom');
 
     expect(mockProgressService.complete).toHaveBeenCalledWith('batch-2');
+  });
+});
+
+describe('ImportService (contributions) — resolveByStaffId', () => {
+  let service: ImportService;
+
+  function makeBatch(overrides: Partial<{ status: string; flaggedEntries: any[] }> = {}) {
+    const batch: any = {
+      _id: 'batch-x',
+      month: 1,
+      year: 2026,
+      status: overrides.status ?? 'Pending',
+      matchedRows: 0,
+      flaggedRows: overrides.flaggedEntries?.length ?? 0,
+      flaggedEntries: overrides.flaggedEntries ?? [],
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    return batch;
+  }
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ImportService,
+        { provide: getModelToken(ImportBatch.name), useValue: mockBatchModel },
+        { provide: ContributionsService, useValue: mockContributionsService },
+        { provide: StaffService, useValue: mockStaffService },
+        { provide: AuditService, useValue: mockAuditService },
+        { provide: ImportProgressService, useValue: mockProgressService },
+      ],
+    }).compile();
+    service = module.get(ImportService);
+    jest.clearAllMocks();
+  });
+
+  it('resolves the matching flagged entry in every pending batch that has one', async () => {
+    const batchA = makeBatch({ flaggedEntries: [{ staffId: 'S1', employeeName: 'Jane', amount: 100, reason: 'Staff ID not found' }] });
+    const batchB = makeBatch({ flaggedEntries: [{ staffId: 'S1', employeeName: 'Jane', amount: 150, reason: 'Staff ID not found' }] });
+    mockFind.mockReturnValue({ exec: jest.fn().mockResolvedValue([batchA, batchB]) });
+
+    const result = await service.resolveByStaffId('S1', 'staff-mongo-id', 'actor-1', 'Actor');
+
+    expect(result).toEqual({ resolvedCount: 2, batchesUpdated: 2 });
+    expect(mockContributionsService.processPayment).toHaveBeenCalledTimes(2);
+    expect(batchA.flaggedEntries).toHaveLength(0);
+    expect(batchB.flaggedEntries).toHaveLength(0);
+    expect(batchA.save).toHaveBeenCalled();
+    expect(batchB.save).toHaveBeenCalled();
+  });
+
+  it('skips batches without a matching staffId and returns zero counts if none match', async () => {
+    const batchA = makeBatch({ flaggedEntries: [{ staffId: 'S2', employeeName: 'Other', amount: 100, reason: 'Staff ID not found' }] });
+    mockFind.mockReturnValue({ exec: jest.fn().mockResolvedValue([batchA]) });
+
+    const result = await service.resolveByStaffId('S1', 'staff-mongo-id', 'actor-1', 'Actor');
+
+    expect(result).toEqual({ resolvedCount: 0, batchesUpdated: 0 });
+    expect(mockContributionsService.processPayment).not.toHaveBeenCalled();
+    expect(batchA.save).not.toHaveBeenCalled();
+  });
+
+  it('resolves multiple matching entries within the same batch', async () => {
+    const batchA = makeBatch({
+      flaggedEntries: [
+        { staffId: 'S1', employeeName: 'Jane', amount: 100, reason: 'Staff ID not found' },
+        { staffId: 'S1', employeeName: 'Jane', amount: 120, reason: 'Staff ID not found' },
+      ],
+    });
+    mockFind.mockReturnValue({ exec: jest.fn().mockResolvedValue([batchA]) });
+
+    const result = await service.resolveByStaffId('S1', 'staff-mongo-id', 'actor-1', 'Actor');
+
+    expect(result).toEqual({ resolvedCount: 2, batchesUpdated: 1 });
+    expect(batchA.flaggedEntries).toHaveLength(0);
+    expect(batchA.matchedRows).toBe(2);
   });
 });

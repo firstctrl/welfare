@@ -7,6 +7,7 @@ import { ContributionsService } from './contributions.service';
 import { ImportService } from './import.service';
 import { ManualEntryDto } from './dto/manual-entry.dto';
 import { ResolveFlaggedDto } from './dto/resolve-flagged.dto';
+import { ResolveByStaffIdDto } from './dto/resolve-by-staff-id.dto';
 import { ContributionQueryDto } from './dto/contribution-query.dto';
 import { BulkDeleteDto } from './dto/bulk-delete.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -66,6 +67,17 @@ export class ContributionsController {
   ) {
     return this.importService.resolveFlagged(
       batchId, dto.originalStaffId, dto.resolvedStaffMongoId, user.sub, user.displayName,
+    );
+  }
+
+  @Patch('import/resolve-by-staff-id')
+  @RequirePermission(AppModule.Contributions, 'full')
+  resolveByStaffId(
+    @Body() dto: ResolveByStaffIdDto,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.importService.resolveByStaffId(
+      dto.originalStaffId, dto.resolvedStaffMongoId, user.sub, user.displayName,
     );
   }
 

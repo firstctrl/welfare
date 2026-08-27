@@ -152,19 +152,67 @@ export class ImportService {
     const entryIndex = batch.flaggedEntries.findIndex((e) => e.staffId === originalStaffId);
     if (entryIndex === -1) throw new NotFoundException(`Flagged entry ${originalStaffId} not found`);
 
+    await this.resolveOneEntry(batch, entryIndex, resolvedStaffMongoId, actorId, actorName);
+    await batch.save();
+
+    this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.ImportBatch, batchId);
+    return batch;
+  }
+
+  async resolveByStaffId(
+    originalStaffId: string,
+    resolvedStaffMongoId: string,
+    actorId: string,
+    actorName: string,
+  ): Promise<{ resolvedCount: number; batchesUpdated: number }> {
+    const batches = await this.batchModel
+      .find({ status: { $ne: ImportBatchStatus.Completed }, 'flaggedEntries.staffId': originalStaffId })
+      .exec();
+
+    let resolvedCount = 0;
+    let batchesUpdated = 0;
+
+    for (const batch of batches) {
+      let resolvedInBatch = 0;
+      // Resolve from the end so repeated splices don't shift not-yet-visited indices.
+      for (let i = batch.flaggedEntries.length - 1; i >= 0; i--) {
+        if (batch.flaggedEntries[i].staffId !== originalStaffId) continue;
+        await this.resolveOneEntry(batch, i, resolvedStaffMongoId, actorId, actorName);
+        resolvedInBatch++;
+      }
+      if (resolvedInBatch > 0) {
+        await batch.save();
+        batchesUpdated++;
+        resolvedCount += resolvedInBatch;
+      }
+    }
+
+    if (resolvedCount > 0) {
+      this.auditService.log(
+        actorId, actorName, AuditAction.Update, AuditEntity.ImportBatch, originalStaffId,
+        undefined, { resolvedCount, batchesUpdated },
+      );
+    }
+
+    return { resolvedCount, batchesUpdated };
+  }
+
+  private async resolveOneEntry(
+    batch: ImportBatchDocument,
+    entryIndex: number,
+    resolvedStaffMongoId: string,
+    actorId: string,
+    actorName: string,
+  ): Promise<void> {
     const entry = batch.flaggedEntries[entryIndex];
     await this.contributionsService.processPayment(
       resolvedStaffMongoId, batch.month, batch.year, entry.amount,
-      ContributionSource.PayrollImport, actorId, actorName, batchId,
+      ContributionSource.PayrollImport, actorId, actorName, batch._id.toString(),
     );
 
     batch.flaggedEntries.splice(entryIndex, 1);
     batch.matchedRows += 1;
     batch.flaggedRows -= 1;
     batch.status = batch.flaggedEntries.length === 0 ? ImportBatchStatus.Completed : ImportBatchStatus.Pending;
-    await batch.save();
-
-    this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.ImportBatch, batchId);
-    return batch;
   }
 }
