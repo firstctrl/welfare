@@ -71,10 +71,11 @@ export class RemittancesController {
   @UseInterceptors(FileInterceptor('file'))
   importFile(
     @UploadedFile() file: Express.Multer.File,
+    @Body('jobId') jobId: string | undefined,
     @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
-    return this.importService.processImport(file.buffer, file.originalname, user._id.toString(), user.displayName);
+    return this.importService.processImport(file.buffer, file.originalname, user._id.toString(), user.displayName, jobId);
   }
 
   @Patch(':id')
