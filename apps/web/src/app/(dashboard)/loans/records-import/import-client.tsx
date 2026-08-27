@@ -13,6 +13,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { fmtGHS, fmtDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { genJobId } from '@/lib/job-id';
+import { useImportProgress } from '@/hooks/use-import-progress';
+import { ImportProgressBar } from '@/components/ui/import-progress-bar';
 
 const statusKind: Record<ImportBatchStatus, 'success' | 'warning' | 'info'> = {
   [ImportBatchStatus.Pending]:   'warning',
@@ -37,6 +40,7 @@ export default function LoanRecordsImportClient() {
   const [preview, setPreview] = useState<PreviewRow[]>([]);
   const [result, setResult] = useState<{ batchId: string; created: number; flagged: number; total: number } | null>(null);
   const [activeBatch, setActiveBatch] = useState<ILoanRecordsImportBatch | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
 
   const { data: batchHistory } = useQuery({
     queryKey: ['loan-records-import-batches'],
@@ -44,7 +48,11 @@ export default function LoanRecordsImportClient() {
   });
 
   const importMutation = useMutation({
-    mutationFn: () => importLoanRecords(file!),
+    mutationFn: () => {
+      const id = genJobId();
+      setJobId(id);
+      return importLoanRecords(file!, id);
+    },
     onSuccess: (data) => {
       setResult(data);
       qc.invalidateQueries({ queryKey: ['loan-records-import-batches'] });
@@ -54,6 +62,8 @@ export default function LoanRecordsImportClient() {
       toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Import failed');
     },
   });
+
+  const progress = useImportProgress(importMutation.isPending ? jobId : null);
 
   function handleFileChange(f: File) {
     setFile(f);
@@ -152,6 +162,9 @@ export default function LoanRecordsImportClient() {
           >
             Import
           </Button>
+          {importMutation.isPending && progress && (
+            <ImportProgressBar processed={progress.processed} total={progress.total} />
+          )}
         </CardBody>
       </Card>
 

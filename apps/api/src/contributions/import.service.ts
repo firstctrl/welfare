@@ -1,12 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as XLSX from 'xlsx';
 import { AuditAction, AuditEntity, ContributionSource, ImportBatchStatus, PaginatedResult } from '@welfare/shared';
 import { ImportBatch, ImportBatchDocument } from './schemas/import-batch.schema';
 import { ContributionsService } from './contributions.service';
 import { StaffService } from '../staff/staff.service';
 import { AuditService } from '../audit/audit.service';
+import { ImportProgressService } from '../common/import-progress.service';
 
 interface ExcelRow {
   'Staff ID'?: string;
@@ -23,6 +24,7 @@ export class ImportService {
     private readonly contributionsService: ContributionsService,
     private readonly staffService: StaffService,
     private readonly auditService: AuditService,
+    private readonly progressService: ImportProgressService,
   ) {}
 
   async processImport(
@@ -32,6 +34,7 @@ export class ImportService {
     yearOverride: number | undefined,
     actorId: string,
     actorName: string,
+    jobId?: string,
   ): Promise<{ batchId: string; matched: number; flagged: number; total: number }> {
     const workbook = XLSX.read(buffer, { type: 'buffer' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -59,6 +62,7 @@ export class ImportService {
     }
 
     const batch = await this.batchModel.create({
+      ...(jobId ? { _id: new Types.ObjectId(jobId) } : {}),
       month: batchMonth, year: batchYear, fileName,
       uploadedBy: actorName,
       totalRows: rows.length,
@@ -69,38 +73,45 @@ export class ImportService {
     let matched = 0;
     const flaggedEntries: { staffId: string; employeeName: string; amount: number; reason: string }[] = [];
 
-    for (const row of rows) {
-      const rawStaffId = String(row['Staff ID'] ?? '').trim();
-      const employeeName = String(row['Employee Name'] ?? '').trim();
-      const amount = Number(row.Amount ?? 0);
+    this.progressService.start(batchId, rows.length);
+    try {
+      for (const row of rows) {
+        this.progressService.increment(batchId);
 
-      const rowMonth = monthOverride ?? Number(row.Month);
-      const rowYear  = yearOverride  ?? Number(row.Year);
+        const rawStaffId = String(row['Staff ID'] ?? '').trim();
+        const employeeName = String(row['Employee Name'] ?? '').trim();
+        const amount = Number(row.Amount ?? 0);
 
-      if (!rawStaffId) {
-        flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Missing Staff ID' });
-        continue;
-      }
-      if (!rowMonth || rowMonth < 1 || rowMonth > 12) {
-        flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Invalid or missing Month' });
-        continue;
-      }
-      if (!rowYear || rowYear < 2000) {
-        flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Invalid or missing Year' });
-        continue;
-      }
+        const rowMonth = monthOverride ?? Number(row.Month);
+        const rowYear  = yearOverride  ?? Number(row.Year);
 
-      const staff = await this.staffService.findByStaffId(rawStaffId);
-      if (!staff) {
-        flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Staff ID not found' });
-        continue;
-      }
+        if (!rawStaffId) {
+          flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Missing Staff ID' });
+          continue;
+        }
+        if (!rowMonth || rowMonth < 1 || rowMonth > 12) {
+          flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Invalid or missing Month' });
+          continue;
+        }
+        if (!rowYear || rowYear < 2000) {
+          flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Invalid or missing Year' });
+          continue;
+        }
 
-      await this.contributionsService.processPayment(
-        staff._id.toString(), rowMonth, rowYear, amount,
-        ContributionSource.PayrollImport, actorId, actorName, batchId,
-      );
-      matched++;
+        const staff = await this.staffService.findByStaffId(rawStaffId);
+        if (!staff) {
+          flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Staff ID not found' });
+          continue;
+        }
+
+        await this.contributionsService.processPayment(
+          staff._id.toString(), rowMonth, rowYear, amount,
+          ContributionSource.PayrollImport, actorId, actorName, batchId,
+        );
+        matched++;
+      }
+    } finally {
+      this.progressService.complete(batchId);
     }
 
     const status = flaggedEntries.length === 0 ? ImportBatchStatus.Completed : ImportBatchStatus.Pending;
@@ -141,19 +152,67 @@ export class ImportService {
     const entryIndex = batch.flaggedEntries.findIndex((e) => e.staffId === originalStaffId);
     if (entryIndex === -1) throw new NotFoundException(`Flagged entry ${originalStaffId} not found`);
 
+    await this.resolveOneEntry(batch, entryIndex, resolvedStaffMongoId, actorId, actorName);
+    await batch.save();
+
+    this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.ImportBatch, batchId);
+    return batch;
+  }
+
+  async resolveByStaffId(
+    originalStaffId: string,
+    resolvedStaffMongoId: string,
+    actorId: string,
+    actorName: string,
+  ): Promise<{ resolvedCount: number; batchesUpdated: number }> {
+    const batches = await this.batchModel
+      .find({ status: { $ne: ImportBatchStatus.Completed }, 'flaggedEntries.staffId': originalStaffId })
+      .exec();
+
+    let resolvedCount = 0;
+    let batchesUpdated = 0;
+
+    for (const batch of batches) {
+      let resolvedInBatch = 0;
+      // Resolve from the end so repeated splices don't shift not-yet-visited indices.
+      for (let i = batch.flaggedEntries.length - 1; i >= 0; i--) {
+        if (batch.flaggedEntries[i].staffId !== originalStaffId) continue;
+        await this.resolveOneEntry(batch, i, resolvedStaffMongoId, actorId, actorName);
+        resolvedInBatch++;
+      }
+      if (resolvedInBatch > 0) {
+        await batch.save();
+        batchesUpdated++;
+        resolvedCount += resolvedInBatch;
+      }
+    }
+
+    if (resolvedCount > 0) {
+      this.auditService.log(
+        actorId, actorName, AuditAction.Update, AuditEntity.ImportBatch, originalStaffId,
+        undefined, { resolvedCount, batchesUpdated },
+      );
+    }
+
+    return { resolvedCount, batchesUpdated };
+  }
+
+  private async resolveOneEntry(
+    batch: ImportBatchDocument,
+    entryIndex: number,
+    resolvedStaffMongoId: string,
+    actorId: string,
+    actorName: string,
+  ): Promise<void> {
     const entry = batch.flaggedEntries[entryIndex];
     await this.contributionsService.processPayment(
       resolvedStaffMongoId, batch.month, batch.year, entry.amount,
-      ContributionSource.PayrollImport, actorId, actorName, batchId,
+      ContributionSource.PayrollImport, actorId, actorName, batch._id.toString(),
     );
 
     batch.flaggedEntries.splice(entryIndex, 1);
     batch.matchedRows += 1;
     batch.flaggedRows -= 1;
     batch.status = batch.flaggedEntries.length === 0 ? ImportBatchStatus.Completed : ImportBatchStatus.Pending;
-    await batch.save();
-
-    this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.ImportBatch, batchId);
-    return batch;
   }
 }

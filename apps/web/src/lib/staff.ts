@@ -92,9 +92,10 @@ export interface StaffImportResult {
   total: number;
 }
 
-export async function importStaff(file: File): Promise<StaffImportResult> {
+export async function importStaff(file: File, jobId?: string): Promise<StaffImportResult> {
   const form = new FormData();
   form.append('file', file);
+  if (jobId) form.append('jobId', jobId);
   const { data } = await apiClient.post('/staff/import', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });

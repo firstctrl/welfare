@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as XLSX from 'xlsx';
 import { AuditAction, AuditEntity, ImportBatchStatus, PaginatedResult } from '@welfare/shared';
 import { LoanRecordsImportBatch, LoanRecordsImportBatchDocument } from './schemas/loan-records-import-batch.schema';
@@ -8,6 +8,7 @@ import { LoansService } from './loans.service';
 import { StaffService } from '../staff/staff.service';
 import { AuditService } from '../audit/audit.service';
 import { normalizeExcelDate } from '../common/utils/excel-date.util';
+import { ImportProgressService } from '../common/import-progress.service';
 
 interface ImportRow {
   'Staff ID'?: string;
@@ -34,6 +35,7 @@ export class LoansRecordsImportService {
     private readonly loansService: LoansService,
     private readonly staffService: StaffService,
     private readonly auditService: AuditService,
+    private readonly progressService: ImportProgressService,
   ) {}
 
   async processImport(
@@ -41,6 +43,7 @@ export class LoansRecordsImportService {
     fileName: string,
     actorId: string,
     actorName: string,
+    jobId?: string,
   ): Promise<LoanRecordsImportResult> {
     const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -49,60 +52,69 @@ export class LoansRecordsImportService {
     if (rows.length === 0) throw new BadRequestException('Excel file has no data rows');
 
     const batch = await this.batchModel.create({
+      ...(jobId ? { _id: new Types.ObjectId(jobId) } : {}),
       fileName,
       uploadedBy: actorName,
       totalRows: rows.length,
       status: ImportBatchStatus.Pending,
     });
+    const batchId = batch._id.toString();
 
     const flaggedEntries: LoanRecordsImportBatchDocument['flaggedEntries'] = [];
     let created = 0;
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const rowNumber = i + 2;
-      const rawStaffId     = String(row['Staff ID']          ?? '').trim();
-      const rawGuarantorId = String(row['Guarantor Staff ID'] ?? '').trim();
-      const principalAmount = Number(row['Principal Amount'] ?? 0);
-      const tenureMonths   = Number(row['Tenure Months']     ?? 0);
-      const disbursedDateRaw = normalizeExcelDate(row['Disbursed Date']);
-      const chequeNo       = String(row['Cheque No']         ?? '').trim();
-      const pvNo           = String(row['PV No']             ?? '').trim();
+    this.progressService.start(batchId, rows.length);
+    try {
+      for (let i = 0; i < rows.length; i++) {
+        this.progressService.increment(batchId);
 
-      const flag = (reason: string) =>
-        flaggedEntries.push({ rowNumber, staffId: rawStaffId, guarantorId: rawGuarantorId, principalAmount, disbursedDate: disbursedDateRaw, reason });
+        const row = rows[i];
+        const rowNumber = i + 2;
+        const rawStaffId     = String(row['Staff ID']          ?? '').trim();
+        const rawGuarantorId = String(row['Guarantor Staff ID'] ?? '').trim();
+        const principalAmount = Number(row['Principal Amount'] ?? 0);
+        const tenureMonths   = Number(row['Tenure Months']     ?? 0);
+        const disbursedDateRaw = normalizeExcelDate(row['Disbursed Date']);
+        const chequeNo       = String(row['Cheque No']         ?? '').trim();
+        const pvNo           = String(row['PV No']             ?? '').trim();
 
-      if (!rawStaffId)      { flag('Missing Staff ID');       continue; }
-      if (!rawGuarantorId)  { flag('Missing Guarantor Staff ID'); continue; }
-      if (!(principalAmount > 0)) { flag('Principal Amount must be > 0'); continue; }
-      if (!(tenureMonths >= 1 && tenureMonths <= 12)) { flag('Tenure Months must be 1–12'); continue; }
-      if (!disbursedDateRaw){ flag('Missing Disbursed Date'); continue; }
-      if (isNaN(new Date(disbursedDateRaw).getTime())) { flag('Invalid Disbursed Date'); continue; }
-      if (!chequeNo)        { flag('Missing Cheque No');     continue; }
-      if (!pvNo)            { flag('Missing PV No');         continue; }
+        const flag = (reason: string) =>
+          flaggedEntries.push({ rowNumber, staffId: rawStaffId, guarantorId: rawGuarantorId, principalAmount, disbursedDate: disbursedDateRaw, reason });
 
-      try {
-        const staff = await this.staffService.findByStaffId(rawStaffId);
-        if (!staff) { flag('Staff ID not found'); continue; }
+        if (!rawStaffId)      { flag('Missing Staff ID');       continue; }
+        if (!rawGuarantorId)  { flag('Missing Guarantor Staff ID'); continue; }
+        if (!(principalAmount > 0)) { flag('Principal Amount must be > 0'); continue; }
+        if (!(tenureMonths >= 1 && tenureMonths <= 12)) { flag('Tenure Months must be 1–12'); continue; }
+        if (!disbursedDateRaw){ flag('Missing Disbursed Date'); continue; }
+        if (isNaN(new Date(disbursedDateRaw).getTime())) { flag('Invalid Disbursed Date'); continue; }
+        if (!chequeNo)        { flag('Missing Cheque No');     continue; }
+        if (!pvNo)            { flag('Missing PV No');         continue; }
 
-        const guarantor = await this.staffService.findByStaffId(rawGuarantorId);
-        if (!guarantor) { flag('Guarantor Staff ID not found'); continue; }
+        try {
+          const staff = await this.staffService.findByStaffId(rawStaffId);
+          if (!staff) { flag('Staff ID not found'); continue; }
 
-        await this.loansService.createForImport(
-          staff._id.toString(),
-          guarantor._id.toString(),
-          { principalAmount, tenureMonths, disbursedDate: disbursedDateRaw, chequeNo, pvNo },
-          actorId,
-          actorName,
-        );
-        created++;
-      } catch (err: unknown) {
-        flag(err instanceof Error ? err.message : 'Processing error');
+          const guarantor = await this.staffService.findByStaffId(rawGuarantorId);
+          if (!guarantor) { flag('Guarantor Staff ID not found'); continue; }
+
+          await this.loansService.createForImport(
+            staff._id.toString(),
+            guarantor._id.toString(),
+            { principalAmount, tenureMonths, disbursedDate: disbursedDateRaw, chequeNo, pvNo },
+            actorId,
+            actorName,
+          );
+          created++;
+        } catch (err: unknown) {
+          flag(err instanceof Error ? err.message : 'Processing error');
+        }
       }
+    } finally {
+      this.progressService.complete(batchId);
     }
 
     const flagged = flaggedEntries.length;
-    await this.batchModel.findByIdAndUpdate(batch._id, {
+    await this.batchModel.findByIdAndUpdate(batchId, {
       $set: {
         matchedRows: created,
         flaggedRows: flagged,

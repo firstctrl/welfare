@@ -27,6 +27,7 @@ import { LoansModule } from './loans/loans.module';
 import { ReportsModule } from './reports/reports.module';
 import { RemittancesModule } from './remittances/remittances.module';
 import { InvestmentsModule } from './investments/investments.module';
+import { ImportProgressModule } from './common/import-progress.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { InvestmentsModule } from './investments/investments.module';
     LoansModule,
     RemittancesModule,
     InvestmentsModule,
+    ImportProgressModule,
     ReportsModule,
   ],
   providers: [

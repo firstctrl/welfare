@@ -66,9 +66,13 @@ export async function deleteRemittance(id: string, reason: string): Promise<void
   await apiClient.delete(`/remittances/${id}`, { data: { reason } });
 }
 
-export async function importRemittances(file: File): Promise<{ batchId: string; imported: number; flagged: number; total: number }> {
+export async function importRemittances(
+  file: File,
+  jobId?: string,
+): Promise<{ batchId: string; imported: number; flagged: number; total: number }> {
   const form = new FormData();
   form.append('file', file);
+  if (jobId) form.append('jobId', jobId);
   const { data } = await apiClient.post('/remittances/import', form);
   return data;
 }

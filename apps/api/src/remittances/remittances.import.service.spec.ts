@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 import { RemittancesImportService } from './remittances.import.service';
 import { RemittanceImportBatch } from './schemas/remittance-import-batch.schema';
 import { RemittancesService } from './remittances.service';
+import { ImportProgressService } from '../common/import-progress.service';
 
 function makeBuffer(rows: object[]): Buffer {
   const wb = XLSX.utils.book_new();
@@ -19,6 +20,7 @@ const mockBatchModel = {
 const mockRemittancesService = {
   create: jest.fn(),
 };
+const mockProgressService = { start: jest.fn(), increment: jest.fn(), complete: jest.fn(), get: jest.fn() };
 
 describe('RemittancesImportService', () => {
   let service: RemittancesImportService;
@@ -29,6 +31,7 @@ describe('RemittancesImportService', () => {
         RemittancesImportService,
         { provide: getModelToken(RemittanceImportBatch.name), useValue: mockBatchModel },
         { provide: RemittancesService, useValue: mockRemittancesService },
+        { provide: ImportProgressService, useValue: mockProgressService },
       ],
     }).compile();
     service = module.get<RemittancesImportService>(RemittancesImportService);
@@ -70,5 +73,51 @@ describe('RemittancesImportService', () => {
     const result = await service.processImport(buf, 'test.xlsx', 'uid', 'User');
     expect(result.flagged).toBe(1);
     expect(mockRemittancesService.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('RemittancesImportService — progress tracking', () => {
+  let service: RemittancesImportService;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        RemittancesImportService,
+        { provide: getModelToken(RemittanceImportBatch.name), useValue: mockBatchModel },
+        { provide: RemittancesService, useValue: mockRemittancesService },
+        { provide: ImportProgressService, useValue: mockProgressService },
+      ],
+    }).compile();
+    service = module.get(RemittancesImportService);
+    jest.clearAllMocks();
+    mockBatchModel.updateOne.mockResolvedValue(undefined);
+  });
+
+  function excelBuffer(): Buffer {
+    const ws = XLSX.utils.json_to_sheet([
+      { Month: 1, Year: 2026, 'Receipt Date': '05/01/2026' },
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  }
+
+  it('starts, increments once per row, and completes progress using the batch id', async () => {
+    mockBatchModel.create.mockResolvedValue({ _id: { toString: () => 'batch-1' } });
+
+    await service.processImport(excelBuffer(), 'rem.xlsx', 'actor-1', 'Actor');
+
+    expect(mockProgressService.start).toHaveBeenCalledWith('batch-1', 1);
+    expect(mockProgressService.increment).toHaveBeenCalledTimes(1);
+    expect(mockProgressService.complete).toHaveBeenCalledWith('batch-1');
+  });
+
+  it('creates the batch with the caller-supplied jobId as its _id', async () => {
+    mockBatchModel.create.mockResolvedValue({ _id: { toString: () => '507f1f77bcf86cd799439011' } });
+
+    await service.processImport(excelBuffer(), 'rem.xlsx', 'actor-1', 'Actor', '507f1f77bcf86cd799439011');
+
+    const createArg = mockBatchModel.create.mock.calls[0][0];
+    expect(createArg._id?.toString()).toBe('507f1f77bcf86cd799439011');
   });
 });

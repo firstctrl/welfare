@@ -50,11 +50,13 @@ export async function importContributions(
   file: File,
   month?: number,
   year?: number,
+  jobId?: string,
 ): Promise<ImportResult> {
   const form = new FormData();
   form.append('file', file);
   if (month) form.append('month', String(month));
   if (year) form.append('year', String(year));
+  if (jobId) form.append('jobId', jobId);
   const { data } = await apiClient.post('/contributions/import', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
@@ -80,6 +82,17 @@ export async function resolveFlaggedEntry(
   resolvedStaffMongoId: string,
 ): Promise<IImportBatch> {
   const { data } = await apiClient.patch(`/contributions/import/${batchId}/resolve`, {
+    originalStaffId,
+    resolvedStaffMongoId,
+  });
+  return data;
+}
+
+export async function resolveContributionsByStaffId(
+  originalStaffId: string,
+  resolvedStaffMongoId: string,
+): Promise<{ resolvedCount: number; batchesUpdated: number }> {
+  const { data } = await apiClient.patch('/contributions/import/resolve-by-staff-id', {
     originalStaffId,
     resolvedStaffMongoId,
   });

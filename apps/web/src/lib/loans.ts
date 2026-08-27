@@ -86,9 +86,10 @@ export interface LoanImportResult {
   total: number;
 }
 
-export async function importLoanRepayments(file: File): Promise<LoanImportResult> {
+export async function importLoanRepayments(file: File, jobId?: string): Promise<LoanImportResult> {
   const form = new FormData();
   form.append('file', file);
+  if (jobId) form.append('jobId', jobId);
   const { data } = await apiClient.post('/loans/import', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
@@ -117,6 +118,17 @@ export async function resolveLoanFlaggedEntry(
   return data;
 }
 
+export async function resolveLoanByStaffId(
+  originalStaffId: string,
+  resolvedLoanId: string,
+): Promise<{ resolvedCount: number; batchesUpdated: number }> {
+  const { data } = await apiClient.patch('/loans/import/resolve-by-staff-id', {
+    originalStaffId,
+    resolvedLoanId,
+  });
+  return data;
+}
+
 export interface LoanRecordsImportResult {
   batchId: string;
   created: number;
@@ -124,9 +136,10 @@ export interface LoanRecordsImportResult {
   total: number;
 }
 
-export async function importLoanRecords(file: File): Promise<LoanRecordsImportResult> {
+export async function importLoanRecords(file: File, jobId?: string): Promise<LoanRecordsImportResult> {
   const form = new FormData();
   form.append('file', file);
+  if (jobId) form.append('jobId', jobId);
   const { data } = await apiClient.post('/loans/records-import', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });

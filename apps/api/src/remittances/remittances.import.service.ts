@@ -1,10 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as XLSX from 'xlsx';
 import { RemittanceImportBatch, RemittanceImportBatchDocument } from './schemas/remittance-import-batch.schema';
 import { RemittancesService } from './remittances.service';
 import { normalizeExcelDate } from '../common/utils/excel-date.util';
+import { ImportProgressService } from '../common/import-progress.service';
 
 interface RemittanceExcelRow {
   Month?: number;
@@ -18,6 +19,7 @@ export class RemittancesImportService {
     @InjectModel(RemittanceImportBatch.name)
     private readonly batchModel: Model<RemittanceImportBatchDocument>,
     private readonly remittancesService: RemittancesService,
+    private readonly progressService: ImportProgressService,
   ) {}
 
   async processImport(
@@ -25,6 +27,7 @@ export class RemittancesImportService {
     fileName: string,
     actorId: string,
     actorName: string,
+    jobId?: string,
   ): Promise<{ batchId: string; imported: number; flagged: number; total: number }> {
     const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -33,6 +36,7 @@ export class RemittancesImportService {
     if (rows.length === 0) throw new BadRequestException('Excel file has no data rows');
 
     const batch = await this.batchModel.create({
+      ...(jobId ? { _id: new Types.ObjectId(jobId) } : {}),
       fileName,
       recordedBy: actorName,
       total: rows.length,
@@ -40,45 +44,53 @@ export class RemittancesImportService {
       flagged: 0,
       flaggedRows: [],
     });
+    const batchId = batch._id.toString();
 
     let imported = 0;
     const flaggedRows: Array<{ rowNumber: number; month: number; year: number; flagReason: string }> = [];
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const month = Number(row.Month ?? 0);
-      const year = Number(row.Year ?? 0);
-      const receiptDate = normalizeExcelDate(row['Receipt Date']);
+    this.progressService.start(batchId, rows.length);
+    try {
+      for (let i = 0; i < rows.length; i++) {
+        this.progressService.increment(batchId);
 
-      if (!month || month < 1 || month > 12) {
-        flaggedRows.push({ rowNumber: i + 2, month, year, flagReason: 'Invalid or missing Month (must be 1–12)' });
-        continue;
-      }
-      if (!year || year < 2000) {
-        flaggedRows.push({ rowNumber: i + 2, month, year, flagReason: 'Invalid or missing Year (must be ≥ 2000)' });
-        continue;
-      }
-      if (!receiptDate) {
-        flaggedRows.push({ rowNumber: i + 2, month, year, flagReason: 'Missing Receipt Date' });
-        continue;
-      }
-      if (isNaN(new Date(receiptDate).getTime())) {
-        flaggedRows.push({ rowNumber: i + 2, month, year, flagReason: 'Invalid Receipt Date' });
-        continue;
-      }
+        const row = rows[i];
+        const month = Number(row.Month ?? 0);
+        const year = Number(row.Year ?? 0);
+        const receiptDate = normalizeExcelDate(row['Receipt Date']);
 
-      try {
-        await this.remittancesService.create({ month, year, receiptDate }, actorId);
-        imported++;
-      } catch (err: any) {
-        const isDuplicate = err?.status === 409 || err?.message?.includes('already exists');
-        flaggedRows.push({
-          rowNumber: i + 2,
-          month,
-          year,
-          flagReason: isDuplicate ? 'Duplicate period' : (err?.message ?? 'Unknown error'),
-        });
+        if (!month || month < 1 || month > 12) {
+          flaggedRows.push({ rowNumber: i + 2, month, year, flagReason: 'Invalid or missing Month (must be 1–12)' });
+          continue;
+        }
+        if (!year || year < 2000) {
+          flaggedRows.push({ rowNumber: i + 2, month, year, flagReason: 'Invalid or missing Year (must be ≥ 2000)' });
+          continue;
+        }
+        if (!receiptDate) {
+          flaggedRows.push({ rowNumber: i + 2, month, year, flagReason: 'Missing Receipt Date' });
+          continue;
+        }
+        if (isNaN(new Date(receiptDate).getTime())) {
+          flaggedRows.push({ rowNumber: i + 2, month, year, flagReason: 'Invalid Receipt Date' });
+          continue;
+        }
+
+        try {
+          await this.remittancesService.create({ month, year, receiptDate }, actorId);
+          imported++;
+        } catch (err: any) {
+          const isDuplicate = err?.status === 409 || err?.message?.includes('already exists');
+          flaggedRows.push({
+            rowNumber: i + 2,
+            month,
+            year,
+            flagReason: isDuplicate ? 'Duplicate period' : (err?.message ?? 'Unknown error'),
+          });
+        }
       }
+    } finally {
+      this.progressService.complete(batchId);
     }
 
     await this.batchModel.updateOne(
@@ -86,6 +98,6 @@ export class RemittancesImportService {
       { imported, flagged: flaggedRows.length, flaggedRows },
     );
 
-    return { batchId: batch._id.toString(), imported, flagged: flaggedRows.length, total: rows.length };
+    return { batchId, imported, flagged: flaggedRows.length, total: rows.length };
   }
 }

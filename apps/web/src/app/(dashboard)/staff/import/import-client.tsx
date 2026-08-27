@@ -13,6 +13,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { fmtDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { normalizeExcelDate } from '@/lib/excel-date';
+import { genJobId } from '@/lib/job-id';
+import { useImportProgress } from '@/hooks/use-import-progress';
+import { ImportProgressBar } from '@/components/ui/import-progress-bar';
 
 const statusKind: Record<ImportBatchStatus, 'success' | 'warning' | 'info'> = {
   [ImportBatchStatus.Pending]:   'warning',
@@ -40,6 +44,7 @@ export default function StaffImportClient() {
   const [preview, setPreview] = useState<PreviewRow[]>([]);
   const [result, setResult] = useState<{ batchId: string; created: number; flagged: number; total: number } | null>(null);
   const [activeBatch, setActiveBatch] = useState<IStaffImportBatch | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
 
   const { data: batchHistory } = useQuery({
     queryKey: ['staff-import-batches'],
@@ -47,7 +52,11 @@ export default function StaffImportClient() {
   });
 
   const importMutation = useMutation({
-    mutationFn: () => importStaff(file!),
+    mutationFn: () => {
+      const id = genJobId();
+      setJobId(id);
+      return importStaff(file!, id);
+    },
     onSuccess: (data) => {
       setResult(data);
       qc.invalidateQueries({ queryKey: ['staff-import-batches'] });
@@ -57,6 +66,8 @@ export default function StaffImportClient() {
       toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Import failed');
     },
   });
+
+  const progress = useImportProgress(importMutation.isPending ? jobId : null);
 
   function handleFileChange(f: File) {
     setFile(f);
@@ -70,10 +81,10 @@ export default function StaffImportClient() {
         rows.map((r) => ({
           staffId: String(r['Staff ID'] ?? ''),
           fullName: String(r['Full Name'] ?? ''),
-          dateOfBirth: String(r['Date of Birth'] ?? ''),
+          dateOfBirth: normalizeExcelDate(r['Date of Birth'] as string | number | undefined),
           email: String(r['Email'] ?? ''),
           phone: String(r['Phone'] ?? ''),
-          dateOfEmployment: String(r['Date of Employment'] ?? ''),
+          dateOfEmployment: normalizeExcelDate(r['Date of Employment'] as string | number | undefined),
         })),
       );
     };
@@ -153,7 +164,9 @@ export default function StaffImportClient() {
                       </td>
                       <td className="px-3 py-1.5 text-neutral-500">{row.email || '—'}</td>
                       <td className="px-3 py-1.5 font-mono text-xs">{row.phone || '—'}</td>
-                      <td className="px-3 py-1.5">{row.dateOfEmployment || '—'}</td>
+                      <td className="px-3 py-1.5">
+                        {row.dateOfEmployment ? fmtDate(row.dateOfEmployment) : '—'}
+                      </td>
                     </tr>
                   ))}
                   {preview.length > 50 && (
@@ -177,6 +190,9 @@ export default function StaffImportClient() {
           >
             Import
           </Button>
+          {importMutation.isPending && progress && (
+            <ImportProgressBar processed={progress.processed} total={progress.total} />
+          )}
         </CardBody>
       </Card>
 

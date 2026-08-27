@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as XLSX from 'xlsx';
 import {
   AuditAction,
@@ -16,6 +16,7 @@ import { LoansService } from './loans.service';
 import { StaffService } from '../staff/staff.service';
 import { AuditService } from '../audit/audit.service';
 import { normalizeExcelDate } from '../common/utils/excel-date.util';
+import { ImportProgressService } from '../common/import-progress.service';
 
 interface ImportRow {
   'Staff ID'?: string;
@@ -42,6 +43,7 @@ export class LoansImportService {
     private readonly loansService: LoansService,
     private readonly staffService: StaffService,
     private readonly auditService: AuditService,
+    private readonly progressService: ImportProgressService,
   ) {}
 
   async processImport(
@@ -49,6 +51,7 @@ export class LoansImportService {
     fileName: string,
     actorId: string,
     actorName: string,
+    jobId?: string,
   ): Promise<ImportRepaymentResult> {
     const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -57,69 +60,78 @@ export class LoansImportService {
     if (rows.length === 0) throw new BadRequestException('Excel file has no data rows');
 
     const batch = await this.batchModel.create({
+      ...(jobId ? { _id: new Types.ObjectId(jobId) } : {}),
       fileName,
       uploadedBy: actorName,
       totalRows: rows.length,
       status: ImportBatchStatus.Pending,
     });
+    const batchId = batch._id.toString();
 
     const flaggedEntries: LoanImportBatchDocument['flaggedEntries'] = [];
     let matched = 0;
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const rowNumber = i + 2;
-      const rawStaffId  = String(row['Staff ID']   ?? '').trim();
-      const staffName   = String(row['Staff Name'] ?? '').trim();
-      const rawLoanId   = String(row['Loan ID']    ?? '').trim();
-      const amount      = Number(row.Amount ?? 0);
-      const paidDateRaw = normalizeExcelDate(row['Paid Date']);
-      const notes       = String(row.Notes        ?? '').trim() || undefined;
+    this.progressService.start(batchId, rows.length);
+    try {
+      for (let i = 0; i < rows.length; i++) {
+        this.progressService.increment(batchId);
 
-      const flag = (reason: string) =>
-        flaggedEntries.push({ rowNumber, staffId: rawStaffId, staffName, loanId: rawLoanId, amount, paidDate: paidDateRaw, notes, reason });
+        const row = rows[i];
+        const rowNumber = i + 2;
+        const rawStaffId  = String(row['Staff ID']   ?? '').trim();
+        const staffName   = String(row['Staff Name'] ?? '').trim();
+        const rawLoanId   = String(row['Loan ID']    ?? '').trim();
+        const amount      = Number(row.Amount ?? 0);
+        const paidDateRaw = normalizeExcelDate(row['Paid Date']);
+        const notes       = String(row.Notes        ?? '').trim() || undefined;
 
-      if (!rawStaffId) { flag('Missing Staff ID'); continue; }
-      if (!(amount > 0)) { flag('Amount must be > 0'); continue; }
+        const flag = (reason: string) =>
+          flaggedEntries.push({ rowNumber, staffId: rawStaffId, staffName, loanId: rawLoanId, amount, paidDate: paidDateRaw, notes, reason });
 
-      let paidDate: string;
-      if (paidDateRaw) {
-        const d = new Date(paidDateRaw);
-        if (isNaN(d.getTime())) { flag('Invalid Paid Date'); continue; }
-        paidDate = d.toISOString();
-      } else {
-        paidDate = new Date().toISOString();
-      }
+        if (!rawStaffId) { flag('Missing Staff ID'); continue; }
+        if (!(amount > 0)) { flag('Amount must be > 0'); continue; }
 
-      try {
-        const staff = await this.staffService.findByStaffId(rawStaffId);
-        if (!staff) { flag('Staff ID not found'); continue; }
-
-        let loanId = rawLoanId || undefined;
-
-        if (!loanId) {
-          const activeLoan = await this.loanModel
-            .findOne({ staffId: staff._id.toString(), status: LoanStatus.Active })
-            .exec();
-          if (!activeLoan) { flag('No active loan found for staff'); continue; }
-          loanId = activeLoan._id.toString();
+        let paidDate: string;
+        if (paidDateRaw) {
+          const d = new Date(paidDateRaw);
+          if (isNaN(d.getTime())) { flag('Invalid Paid Date'); continue; }
+          paidDate = d.toISOString();
+        } else {
+          paidDate = new Date().toISOString();
         }
 
-        await this.loansService.recordPaymentInternal(
-          loanId,
-          { amount, paidDate, notes },
-          RepaymentSource.Import,
-          actorId,
-          actorName,
-        );
-        matched++;
-      } catch (err: unknown) {
-        flag(err instanceof Error ? err.message : 'Processing error');
+        try {
+          const staff = await this.staffService.findByStaffId(rawStaffId);
+          if (!staff) { flag('Staff ID not found'); continue; }
+
+          let loanId = rawLoanId || undefined;
+
+          if (!loanId) {
+            const activeLoan = await this.loanModel
+              .findOne({ staffId: staff._id.toString(), status: LoanStatus.Active })
+              .exec();
+            if (!activeLoan) { flag('No active loan found for staff'); continue; }
+            loanId = activeLoan._id.toString();
+          }
+
+          await this.loansService.recordPaymentInternal(
+            loanId,
+            { amount, paidDate, notes },
+            RepaymentSource.Import,
+            actorId,
+            actorName,
+          );
+          matched++;
+        } catch (err: unknown) {
+          flag(err instanceof Error ? err.message : 'Processing error');
+        }
       }
+    } finally {
+      this.progressService.complete(batchId);
     }
 
     const flagged = flaggedEntries.length;
-    await this.batchModel.findByIdAndUpdate(batch._id, {
+    await this.batchModel.findByIdAndUpdate(batchId, {
       $set: {
         matchedRows: matched,
         flaggedRows: flagged,
@@ -167,6 +179,61 @@ export class LoansImportService {
     const entryIdx = batch.flaggedEntries.findIndex((e) => e.rowNumber === rowNumber);
     if (entryIdx === -1) throw new NotFoundException(`Flagged entry row ${rowNumber} not found`);
 
+    await this.resolveOneEntry(batch, entryIdx, resolvedLoanId, actorId, actorName);
+    await batch.save();
+
+    this.auditService.log(
+      actorId, actorName, AuditAction.Update, AuditEntity.Loan, batchId,
+      undefined, { resolvedRow: rowNumber, resolvedLoanId },
+    );
+
+    return batch;
+  }
+
+  async resolveByStaffId(
+    originalStaffId: string,
+    resolvedLoanId: string,
+    actorId: string,
+    actorName: string,
+  ): Promise<{ resolvedCount: number; batchesUpdated: number }> {
+    const batches = await this.batchModel
+      .find({ status: { $ne: ImportBatchStatus.Resolved }, 'flaggedEntries.staffId': originalStaffId })
+      .exec();
+
+    let resolvedCount = 0;
+    let batchesUpdated = 0;
+
+    for (const batch of batches) {
+      let resolvedInBatch = 0;
+      for (let i = batch.flaggedEntries.length - 1; i >= 0; i--) {
+        if (batch.flaggedEntries[i].staffId !== originalStaffId) continue;
+        await this.resolveOneEntry(batch, i, resolvedLoanId, actorId, actorName);
+        resolvedInBatch++;
+      }
+      if (resolvedInBatch > 0) {
+        await batch.save();
+        batchesUpdated++;
+        resolvedCount += resolvedInBatch;
+      }
+    }
+
+    if (resolvedCount > 0) {
+      this.auditService.log(
+        actorId, actorName, AuditAction.Update, AuditEntity.Loan, originalStaffId,
+        undefined, { resolvedCount, batchesUpdated },
+      );
+    }
+
+    return { resolvedCount, batchesUpdated };
+  }
+
+  private async resolveOneEntry(
+    batch: LoanImportBatchDocument,
+    entryIdx: number,
+    resolvedLoanId: string,
+    actorId: string,
+    actorName: string,
+  ): Promise<void> {
     const entry = batch.flaggedEntries[entryIdx];
     const paidDate = entry.paidDate
       ? new Date(entry.paidDate).toISOString()
@@ -184,18 +251,5 @@ export class LoansImportService {
     batch.matchedRows += 1;
     batch.flaggedRows  -= 1;
     batch.status = batch.flaggedRows === 0 ? ImportBatchStatus.Resolved : ImportBatchStatus.Pending;
-    await batch.save();
-
-    this.auditService.log(
-      actorId,
-      actorName,
-      AuditAction.Update,
-      AuditEntity.Loan,
-      batchId,
-      undefined,
-      { resolvedRow: rowNumber, resolvedLoanId },
-    );
-
-    return batch;
   }
 }
