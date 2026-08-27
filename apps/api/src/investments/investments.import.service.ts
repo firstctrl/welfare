@@ -1,10 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as XLSX from 'xlsx';
 import { InvestmentImportBatch, InvestmentImportBatchDocument } from './schemas/investment-import-batch.schema';
 import { InvestmentsService } from './investments.service';
 import { normalizeExcelDate } from '../common/utils/excel-date.util';
+import { ImportProgressService } from '../common/import-progress.service';
 
 interface InvestmentExcelRow {
   'Purchase Date'?: string | number | Date;
@@ -21,6 +22,7 @@ export class InvestmentsImportService {
     @InjectModel(InvestmentImportBatch.name)
     private readonly batchModel: Model<InvestmentImportBatchDocument>,
     private readonly investmentsService: InvestmentsService,
+    private readonly progressService: ImportProgressService,
   ) {}
 
   async processImport(
@@ -28,6 +30,7 @@ export class InvestmentsImportService {
     fileName: string,
     actorId: string,
     actorName: string,
+    jobId?: string,
   ): Promise<{ batchId: string; imported: number; flagged: number; total: number }> {
     const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -36,6 +39,7 @@ export class InvestmentsImportService {
     if (rows.length === 0) throw new BadRequestException('Excel file has no data rows');
 
     const batch = await this.batchModel.create({
+      ...(jobId ? { _id: new Types.ObjectId(jobId) } : {}),
       fileName,
       recordedBy: actorName,
       total: rows.length,
@@ -43,61 +47,69 @@ export class InvestmentsImportService {
       flagged: 0,
       flaggedRows: [],
     });
+    const batchId = batch._id.toString();
 
     let imported = 0;
     const flaggedRows: Array<{ rowNumber: number; description: string; flagReason: string }> = [];
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const description = String(row.Description ?? '').trim();
-      const cost = Number(row.Cost ?? 0);
-      const faceValue = Number(row['Face Value'] ?? 0);
-      const instruction = String(row.Instruction ?? '').trim() as 'One-Time' | 'Roll-Over';
-      const purchaseDateRaw = normalizeExcelDate(row['Purchase Date']);
-      const maturityDateRaw = normalizeExcelDate(row['Maturity Date']);
+    this.progressService.start(batchId, rows.length);
+    try {
+      for (let i = 0; i < rows.length; i++) {
+        this.progressService.increment(batchId);
 
-      if (!description) {
-        flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Missing Description' });
-        continue;
-      }
-      if (!cost || cost <= 0) {
-        flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Invalid or missing Cost' });
-        continue;
-      }
-      if (!faceValue || faceValue <= 0) {
-        flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Invalid or missing Face Value' });
-        continue;
-      }
-      if (!purchaseDateRaw) {
-        flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Missing Purchase Date' });
-        continue;
-      }
-      if (!maturityDateRaw) {
-        flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Missing Maturity Date' });
-        continue;
-      }
-      if (isNaN(new Date(purchaseDateRaw).getTime())) {
-        flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Invalid Purchase Date' });
-        continue;
-      }
-      if (isNaN(new Date(maturityDateRaw).getTime())) {
-        flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Invalid Maturity Date' });
-        continue;
-      }
-      if (!['One-Time', 'Roll-Over'].includes(instruction)) {
-        flaggedRows.push({ rowNumber: i + 2, description, flagReason: `Invalid Instruction: "${instruction}" (must be One-Time or Roll-Over)` });
-        continue;
-      }
+        const row = rows[i];
+        const description = String(row.Description ?? '').trim();
+        const cost = Number(row.Cost ?? 0);
+        const faceValue = Number(row['Face Value'] ?? 0);
+        const instruction = String(row.Instruction ?? '').trim() as 'One-Time' | 'Roll-Over';
+        const purchaseDateRaw = normalizeExcelDate(row['Purchase Date']);
+        const maturityDateRaw = normalizeExcelDate(row['Maturity Date']);
 
-      try {
-        await this.investmentsService.create(
-          { purchaseDate: purchaseDateRaw, description, cost, maturityDate: maturityDateRaw, faceValue, instruction },
-          actorId,
-        );
-        imported++;
-      } catch (err: any) {
-        flaggedRows.push({ rowNumber: i + 2, description, flagReason: err?.message ?? 'Unknown error' });
+        if (!description) {
+          flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Missing Description' });
+          continue;
+        }
+        if (!cost || cost <= 0) {
+          flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Invalid or missing Cost' });
+          continue;
+        }
+        if (!faceValue || faceValue <= 0) {
+          flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Invalid or missing Face Value' });
+          continue;
+        }
+        if (!purchaseDateRaw) {
+          flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Missing Purchase Date' });
+          continue;
+        }
+        if (!maturityDateRaw) {
+          flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Missing Maturity Date' });
+          continue;
+        }
+        if (isNaN(new Date(purchaseDateRaw).getTime())) {
+          flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Invalid Purchase Date' });
+          continue;
+        }
+        if (isNaN(new Date(maturityDateRaw).getTime())) {
+          flaggedRows.push({ rowNumber: i + 2, description, flagReason: 'Invalid Maturity Date' });
+          continue;
+        }
+        if (!['One-Time', 'Roll-Over'].includes(instruction)) {
+          flaggedRows.push({ rowNumber: i + 2, description, flagReason: `Invalid Instruction: "${instruction}" (must be One-Time or Roll-Over)` });
+          continue;
+        }
+
+        try {
+          await this.investmentsService.create(
+            { purchaseDate: purchaseDateRaw, description, cost, maturityDate: maturityDateRaw, faceValue, instruction },
+            actorId,
+          );
+          imported++;
+        } catch (err: any) {
+          flaggedRows.push({ rowNumber: i + 2, description, flagReason: err?.message ?? 'Unknown error' });
+        }
       }
+    } finally {
+      this.progressService.complete(batchId);
     }
 
     await this.batchModel.updateOne(
@@ -105,6 +117,6 @@ export class InvestmentsImportService {
       { imported, flagged: flaggedRows.length, flaggedRows },
     );
 
-    return { batchId: batch._id.toString(), imported, flagged: flaggedRows.length, total: rows.length };
+    return { batchId, imported, flagged: flaggedRows.length, total: rows.length };
   }
 }

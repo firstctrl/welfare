@@ -41,9 +41,13 @@ export async function deleteInvestment(id: string, reason: string): Promise<void
   await apiClient.delete(`/investments/${id}`, { data: { reason } });
 }
 
-export async function importInvestments(file: File): Promise<{ batchId: string; imported: number; flagged: number; total: number }> {
+export async function importInvestments(
+  file: File,
+  jobId?: string,
+): Promise<{ batchId: string; imported: number; flagged: number; total: number }> {
   const form = new FormData();
   form.append('file', file);
+  if (jobId) form.append('jobId', jobId);
   const { data } = await apiClient.post('/investments/import', form);
   return data;
 }

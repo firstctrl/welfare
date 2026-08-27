@@ -8,15 +8,23 @@ import { Upload, CheckCircle, AlertTriangle } from 'lucide-react';
 import { importInvestments } from '@/lib/investments';
 import { Card, CardHeader, CardBody } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { genJobId } from '@/lib/job-id';
+import { useImportProgress } from '@/hooks/use-import-progress';
+import { ImportProgressBar } from '@/components/ui/import-progress-bar';
 
 export function InvestmentsImportClient() {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<{ batchId: string; imported: number; flagged: number; total: number } | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
 
   const mutation = useMutation({
-    mutationFn: () => importInvestments(file!),
+    mutationFn: () => {
+      const id = genJobId();
+      setJobId(id);
+      return importInvestments(file!, id);
+    },
     onSuccess: (data) => {
       setResult(data);
       if (data.flagged === 0) toast.success(`${data.imported} investments imported`);
@@ -24,6 +32,8 @@ export function InvestmentsImportClient() {
     },
     onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Import failed'),
   });
+
+  const progress = useImportProgress(mutation.isPending ? jobId : null);
 
   return (
     <div className="max-w-lg space-y-4">
@@ -56,6 +66,9 @@ export function InvestmentsImportClient() {
             <Button onClick={() => mutation.mutate()} disabled={mutation.isPending} Icon={Upload}>
               {mutation.isPending ? 'Importing…' : 'Import'}
             </Button>
+          )}
+          {mutation.isPending && progress && (
+            <ImportProgressBar processed={progress.processed} total={progress.total} />
           )}
 
           {result && (
