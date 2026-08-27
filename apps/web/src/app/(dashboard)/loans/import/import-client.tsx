@@ -12,6 +12,8 @@ import {
   listLoanImportBatches,
   resolveLoanFlaggedEntry,
   resolveLoanByStaffId,
+  dismissLoanFlaggedEntry,
+  deleteLoanImportBatch,
   listLoans,
 } from '@/lib/loans';
 import { searchStaff } from '@/lib/staff';
@@ -19,6 +21,7 @@ import { Card, CardHeader, CardBody } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/field';
 import { Modal } from '@/components/ui/modal';
+import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { Badge } from '@/components/ui/badge';
 import { fmtGHS, fmtDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -60,6 +63,7 @@ export default function LoanImportClient() {
   const [staffOptions, setStaffOptions] = useState<{ _id: string; fullName: string; staffId: string }[]>([]);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ batchId: string; fileName: string } | null>(null);
 
   const { data: batchHistory } = useQuery({
     queryKey: ['loan-import-batches'],
@@ -135,6 +139,31 @@ export default function LoanImportClient() {
     },
     onError: (err: unknown) => {
       toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Resolve failed');
+    },
+  });
+
+  const dismissMutation = useMutation({
+    mutationFn: (index: number) => dismissLoanFlaggedEntry(activeBatch!._id, index),
+    onSuccess: (updated) => {
+      setActiveBatch(updated);
+      qc.invalidateQueries({ queryKey: ['loan-import-batches'] });
+      toast.success('Entry dismissed');
+    },
+    onError: (err: unknown) => {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Dismiss failed');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (batchId: string) => deleteLoanImportBatch(batchId),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      if (activeBatch && deleteTarget?.batchId === activeBatch._id) setActiveBatch(null);
+      qc.invalidateQueries({ queryKey: ['loan-import-batches'] });
+      toast.success('Import deleted');
+    },
+    onError: (err: unknown) => {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Delete failed');
     },
   });
 
@@ -300,12 +329,21 @@ export default function LoanImportClient() {
                       <td className="px-4 py-2 text-xs">{entry.paidDate ? fmtDate(entry.paidDate) : '—'}</td>
                       <td className="px-4 py-2 text-xs text-danger-600">{entry.reason}</td>
                       <td className="px-4 py-2">
-                        <button
-                          onClick={() => setResolveState({ batchId: activeBatch._id, rowNumber: entry.rowNumber, amount: entry.amount, paidDate: entry.paidDate })}
-                          className="text-primary-600 hover:underline text-xs font-medium"
-                        >
-                          Resolve
-                        </button>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => setResolveState({ batchId: activeBatch._id, rowNumber: entry.rowNumber, amount: entry.amount, paidDate: entry.paidDate })}
+                            className="text-primary-600 hover:underline text-xs font-medium"
+                          >
+                            Resolve
+                          </button>
+                          <button
+                            onClick={() => dismissMutation.mutate(activeBatch!.flaggedEntries.indexOf(entry))}
+                            disabled={dismissMutation.isPending}
+                            className="text-neutral-500 hover:text-danger-600 hover:underline text-xs font-medium"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -376,14 +414,22 @@ export default function LoanImportClient() {
                         <Badge kind={statusKind[batch.status]}>{batch.status}</Badge>
                       </td>
                       <td className="px-4 py-2">
-                        {batch.flaggedRows > 0 && (
+                        <div className="flex items-center gap-3">
+                          {batch.flaggedRows > 0 && (
+                            <button
+                              onClick={() => setActiveBatch(batch)}
+                              className="text-primary-600 hover:underline text-xs font-medium"
+                            >
+                              Resolve
+                            </button>
+                          )}
                           <button
-                            onClick={() => setActiveBatch(batch)}
-                            className="text-primary-600 hover:underline text-xs font-medium"
+                            onClick={() => setDeleteTarget({ batchId: batch._id, fileName: batch.fileName })}
+                            className="text-neutral-500 hover:text-danger-600 hover:underline text-xs font-medium"
                           >
-                            Resolve
+                            Delete
                           </button>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -553,6 +599,16 @@ export default function LoanImportClient() {
           </div>
         </Modal>
       )}
+
+      <ConfirmModal
+        open={!!deleteTarget}
+        title="Delete this import?"
+        body={`This permanently removes "${deleteTarget?.fileName}" from Import History, including its flagged entries. Repayments already recorded from this import are not affected.`}
+        confirmLabel="Delete"
+        isPending={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate(deleteTarget!.batchId)}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

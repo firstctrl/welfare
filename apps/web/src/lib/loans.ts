@@ -129,6 +129,15 @@ export async function resolveLoanByStaffId(
   return data;
 }
 
+export async function dismissLoanFlaggedEntry(batchId: string, index: number): Promise<ILoanRepaymentImportBatch> {
+  const { data } = await apiClient.patch(`/loans/import/${batchId}/dismiss`, { index });
+  return data;
+}
+
+export async function deleteLoanImportBatch(batchId: string): Promise<void> {
+  await apiClient.delete(`/loans/import/${batchId}`);
+}
+
 export interface LoanRecordsImportResult {
   batchId: string;
   created: number;
