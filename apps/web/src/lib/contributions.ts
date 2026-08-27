@@ -88,6 +88,17 @@ export async function resolveFlaggedEntry(
   return data;
 }
 
+export async function resolveContributionsByStaffId(
+  originalStaffId: string,
+  resolvedStaffMongoId: string,
+): Promise<{ resolvedCount: number; batchesUpdated: number }> {
+  const { data } = await apiClient.patch('/contributions/import/resolve-by-staff-id', {
+    originalStaffId,
+    resolvedStaffMongoId,
+  });
+  return data;
+}
+
 export async function deleteContribution(id: string): Promise<void> {
   await apiClient.delete(`/contributions/${id}`);
 }

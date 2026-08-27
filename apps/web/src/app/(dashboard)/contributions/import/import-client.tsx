@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Upload, CheckCircle, AlertTriangle } from 'lucide-react';
 import { ImportBatchStatus } from '@welfare/shared';
 import type { IImportBatch } from '@welfare/shared';
-import { importContributions, listImportBatches, resolveFlaggedEntry } from '@/lib/contributions';
+import { importContributions, listImportBatches, resolveFlaggedEntry, resolveContributionsByStaffId } from '@/lib/contributions';
 import { searchStaff } from '@/lib/staff';
 import { Card, CardHeader, CardBody } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,10 +44,31 @@ export default function ImportClient() {
   const [result, setResult] = useState<{ batchId: string; matched: number; flagged: number; total: number } | null>(null);
   const [activeBatch, setActiveBatch] = useState<IImportBatch | null>(null);
   const [resolveTarget, setResolveTarget] = useState<string | null>(null);
+  const [bulkResolveTarget, setBulkResolveTarget] = useState<string | null>(null);
   const [staffSearch, setStaffSearch] = useState('');
   const [staffOptions, setStaffOptions] = useState<{ _id: string; fullName: string; staffId: string }[]>([]);
 
   const { data: batchHistory } = useQuery({ queryKey: ['import-batches'], queryFn: () => listImportBatches() });
+
+  interface AggregatedFlag {
+    staffId: string;
+    employeeName: string;
+    occurrences: number;
+  }
+
+  const aggregatedFlags: AggregatedFlag[] = (() => {
+    const byStaffId = new Map<string, AggregatedFlag>();
+    for (const batch of batchHistory?.data ?? []) {
+      if (batch.status === ImportBatchStatus.Completed) continue;
+      for (const entry of batch.flaggedEntries) {
+        if (!entry.staffId) continue; // nothing to bulk-map for rows with no Staff ID at all
+        const existing = byStaffId.get(entry.staffId);
+        if (existing) existing.occurrences++;
+        else byStaffId.set(entry.staffId, { staffId: entry.staffId, employeeName: entry.employeeName, occurrences: 1 });
+      }
+    }
+    return Array.from(byStaffId.values());
+  })();
 
   const [jobId, setJobId] = useState<string | null>(null);
 
@@ -83,6 +104,21 @@ export default function ImportClient() {
       setStaffSearch('');
       setStaffOptions([]);
       toast.success('Entry resolved');
+    },
+    onError: (err: unknown) => {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Resolve failed');
+    },
+  });
+
+  const bulkResolveMutation = useMutation({
+    mutationFn: ({ originalStaffId, resolvedId }: { originalStaffId: string; resolvedId: string }) =>
+      resolveContributionsByStaffId(originalStaffId, resolvedId),
+    onSuccess: (result) => {
+      setBulkResolveTarget(null);
+      setStaffSearch('');
+      setStaffOptions([]);
+      qc.invalidateQueries({ queryKey: ['import-batches'] });
+      toast.success(`Mapped ${result.resolvedCount} entries across ${result.batchesUpdated} imports`);
     },
     onError: (err: unknown) => {
       toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Resolve failed');
@@ -242,6 +278,39 @@ export default function ImportClient() {
         </Card>
       )}
 
+      {aggregatedFlags.length > 0 && (
+        <Card className="border-warning-300">
+          <CardHeader title="Flagged Entries (All Pending Imports)" subtitle={`${aggregatedFlags.length} Staff IDs need mapping across one or more imports`} />
+          <CardBody noPadding>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b border-neutral-200 bg-neutral-50">
+                    {['Staff ID', 'Employee Name', 'Occurrences', 'Action'].map((h) => (
+                      <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {aggregatedFlags.map((flag) => (
+                    <tr key={flag.staffId} className="hover:bg-neutral-50">
+                      <td className="px-4 py-2 font-mono text-xs text-neutral-600">{flag.staffId}</td>
+                      <td className="px-4 py-2 text-neutral-700">{flag.employeeName}</td>
+                      <td className="px-4 py-2 text-neutral-500">{flag.occurrences} import{flag.occurrences === 1 ? '' : 's'}</td>
+                      <td className="px-4 py-2">
+                        <button onClick={() => setBulkResolveTarget(flag.staffId)} className="text-primary-600 hover:underline text-xs font-medium">
+                          Map to Staff (all imports)
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
       {/* Import history */}
       <Card>
         <CardHeader title="Import History" />
@@ -307,6 +376,41 @@ export default function ImportClient() {
                     <button
                       className="w-full text-left px-3 py-2 text-sm hover:bg-primary-50 transition-colors duration-fast"
                       onClick={() => resolveMutation.mutate({ originalId: resolveTarget, resolvedId: s._id })}
+                    >
+                      <span className="font-medium text-neutral-900">{s.fullName}</span>
+                      <span className="text-neutral-400 ml-2 text-xs font-mono">{s.staffId}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {bulkResolveTarget && (
+        <Modal
+          open
+          onClose={() => { setBulkResolveTarget(null); setStaffSearch(''); setStaffOptions([]); }}
+          title={`Map "${bulkResolveTarget}" to Staff (all imports)`}
+          size="sm"
+          iconKind="warning"
+        >
+          <div className="mt-3 space-y-3">
+            <Input
+              placeholder="Search staff name or ID…"
+              value={staffSearch}
+              onChange={(e) => handleStaffSearch(e.target.value)}
+              autoFocus
+            />
+            {staffOptions.length > 0 && (
+              <ul className="border border-neutral-200 rounded-sm divide-y divide-neutral-100 max-h-48 overflow-y-auto">
+                {staffOptions.map((s) => (
+                  <li key={s._id}>
+                    <button
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-primary-50 transition-colors duration-fast"
+                      onClick={() => bulkResolveMutation.mutate({ originalStaffId: bulkResolveTarget, resolvedId: s._id })}
+                      disabled={bulkResolveMutation.isPending}
                     >
                       <span className="font-medium text-neutral-900">{s.fullName}</span>
                       <span className="text-neutral-400 ml-2 text-xs font-mono">{s.staffId}</span>
