@@ -21,6 +21,7 @@ import { InvestmentsService } from './investments.service';
 import { InvestmentsImportService } from './investments.import.service';
 import { CreateInvestmentDto } from './dto/create-investment.dto';
 import { UpdateInvestmentDto } from './dto/update-investment.dto';
+import { DismissFlaggedRowDto } from './dto/dismiss-flagged-row.dto';
 
 @Controller('investments')
 export class InvestmentsController {
@@ -77,5 +78,37 @@ export class InvestmentsController {
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
     return this.importService.processImport(file.buffer, file.originalname, user._id.toString(), user.displayName, jobId);
+  }
+
+  @Get('import')
+  @RequirePermission(AppModule.Investments, 'readonly')
+  listImportBatches(@Query('page') page?: string, @Query('limit') limit?: string) {
+    return this.importService.listBatches(page ? +page : 1, limit ? +limit : 20);
+  }
+
+  @Get('import/:batchId')
+  @RequirePermission(AppModule.Investments, 'readonly')
+  getImportBatch(@Param('batchId') batchId: string) {
+    return this.importService.getBatch(batchId);
+  }
+
+  @Patch('import/:batchId/dismiss')
+  @RequirePermission(AppModule.Investments, 'full')
+  dismissFlaggedEntry(
+    @Param('batchId') batchId: string,
+    @Body() dto: DismissFlaggedRowDto,
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
+  ) {
+    return this.importService.dismissFlaggedEntry(batchId, dto.index, user._id.toString(), user.displayName);
+  }
+
+  @Delete('import/:batchId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermission(AppModule.Investments, 'full')
+  async deleteImportBatch(
+    @Param('batchId') batchId: string,
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
+  ) {
+    await this.importService.deleteBatch(batchId, user._id.toString(), user.displayName);
   }
 }
