@@ -63,3 +63,77 @@ describe('StaffImportService — progress tracking', () => {
     expect(createArg._id?.toString()).toBe('507f1f77bcf86cd799439011');
   });
 });
+
+describe('StaffImportService — dismiss/delete', () => {
+  let service: StaffImportService;
+  const mockFindById = jest.fn();
+  const mockFindByIdAndDelete = jest.fn();
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        StaffImportService,
+        {
+          provide: getModelToken(StaffImportBatch.name),
+          useValue: { create: mockCreate, findByIdAndUpdate: mockFindByIdAndUpdate, findById: mockFindById, findByIdAndDelete: mockFindByIdAndDelete },
+        },
+        { provide: StaffService, useValue: mockStaffService },
+        { provide: AuditService, useValue: mockAuditService },
+        { provide: ImportProgressService, useValue: mockProgressService },
+      ],
+    }).compile();
+    service = module.get(StaffImportService);
+    jest.clearAllMocks();
+  });
+
+  it('dismissFlaggedEntry removes the entry at the given index and decrements the count, recomputing status', async () => {
+    const batch: any = {
+      _id: 'b1',
+      status: 'Pending',
+      flaggedRows: 2,
+      flaggedEntries: [
+        { rowNumber: 2, staffId: 'S1', fullName: 'A', reason: 'Missing Email' },
+        { rowNumber: 3, staffId: 'S2', fullName: 'B', reason: 'Missing Email' },
+      ],
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    mockFindById.mockReturnValue({ exec: jest.fn().mockResolvedValue(batch) });
+
+    const result = await service.dismissFlaggedEntry('b1', 0, 'actor-1', 'Actor');
+
+    expect(result.flaggedEntries).toEqual([{ rowNumber: 3, staffId: 'S2', fullName: 'B', reason: 'Missing Email' }]);
+    expect(result.flaggedRows).toBe(1);
+    expect(result.status).toBe('Pending');
+    expect(batch.save).toHaveBeenCalled();
+  });
+
+  it('dismissFlaggedEntry marks the batch Completed once the last flagged entry is cleared', async () => {
+    const batch: any = {
+      _id: 'b1',
+      status: 'Pending',
+      flaggedRows: 1,
+      flaggedEntries: [{ rowNumber: 2, staffId: 'S1', fullName: 'A', reason: 'Missing Email' }],
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    mockFindById.mockReturnValue({ exec: jest.fn().mockResolvedValue(batch) });
+
+    const result = await service.dismissFlaggedEntry('b1', 0, 'actor-1', 'Actor');
+
+    expect(result.status).toBe('Completed');
+  });
+
+  it('dismissFlaggedEntry throws BadRequestException on an out-of-range index', async () => {
+    const batch: any = { _id: 'b1', flaggedRows: 1, flaggedEntries: [{ rowNumber: 2, staffId: 'S1', fullName: 'A', reason: 'x' }], save: jest.fn() };
+    mockFindById.mockReturnValue({ exec: jest.fn().mockResolvedValue(batch) });
+
+    await expect(service.dismissFlaggedEntry('b1', 5, 'actor-1', 'Actor')).rejects.toThrow('Flagged entry index 5 out of range');
+  });
+
+  it('deleteBatch deletes and throws NotFoundException when missing', async () => {
+    mockFindByIdAndDelete.mockReturnValue({ exec: jest.fn().mockResolvedValue({ _id: 'b1' }) });
+    await expect(service.deleteBatch('b1', 'actor-1', 'Actor')).resolves.toBeUndefined();
+
+    mockFindByIdAndDelete.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+    await expect(service.deleteBatch('missing', 'actor-1', 'Actor')).rejects.toThrow('Import batch missing not found');
+  });
+});

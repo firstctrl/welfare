@@ -22,6 +22,7 @@ import { UpdateStaffDto } from './dto/update-staff.dto';
 import { ChangeStatusDto } from './dto/change-status.dto';
 import { StaffQueryDto } from './dto/staff-query.dto';
 import { BulkDeleteDto } from './dto/bulk-delete.dto';
+import { DismissFlaggedEntryDto } from './dto/dismiss-flagged-entry.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { AppModule } from '@welfare/shared';
@@ -58,6 +59,26 @@ export class StaffController {
   @RequirePermission(AppModule.Staff, 'readonly')
   getImportBatch(@Param('batchId') batchId: string) {
     return this.importService.getBatch(batchId);
+  }
+
+  @Patch('import/:batchId/dismiss')
+  @RequirePermission(AppModule.Staff, 'full')
+  dismissFlaggedEntry(
+    @Param('batchId') batchId: string,
+    @Body() dto: DismissFlaggedEntryDto,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.importService.dismissFlaggedEntry(batchId, dto.index, user.sub, user.displayName);
+  }
+
+  @Delete('import/:batchId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermission(AppModule.Staff, 'full')
+  async deleteImportBatch(
+    @Param('batchId') batchId: string,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    await this.importService.deleteBatch(batchId, user.sub, user.displayName);
   }
 
   @Post()
