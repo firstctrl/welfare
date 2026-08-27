@@ -25,6 +25,7 @@ import { ExitSettlementDto } from './dto/exit-settlement.dto';
 import { LoanQueryDto } from './dto/loan-query.dto';
 import { ProcessPayOffDto } from './dto/process-payoff.dto';
 import { BulkDeleteDto } from './dto/bulk-delete.dto';
+import { ResolveLoanByStaffIdDto } from './dto/resolve-loan-by-staff-id.dto';
 
 @Controller('loans')
 export class LoansController {
@@ -113,6 +114,17 @@ export class LoansController {
       dto.resolvedLoanId,
       user.sub,
       user.displayName,
+    );
+  }
+
+  @Patch('import/resolve-by-staff-id')
+  @RequirePermission(AppModule.Loans, 'full')
+  resolveLoanByStaffId(
+    @Body() dto: ResolveLoanByStaffIdDto,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.importService.resolveByStaffId(
+      dto.originalStaffId, dto.resolvedLoanId, user.sub, user.displayName,
     );
   }
 
