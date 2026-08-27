@@ -250,6 +250,7 @@ export class StaffService implements OnModuleInit {
       phoneNumber: s.phoneNumber,
       level: s.level,
       status: s.status,
+      dateOfEmployment: s.dateOfEmployment,
     }));
     if (docs.length > 0) {
       await this.meiliClient.index('staff').addDocuments(docs, { primaryKey: 'id' });
@@ -266,6 +267,7 @@ export class StaffService implements OnModuleInit {
       phoneNumber: staff.phoneNumber,
       level: staff.level,
       status: staff.status,
+      dateOfEmployment: staff.dateOfEmployment,
     };
     this.meiliClient
       .index('staff')
