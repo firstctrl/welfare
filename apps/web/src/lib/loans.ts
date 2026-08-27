@@ -168,6 +168,15 @@ export async function getLoanRecordsImportBatch(batchId: string): Promise<ILoanR
   return data;
 }
 
+export async function dismissLoanRecordsFlaggedEntry(batchId: string, index: number): Promise<ILoanRecordsImportBatch> {
+  const { data } = await apiClient.patch(`/loans/records-import/${batchId}/dismiss`, { index });
+  return data;
+}
+
+export async function deleteLoanRecordsImportBatch(batchId: string): Promise<void> {
+  await apiClient.delete(`/loans/records-import/${batchId}`);
+}
+
 export async function deleteLoan(id: string): Promise<void> {
   await apiClient.delete(`/loans/${id}`);
 }
