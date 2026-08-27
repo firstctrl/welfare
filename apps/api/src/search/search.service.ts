@@ -32,7 +32,7 @@ export class SearchService {
       type: 'staff' as const,
       id: h.id,
       title: h.fullName,
-      subtitle: `${h.staffId} · ${h.level} · ${h.status}`,
+      subtitle: `${h.staffId} · ${new Date(h.dateOfEmployment).toLocaleDateString('en-GB')} · ${h.status}`,
       url: `/staff/${h.id}`,
     }));
 

@@ -173,128 +173,202 @@ export function NewLoanClient() {
   return (
     <div className="grid grid-cols-2 gap-6 items-start">
       <div>
-      <Card>
-        <CardHeader title="Loan Details" />
-        <CardBody>
-          <form onSubmit={handleSubmit((v) => mutation.mutate(v))} className="space-y-6">
-            <div className="grid grid-cols-2 gap-5">
-              {/* Staff picker */}
-              <div className="space-y-1.5">
-                <Field label="Staff Member" required error={errors.staffId?.message}>
-                  <StaffPicker
-                    label="Staff Member"
-                    value={selectedStaff?.fullName ?? ''}
-                    excludeId={watchGuarantorId}
-                    onSelect={selectStaff}
-                  />
-                </Field>
-                <input type="hidden" {...register('staffId')} />
-                {selectedStaff && eligibility && (
-                  <div className={cn('flex items-center gap-1.5 text-xs mt-1 px-2 py-1 rounded-xs', eligibility.eligible ? 'bg-success-50 text-success-700' : 'bg-danger-50 text-danger-700')}>
-                    {eligibility.eligible
-                      ? <><CheckCircle size={12} strokeWidth={1.75} /> Eligible for a loan</>
-                      : <><XCircle size={12} strokeWidth={1.75} /> Ineligible: {eligibility.reason}</>
-                    }
-                  </div>
-                )}
-              </div>
+        <Card>
+          <CardHeader title="Loan Details" />
+          <CardBody>
+            <form onSubmit={handleSubmit((v) => mutation.mutate(v))} className="space-y-6">
+              <div className="grid grid-cols-2 gap-5">
+                {/* Staff picker */}
+                <div className="space-y-1.5">
+                  <Field label="Staff Member" required error={errors.staffId?.message}>
+                    <StaffPicker
+                      label="Staff Member"
+                      value={selectedStaff?.fullName ?? ''}
+                      excludeId={watchGuarantorId}
+                      onSelect={selectStaff}
+                    />
+                  </Field>
+                  <input type="hidden" {...register('staffId')} />
+                  {selectedStaff && eligibility && (
+                    <div
+                      className={cn(
+                        'flex items-center gap-1.5 text-xs mt-1 px-2 py-1 rounded-xs',
+                        eligibility.eligible
+                          ? 'bg-success-50 text-success-700'
+                          : 'bg-danger-50 text-danger-700',
+                      )}
+                    >
+                      {eligibility.eligible ? (
+                        <>
+                          <CheckCircle size={12} strokeWidth={1.75} /> Eligible for a loan
+                        </>
+                      ) : (
+                        <>
+                          <XCircle size={12} strokeWidth={1.75} /> Ineligible: {eligibility.reason}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
 
-              {/* Guarantor picker */}
-              <div className="space-y-1.5">
-                <Field label="Guarantor" required error={errors.guarantorId?.message}>
-                  <StaffPicker
-                    label="Guarantor"
-                    value={selectedGuarantor?.fullName ?? ''}
-                    excludeId={watchStaffId}
-                    onSelect={selectGuarantor}
+                {/* Guarantor picker */}
+                <div className="space-y-1.5">
+                  <Field label="Guarantor" required error={errors.guarantorId?.message}>
+                    <StaffPicker
+                      label="Guarantor"
+                      value={selectedGuarantor?.fullName ?? ''}
+                      excludeId={watchStaffId}
+                      onSelect={selectGuarantor}
+                      disabled={ineligible}
+                    />
+                  </Field>
+                  <input type="hidden" {...register('guarantorId')} />
+                  {selectedGuarantor && (
+                    <div
+                      className={cn(
+                        'flex items-center gap-1.5 text-xs mt-1 px-2 py-1 rounded-xs',
+                        guarantorAtCap
+                          ? 'bg-danger-50 text-danger-700'
+                          : 'bg-neutral-50 text-neutral-600',
+                      )}
+                    >
+                      {guarantorAtCap ? (
+                        <>
+                          <XCircle size={12} strokeWidth={1.75} /> At cap ({activeGuaranteeCount}/
+                          {maxPerGuarantor} active)
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle size={12} strokeWidth={1.75} /> {activeGuaranteeCount} active
+                          guarantee{activeGuaranteeCount !== 1 ? 's' : ''}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <Field
+                  label={`Amount${cfg ? ` (min: ${fmtGHS(minAmount)}, max: ${fmtGHS(maxAmount)})` : ''}`}
+                  required
+                  error={
+                    errors.principalAmount?.message ??
+                    (principalOutOfRange
+                      ? `Amount must be between ${fmtGHS(minAmount)} and ${fmtGHS(maxAmount)}`
+                      : undefined)
+                  }
+                >
+                  <Input
+                    {...register('principalAmount')}
+                    type="number"
+                    min={minAmount}
+                    max={maxAmount}
+                    step="0.01"
+                    prefix="₵"
+                    error={!!errors.principalAmount || principalOutOfRange}
                     disabled={ineligible}
                   />
                 </Field>
-                <input type="hidden" {...register('guarantorId')} />
-                {selectedGuarantor && (
-                  <div className={cn('flex items-center gap-1.5 text-xs mt-1 px-2 py-1 rounded-xs', guarantorAtCap ? 'bg-danger-50 text-danger-700' : 'bg-neutral-50 text-neutral-600')}>
-                    {guarantorAtCap
-                      ? <><XCircle size={12} strokeWidth={1.75} /> At cap ({activeGuaranteeCount}/{maxPerGuarantor} active)</>
-                      : <><CheckCircle size={12} strokeWidth={1.75} /> {activeGuaranteeCount} active guarantee{activeGuaranteeCount !== 1 ? 's' : ''}</>
-                    }
-                  </div>
-                )}
-              </div>
 
-              <Field
-                label={`Principal Amount${cfg ? ` (min: ${fmtGHS(minAmount)}, max: ${fmtGHS(maxAmount)})` : ''}`}
-                required
-                error={errors.principalAmount?.message ?? (principalOutOfRange ? `Amount must be between ${fmtGHS(minAmount)} and ${fmtGHS(maxAmount)}` : undefined)}
-              >
-                <Input {...register('principalAmount')} type="number" min={minAmount} max={maxAmount} step="0.01" prefix="₵" error={!!errors.principalAmount || principalOutOfRange} disabled={ineligible} />
-              </Field>
+                <div className="space-y-1.5">
+                  <Field label="Tenure" required error={errors.tenureMonths?.message}>
+                    <Select
+                      {...register('tenureMonths')}
+                      options={Array.from({ length: 12 }, (_, i) => ({
+                        value: String(i + 1),
+                        label: `${i + 1} month${i > 0 ? 's' : ''}`,
+                      }))}
+                      error={!!errors.tenureMonths}
+                      disabled={ineligible}
+                    />
+                  </Field>
+                  {cfg && (
+                    <p className="text-xs text-neutral-500">
+                      Interest rate: <strong>{derivedRate}%</strong>{' '}
+                      {(watchTenure ?? 6) <= 6 ? '(≤ 6 months)' : '(> 6 months)'}
+                    </p>
+                  )}
+                </div>
 
-              <div className="space-y-1.5">
-                <Field label="Tenure" required error={errors.tenureMonths?.message}>
-                  <Select
-                    {...register('tenureMonths')}
-                    options={Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `${i + 1} month${i > 0 ? 's' : ''}` }))}
-                    error={!!errors.tenureMonths}
+                <Field label="Disbursed Date" required error={errors.disbursedDate?.message}>
+                  <Input
+                    {...register('disbursedDate')}
+                    type="date"
+                    error={!!errors.disbursedDate}
                     disabled={ineligible}
                   />
                 </Field>
-                {cfg && (
-                  <p className="text-xs text-neutral-500">Interest rate: <strong>{derivedRate}%</strong> {(watchTenure ?? 6) <= 6 ? '(≤ 6 months)' : '(> 6 months)'}</p>
-                )}
+
+                <Field label="Cheque No." required error={errors.chequeNo?.message}>
+                  <Input
+                    {...register('chequeNo')}
+                    placeholder="e.g. CHQ-00123"
+                    error={!!errors.chequeNo}
+                    disabled={ineligible}
+                  />
+                </Field>
+
+                <Field label="PV No." required error={errors.pvNo?.message}>
+                  <Input
+                    {...register('pvNo')}
+                    placeholder="e.g. PV-2024-001"
+                    error={!!errors.pvNo}
+                    disabled={ineligible}
+                  />
+                </Field>
+
+                <div className="space-y-1.5">
+                  <label className="text-base font-medium text-neutral-700">
+                    Approval Document
+                  </label>
+                  <input
+                    type="file"
+                    accept=".pdf,image/jpeg,image/png"
+                    disabled={ineligible}
+                    onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+                    className="w-full text-sm text-neutral-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-xs file:border-0 file:text-sm file:bg-neutral-100 file:text-neutral-700 hover:file:bg-neutral-200 file:font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  {docFile && <p className="text-xs text-neutral-500">{docFile.name}</p>}
+                </div>
               </div>
 
-              <Field label="Disbursed Date" required error={errors.disbursedDate?.message}>
-                <Input {...register('disbursedDate')} type="date" error={!!errors.disbursedDate} disabled={ineligible} />
-              </Field>
+              {/* Derived summary */}
+              {watchPrincipal > 0 && watchTenure > 0 && (
+                <div className="bg-primary-50 border border-primary-200 rounded-sm p-4 grid grid-cols-3 gap-4">
+                  {(
+                    [
+                      ['Interest Rate', `${derivedRate}%`],
+                      ['Total Repayable', fmtGHS(totalRepayable)],
+                      ['Monthly Instalment', fmtGHS(monthlyInstalment)],
+                    ] as [string, string][]
+                  ).map(([label, value]) => (
+                    <div key={label}>
+                      <p className="text-xs text-primary-600 font-medium uppercase tracking-wide">
+                        {label}
+                      </p>
+                      <p className="text-lg font-bold text-primary-900 mt-0.5 font-mono tabular">
+                        {value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-              <Field label="Cheque No." required error={errors.chequeNo?.message}>
-                <Input {...register('chequeNo')} placeholder="e.g. CHQ-00123" error={!!errors.chequeNo} disabled={ineligible} />
-              </Field>
-
-              <Field label="PV No." required error={errors.pvNo?.message}>
-                <Input {...register('pvNo')} placeholder="e.g. PV-2024-001" error={!!errors.pvNo} disabled={ineligible} />
-              </Field>
-
-              <div className="space-y-1.5">
-                <label className="text-base font-medium text-neutral-700">Approval Document</label>
-                <input
-                  type="file"
-                  accept=".pdf,image/jpeg,image/png"
-                  disabled={ineligible}
-                  onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
-                  className="w-full text-sm text-neutral-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-xs file:border-0 file:text-sm file:bg-neutral-100 file:text-neutral-700 hover:file:bg-neutral-200 file:font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-                {docFile && <p className="text-xs text-neutral-500">{docFile.name}</p>}
+              <div className="flex gap-3 pt-2 border-t border-neutral-100">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={submitDisabled}
+                  loading={mutation.isPending}
+                >
+                  Record Loan
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => router.push('/loans')}>
+                  Cancel
+                </Button>
               </div>
-            </div>
-
-            {/* Derived summary */}
-            {watchPrincipal > 0 && watchTenure > 0 && (
-              <div className="bg-primary-50 border border-primary-200 rounded-sm p-4 grid grid-cols-3 gap-4">
-                {([
-                  ['Interest Rate', `${derivedRate}%`],
-                  ['Total Repayable', fmtGHS(totalRepayable)],
-                  ['Monthly Instalment', fmtGHS(monthlyInstalment)],
-                ] as [string, string][]).map(([label, value]) => (
-                  <div key={label}>
-                    <p className="text-xs text-primary-600 font-medium uppercase tracking-wide">{label}</p>
-                    <p className="text-lg font-bold text-primary-900 mt-0.5 font-mono tabular">{value}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="flex gap-3 pt-2 border-t border-neutral-100">
-              <Button type="submit" variant="primary" disabled={submitDisabled} loading={mutation.isPending}>
-                Record Loan
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => router.push('/loans')}>
-                Cancel
-              </Button>
-            </div>
-          </form>
-        </CardBody>
-      </Card>
+            </form>
+          </CardBody>
+        </Card>
       </div>
 
       {/* Schedule preview — right column */}
@@ -306,14 +380,21 @@ export function NewLoanClient() {
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-b border-neutral-200 bg-neutral-50">
-                    {([
-                      { label: '#',         align: 'left'  },
-                      { label: 'Due Date',  align: 'left'  },
-                      { label: 'Principal', align: 'right' },
-                      { label: 'Interest',  align: 'right' },
-                      { label: 'Total',     align: 'right' },
-                    ] as { label: string; align: 'left' | 'right' }[]).map((h) => (
-                      <th key={h.label} className={`px-3 py-2 text-${h.align} text-xs font-semibold text-neutral-500 uppercase tracking-wide`}>{h.label}</th>
+                    {(
+                      [
+                        { label: '#', align: 'left' },
+                        { label: 'Due Date', align: 'left' },
+                        { label: 'Principal', align: 'right' },
+                        { label: 'Interest', align: 'right' },
+                        { label: 'Total', align: 'right' },
+                      ] as { label: string; align: 'left' | 'right' }[]
+                    ).map((h) => (
+                      <th
+                        key={h.label}
+                        className={`px-3 py-2 text-${h.align} text-xs font-semibold text-neutral-500 uppercase tracking-wide`}
+                      >
+                        {h.label}
+                      </th>
                     ))}
                   </tr>
                 </thead>
@@ -321,24 +402,36 @@ export function NewLoanClient() {
                   {schedulePreview.map((row) => (
                     <tr key={row.n} className="hover:bg-neutral-50">
                       <td className="px-3 py-2 text-neutral-500">{row.n}</td>
-                      <td className="px-3 py-2 font-mono tabular text-xs">{fmtDate(row.dueDate)}</td>
-                      <td className="px-3 py-2 font-mono tabular font-medium text-right">{fmtGHS(row.principalAmt)}</td>
-                      <td className="px-3 py-2 font-mono tabular text-neutral-500 text-right">{fmtGHS(row.interestAmt)}</td>
-                      <td className="px-3 py-2 font-mono tabular font-semibold text-right">{fmtGHS(row.instalment)}</td>
+                      <td className="px-3 py-2 font-mono tabular text-xs">
+                        {fmtDate(row.dueDate)}
+                      </td>
+                      <td className="px-3 py-2 font-mono tabular font-medium text-right">
+                        {fmtGHS(row.principalAmt)}
+                      </td>
+                      <td className="px-3 py-2 font-mono tabular text-neutral-500 text-right">
+                        {fmtGHS(row.interestAmt)}
+                      </td>
+                      <td className="px-3 py-2 font-mono tabular font-semibold text-right">
+                        {fmtGHS(row.instalment)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <div className="px-3 py-2 border-t border-neutral-100 bg-neutral-50 text-xs text-neutral-500 flex justify-between">
                 <span>Total repayable</span>
-                <span className="font-semibold font-mono tabular text-neutral-900">{fmtGHS(totalRepayable)}</span>
+                <span className="font-semibold font-mono tabular text-neutral-900">
+                  {fmtGHS(totalRepayable)}
+                </span>
               </div>
             </CardBody>
           </Card>
         ) : (
           <Card>
             <CardBody>
-              <p className="text-xs text-neutral-400 text-center py-4">Fill in amount, tenure and date to preview schedule</p>
+              <p className="text-xs text-neutral-400 text-center py-4">
+                Fill in amount, tenure and date to preview schedule
+              </p>
             </CardBody>
           </Card>
         )}
