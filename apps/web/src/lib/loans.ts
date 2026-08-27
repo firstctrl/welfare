@@ -86,9 +86,10 @@ export interface LoanImportResult {
   total: number;
 }
 
-export async function importLoanRepayments(file: File): Promise<LoanImportResult> {
+export async function importLoanRepayments(file: File, jobId?: string): Promise<LoanImportResult> {
   const form = new FormData();
   form.append('file', file);
+  if (jobId) form.append('jobId', jobId);
   const { data } = await apiClient.post('/loans/import', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });

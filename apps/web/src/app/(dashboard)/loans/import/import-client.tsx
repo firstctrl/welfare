@@ -21,6 +21,9 @@ import { Modal } from '@/components/ui/modal';
 import { Badge } from '@/components/ui/badge';
 import { fmtGHS, fmtDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { genJobId } from '@/lib/job-id';
+import { useImportProgress } from '@/hooks/use-import-progress';
+import { ImportProgressBar } from '@/components/ui/import-progress-bar';
 
 const statusKind: Record<ImportBatchStatus, 'success' | 'warning' | 'info'> = {
   [ImportBatchStatus.Pending]:   'warning',
@@ -54,6 +57,7 @@ export default function LoanImportClient() {
   const [staffSearch, setStaffSearch] = useState('');
   const [staffOptions, setStaffOptions] = useState<{ _id: string; fullName: string; staffId: string }[]>([]);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
 
   const { data: batchHistory } = useQuery({
     queryKey: ['loan-import-batches'],
@@ -67,7 +71,11 @@ export default function LoanImportClient() {
   });
 
   const importMutation = useMutation({
-    mutationFn: () => importLoanRepayments(file!),
+    mutationFn: () => {
+      const id = genJobId();
+      setJobId(id);
+      return importLoanRepayments(file!, id);
+    },
     onSuccess: (data) => {
       setResult(data);
       qc.invalidateQueries({ queryKey: ['loan-import-batches'] });
@@ -77,6 +85,8 @@ export default function LoanImportClient() {
       toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Import failed');
     },
   });
+
+  const progress = useImportProgress(importMutation.isPending ? jobId : null);
 
   const resolveMutation = useMutation({
     mutationFn: ({ resolvedLoanId }: { resolvedLoanId: string }) =>
@@ -200,6 +210,9 @@ export default function LoanImportClient() {
           >
             Import
           </Button>
+          {importMutation.isPending && progress && (
+            <ImportProgressBar processed={progress.processed} total={progress.total} />
+          )}
         </CardBody>
       </Card>
 
