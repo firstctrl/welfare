@@ -39,9 +39,10 @@ export class StaffController {
   @UseInterceptors(FileInterceptor('file'))
   importStaff(
     @UploadedFile() file: Express.Multer.File,
+    @Body('jobId') jobId: string | undefined,
     @CurrentUser() user: { sub: string; displayName: string },
   ) {
-    return this.importService.processImport(file.buffer, file.originalname, user.sub, user.displayName);
+    return this.importService.processImport(file.buffer, file.originalname, user.sub, user.displayName, jobId);
   }
 
   @Get('import')
