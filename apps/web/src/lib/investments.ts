@@ -1,5 +1,5 @@
 import { apiClient } from './api-client';
-import type { IInvestmentRow } from '@welfare/shared';
+import type { IInvestmentRow, IInvestmentImportBatch, PaginatedResult } from '@welfare/shared';
 
 export interface PaginatedInvestments {
   data: IInvestmentRow[];
@@ -50,4 +50,26 @@ export async function importInvestments(
   if (jobId) form.append('jobId', jobId);
   const { data } = await apiClient.post('/investments/import', form);
   return data;
+}
+
+export async function listInvestmentImportBatches(
+  page = 1,
+  limit = 20,
+): Promise<PaginatedResult<IInvestmentImportBatch>> {
+  const { data } = await apiClient.get('/investments/import', { params: { page, limit } });
+  return data;
+}
+
+export async function getInvestmentImportBatch(batchId: string): Promise<IInvestmentImportBatch> {
+  const { data } = await apiClient.get(`/investments/import/${batchId}`);
+  return data;
+}
+
+export async function dismissInvestmentFlaggedEntry(batchId: string, index: number): Promise<IInvestmentImportBatch> {
+  const { data } = await apiClient.patch(`/investments/import/${batchId}/dismiss`, { index });
+  return data;
+}
+
+export async function deleteInvestmentImportBatch(batchId: string): Promise<void> {
+  await apiClient.delete(`/investments/import/${batchId}`);
 }
