@@ -123,9 +123,10 @@ export class LoansController {
   @UseInterceptors(FileInterceptor('file'))
   importLoanRecords(
     @UploadedFile() file: Express.Multer.File,
+    @Body('jobId') jobId: string | undefined,
     @CurrentUser() user: { sub: string; displayName: string },
   ) {
-    return this.recordsImportService.processImport(file.buffer, file.originalname, user.sub, user.displayName);
+    return this.recordsImportService.processImport(file.buffer, file.originalname, user.sub, user.displayName, jobId);
   }
 
   @Get('records-import')

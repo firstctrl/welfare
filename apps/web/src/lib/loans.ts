@@ -125,9 +125,10 @@ export interface LoanRecordsImportResult {
   total: number;
 }
 
-export async function importLoanRecords(file: File): Promise<LoanRecordsImportResult> {
+export async function importLoanRecords(file: File, jobId?: string): Promise<LoanRecordsImportResult> {
   const form = new FormData();
   form.append('file', file);
+  if (jobId) form.append('jobId', jobId);
   const { data } = await apiClient.post('/loans/records-import', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
