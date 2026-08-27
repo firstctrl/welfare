@@ -27,6 +27,7 @@ export class ContributionsController {
     @UploadedFile() file: Express.Multer.File,
     @Body('month') month?: string,
     @Body('year') year?: string,
+    @Body('jobId') jobId?: string,
     @CurrentUser() user?: { sub: string; displayName: string },
   ) {
     if (!file) throw new Error('No file uploaded');
@@ -37,6 +38,7 @@ export class ContributionsController {
       year ? parseInt(year, 10) : undefined,
       user?.sub ?? 'system',
       user?.displayName ?? 'system',
+      jobId,
     );
   }
 

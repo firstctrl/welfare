@@ -50,11 +50,13 @@ export async function importContributions(
   file: File,
   month?: number,
   year?: number,
+  jobId?: string,
 ): Promise<ImportResult> {
   const form = new FormData();
   form.append('file', file);
   if (month) form.append('month', String(month));
   if (year) form.append('year', String(year));
+  if (jobId) form.append('jobId', jobId);
   const { data } = await apiClient.post('/contributions/import', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });

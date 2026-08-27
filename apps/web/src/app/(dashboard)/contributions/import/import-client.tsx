@@ -16,6 +16,9 @@ import { Modal } from '@/components/ui/modal';
 import { Badge } from '@/components/ui/badge';
 import { fmtGHS } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { genJobId } from '@/lib/job-id';
+import { useImportProgress } from '@/hooks/use-import-progress';
+import { ImportProgressBar } from '@/components/ui/import-progress-bar';
 
 const statusKind: Record<ImportBatchStatus, 'success' | 'warning' | 'info'> = {
   [ImportBatchStatus.Pending]:   'warning',
@@ -46,12 +49,19 @@ export default function ImportClient() {
 
   const { data: batchHistory } = useQuery({ queryKey: ['import-batches'], queryFn: () => listImportBatches() });
 
+  const [jobId, setJobId] = useState<string | null>(null);
+
   const importMutation = useMutation({
-    mutationFn: () => importContributions(
-      file!,
-      monthOverride ? parseInt(monthOverride, 10) : undefined,
-      yearOverride ? parseInt(yearOverride, 10) : undefined,
-    ),
+    mutationFn: () => {
+      const id = genJobId();
+      setJobId(id);
+      return importContributions(
+        file!,
+        monthOverride ? parseInt(monthOverride, 10) : undefined,
+        yearOverride ? parseInt(yearOverride, 10) : undefined,
+        id,
+      );
+    },
     onSuccess: (data) => {
       setResult(data);
       qc.invalidateQueries({ queryKey: ['import-batches'] });
@@ -61,6 +71,8 @@ export default function ImportClient() {
       toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Import failed');
     },
   });
+
+  const progress = useImportProgress(importMutation.isPending ? jobId : null);
 
   const resolveMutation = useMutation({
     mutationFn: ({ originalId, resolvedId }: { originalId: string; resolvedId: string }) =>
@@ -172,6 +184,9 @@ export default function ImportClient() {
           <Button variant="primary" Icon={Upload} disabled={!file || importMutation.isPending} loading={importMutation.isPending} onClick={() => importMutation.mutate()}>
             Import
           </Button>
+          {importMutation.isPending && progress && (
+            <ImportProgressBar processed={progress.processed} total={progress.total} />
+          )}
         </CardBody>
       </Card>
 
