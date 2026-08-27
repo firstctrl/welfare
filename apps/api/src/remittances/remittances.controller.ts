@@ -28,6 +28,7 @@ import { RemittancesImportService } from './remittances.import.service';
 import { CreateRemittanceDto } from './dto/create-remittance.dto';
 import { UpdateRemittanceDto } from './dto/update-remittance.dto';
 import { RemittanceQueryDto } from './dto/remittance-query.dto';
+import { DismissFlaggedRowDto } from './dto/dismiss-flagged-row.dto';
 
 const CSV_COLUMNS = [
   { header: 'Period',           field: 'period' },
@@ -76,6 +77,38 @@ export class RemittancesController {
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
     return this.importService.processImport(file.buffer, file.originalname, user._id.toString(), user.displayName, jobId);
+  }
+
+  @Get('import')
+  @RequirePermission(AppModule.Remittances, 'readonly')
+  listImportBatches(@Query('page') page?: string, @Query('limit') limit?: string) {
+    return this.importService.listBatches(page ? +page : 1, limit ? +limit : 20);
+  }
+
+  @Get('import/:batchId')
+  @RequirePermission(AppModule.Remittances, 'readonly')
+  getImportBatch(@Param('batchId') batchId: string) {
+    return this.importService.getBatch(batchId);
+  }
+
+  @Patch('import/:batchId/dismiss')
+  @RequirePermission(AppModule.Remittances, 'full')
+  dismissFlaggedEntry(
+    @Param('batchId') batchId: string,
+    @Body() dto: DismissFlaggedRowDto,
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
+  ) {
+    return this.importService.dismissFlaggedEntry(batchId, dto.index, user._id.toString(), user.displayName);
+  }
+
+  @Delete('import/:batchId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermission(AppModule.Remittances, 'full')
+  async deleteImportBatch(
+    @Param('batchId') batchId: string,
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
+  ) {
+    await this.importService.deleteBatch(batchId, user._id.toString(), user.displayName);
   }
 
   @Patch(':id')
