@@ -41,8 +41,8 @@ const profileSchema = z.object({
   email:                   z.string().email('Invalid email').optional().or(z.literal('')),
   dateOfBirth:             z.string().min(1, 'Required'),
   dateOfEmployment:        z.string().min(1, 'Required'),
-  dateOfFirstContribution: z.string().min(1, 'Required'),
-  level:                   z.string().min(1, 'Required'),
+  dateOfFirstContribution: z.string().optional().or(z.literal('')),
+  level:                   z.string().optional().or(z.literal('')),
   point:                   z.coerce.number().min(0),
 });
 type ProfileForm = z.infer<typeof profileSchema>;
@@ -153,7 +153,12 @@ export default function StaffDetailClient({ id }: { id: string }) {
   const statusForm = useForm<StatusForm>({ resolver: zodResolver(statusSchema) });
 
   const updateMutation = useMutation({
-    mutationFn: (values: ProfileForm) => updateStaff(id, { ...values, email: values.email || undefined }),
+    mutationFn: (values: ProfileForm) => updateStaff(id, {
+      ...values,
+      email: values.email || undefined,
+      dateOfFirstContribution: values.dateOfFirstContribution || undefined,
+      level: values.level || undefined,
+    }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['staff', id] }); setEditing(false); toast.success('Profile updated'); },
     onError: (err: unknown) => { toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Update failed'); },
   });
