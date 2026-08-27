@@ -115,6 +115,15 @@ export async function getStaffImportBatch(batchId: string): Promise<IStaffImport
   return data;
 }
 
+export async function dismissStaffFlaggedEntry(batchId: string, index: number): Promise<IStaffImportBatch> {
+  const { data } = await apiClient.patch(`/staff/import/${batchId}/dismiss`, { index });
+  return data;
+}
+
+export async function deleteStaffImportBatch(batchId: string): Promise<void> {
+  await apiClient.delete(`/staff/import/${batchId}`);
+}
+
 export async function bulkDeleteStaff(ids: string[]): Promise<{ deleted: number }> {
   const { data } = await apiClient.delete('/staff/bulk', { data: { ids } });
   return data;

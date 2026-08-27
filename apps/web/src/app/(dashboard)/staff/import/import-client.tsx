@@ -7,10 +7,11 @@ import { toast } from 'sonner';
 import { Upload, CheckCircle, AlertTriangle } from 'lucide-react';
 import { ImportBatchStatus } from '@welfare/shared';
 import type { IStaffImportBatch } from '@welfare/shared';
-import { importStaff, listStaffImportBatches } from '@/lib/staff';
+import { importStaff, listStaffImportBatches, dismissStaffFlaggedEntry, deleteStaffImportBatch } from '@/lib/staff';
 import { Card, CardHeader, CardBody } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { fmtDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { normalizeExcelDate } from '@/lib/excel-date';
@@ -45,6 +46,7 @@ export default function StaffImportClient() {
   const [result, setResult] = useState<{ batchId: string; created: number; flagged: number; total: number } | null>(null);
   const [activeBatch, setActiveBatch] = useState<IStaffImportBatch | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ batchId: string; fileName: string } | null>(null);
 
   const { data: batchHistory } = useQuery({
     queryKey: ['staff-import-batches'],
@@ -68,6 +70,31 @@ export default function StaffImportClient() {
   });
 
   const progress = useImportProgress(importMutation.isPending ? jobId : null);
+
+  const dismissMutation = useMutation({
+    mutationFn: (index: number) => dismissStaffFlaggedEntry(activeBatch!._id, index),
+    onSuccess: (updated) => {
+      setActiveBatch(updated);
+      qc.invalidateQueries({ queryKey: ['staff-import-batches'] });
+      toast.success('Entry dismissed');
+    },
+    onError: (err: unknown) => {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Dismiss failed');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (batchId: string) => deleteStaffImportBatch(batchId),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      if (activeBatch && deleteTarget?.batchId === activeBatch._id) setActiveBatch(null);
+      qc.invalidateQueries({ queryKey: ['staff-import-batches'] });
+      toast.success('Import deleted');
+    },
+    onError: (err: unknown) => {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Delete failed');
+    },
+  });
 
   function handleFileChange(f: File) {
     setFile(f);
@@ -227,7 +254,7 @@ export default function StaffImportClient() {
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-b border-neutral-200 bg-neutral-50">
-                    {['Row', 'Staff ID', 'Full Name', 'Reason'].map((h) => (
+                    {['Row', 'Staff ID', 'Full Name', 'Reason', ''].map((h) => (
                       <th
                         key={h}
                         className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide"
@@ -238,7 +265,7 @@ export default function StaffImportClient() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
-                  {activeBatch.flaggedEntries.map((entry) => (
+                  {activeBatch.flaggedEntries.map((entry, index) => (
                     <tr key={entry.rowNumber} className="hover:bg-neutral-50">
                       <td className="px-4 py-2 text-neutral-400 text-xs">{entry.rowNumber}</td>
                       <td className="px-4 py-2 font-mono text-xs text-neutral-600">
@@ -246,6 +273,15 @@ export default function StaffImportClient() {
                       </td>
                       <td className="px-4 py-2 text-neutral-700">{entry.fullName || '—'}</td>
                       <td className="px-4 py-2 text-xs text-danger-600">{entry.reason}</td>
+                      <td className="px-4 py-2">
+                        <button
+                          onClick={() => dismissMutation.mutate(index)}
+                          disabled={dismissMutation.isPending}
+                          className="text-neutral-500 hover:text-danger-600 hover:underline text-xs font-medium"
+                        >
+                          Dismiss
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -295,14 +331,22 @@ export default function StaffImportClient() {
                         <Badge kind={statusKind[batch.status]}>{batch.status}</Badge>
                       </td>
                       <td className="px-4 py-2">
-                        {batch.flaggedRows > 0 && (
+                        <div className="flex items-center gap-3">
+                          {batch.flaggedRows > 0 && (
+                            <button
+                              onClick={() => setActiveBatch(batch)}
+                              className="text-primary-600 hover:underline text-xs font-medium"
+                            >
+                              View Flagged
+                            </button>
+                          )}
                           <button
-                            onClick={() => setActiveBatch(batch)}
-                            className="text-primary-600 hover:underline text-xs font-medium"
+                            onClick={() => setDeleteTarget({ batchId: batch._id, fileName: batch.fileName })}
+                            className="text-neutral-500 hover:text-danger-600 hover:underline text-xs font-medium"
                           >
-                            View Flagged
+                            Delete
                           </button>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -312,6 +356,16 @@ export default function StaffImportClient() {
           )}
         </CardBody>
       </Card>
+
+      <ConfirmModal
+        open={!!deleteTarget}
+        title="Delete this import?"
+        body={`This permanently removes "${deleteTarget?.fileName}" from Import History, including its flagged entries. Staff already created from this import are not affected.`}
+        confirmLabel="Delete"
+        isPending={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate(deleteTarget!.batchId)}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
