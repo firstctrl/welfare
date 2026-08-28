@@ -1,5 +1,4 @@
 export enum ConfigKey {
-  MonthlyContributionAmount = 'MONTHLY_CONTRIBUTION_AMOUNT',
   LoanMinAmount = 'LOAN_MIN_AMOUNT',
   LoanMaxAmount = 'LOAN_MAX_AMOUNT',
   LoanMaxTenure = 'LOAN_MAX_TENURE',

@@ -22,7 +22,6 @@ const REDIS_KEY = 'config:all';
 const REDIS_TTL = 300; // 5 minutes
 
 const SEED_DEFAULTS: Array<{ key: ConfigKey; value: string; description?: string }> = [
-  { key: ConfigKey.MonthlyContributionAmount, value: '100' },
   { key: ConfigKey.LoanMinAmount, value: '500' },
   { key: ConfigKey.LoanMaxAmount, value: '10000' },
   { key: ConfigKey.LoanMaxTenure, value: '24' },
@@ -216,10 +215,6 @@ export class SystemConfigService implements OnModuleInit {
   private validateUpdates(updates: Record<string, string>): void {
     for (const [key, value] of Object.entries(updates)) {
       switch (key as ConfigKey) {
-        case ConfigKey.MonthlyContributionAmount:
-          if (!(parseFloat(value) > 0))
-            throw new UnprocessableEntityException(`MonthlyContributionAmount must be > 0`);
-          break;
         case ConfigKey.LoanMinAmount:
           if (!(parseFloat(value) > 0))
             throw new UnprocessableEntityException(`LoanMinAmount must be > 0`);
