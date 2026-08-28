@@ -162,5 +162,20 @@ describe('ContributionRatesService', () => {
 
       expect(mockCreate).not.toHaveBeenCalled();
     });
+
+    it('excludes legacy month/year-0 contribution records from the earliest-period query', async () => {
+      mockCountDocuments.mockReturnValue({ exec: jest.fn().mockResolvedValue(0) });
+      mockConfigService.getAll.mockResolvedValue({ MONTHLY_CONTRIBUTION_AMOUNT: { value: '3000' } });
+      mockContribFind.mockReturnValue({
+        sort: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue([]),
+      });
+      mockCreate.mockResolvedValue({});
+
+      await service.onModuleInit();
+
+      expect(mockContribFind).toHaveBeenCalledWith({ month: { $gte: 1 }, year: { $gte: 2000 } });
+    });
   });
 });

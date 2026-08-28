@@ -23,7 +23,11 @@ export class ContributionRatesService implements OnModuleInit {
     const config = await this.configService.getAll() as unknown as Record<string, { value: string }>;
     const amount = parseFloat(config['MONTHLY_CONTRIBUTION_AMOUNT']?.value ?? '100');
 
-    const earliest = await this.contributionModel.find().sort({ year: 1, month: 1 }).limit(1).exec();
+    const earliest = await this.contributionModel
+      .find({ month: { $gte: 1 }, year: { $gte: 2000 } })
+      .sort({ year: 1, month: 1 })
+      .limit(1)
+      .exec();
     const now = new Date();
     const { month, year } = earliest.length > 0
       ? { month: earliest[0].month, year: earliest[0].year }
