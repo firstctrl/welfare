@@ -3,7 +3,7 @@ import { getModelToken } from '@nestjs/mongoose';
 import { ContributionsService } from './contributions.service';
 import { Contribution } from './schemas/contribution.schema';
 import { Loan } from '../loans/schemas/loan.schema';
-import { SystemConfigService } from '../system-config/system-config.service';
+import { ContributionRatesService } from './contribution-rates.service';
 import { AuditService } from '../audit/audit.service';
 import { StaffService } from '../staff/staff.service';
 import { ContributionStatus, ContributionSource } from '@welfare/shared';
@@ -36,13 +36,7 @@ const mockLoanModel = {
   findByIdAndUpdate: mockLoanFindByIdAndUpdate,
 };
 
-const mockConfigService = {
-  getAll: jest.fn().mockResolvedValue({
-    MONTHLY_CONTRIBUTION_AMOUNT: { value: '3000' },
-    PENALTY_TYPE: { value: 'Percentage' },
-    PENALTY_VALUE: { value: '5' },
-  }),
-};
+const mockRatesService = { getRateFor: jest.fn().mockResolvedValue(3000) };
 
 const mockAuditService = { log: jest.fn() };
 const mockStaffService = { findManyByStaffIdPattern: jest.fn() };
@@ -56,7 +50,7 @@ describe('ContributionsService', () => {
         ContributionsService,
         { provide: getModelToken(Contribution.name), useValue: mockContributionModel },
         { provide: getModelToken(Loan.name), useValue: mockLoanModel },
-        { provide: SystemConfigService, useValue: mockConfigService },
+        { provide: ContributionRatesService, useValue: mockRatesService },
         { provide: AuditService, useValue: mockAuditService },
         { provide: StaffService, useValue: mockStaffService },
       ],
@@ -66,11 +60,7 @@ describe('ContributionsService', () => {
     mockCreate.mockResolvedValue(undefined);
     mockLoanFindOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
     mockLoanFindByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
-    mockConfigService.getAll.mockResolvedValue({
-      MONTHLY_CONTRIBUTION_AMOUNT: { value: '3000' },
-      PENALTY_TYPE: { value: 'Percentage' },
-      PENALTY_VALUE: { value: '5' },
-    });
+    mockRatesService.getRateFor.mockResolvedValue(3000);
   });
 
   describe('calculatePaymentResult (pure logic)', () => {
@@ -143,6 +133,17 @@ describe('ContributionsService', () => {
         expect.anything(),
       );
     });
+
+    it('resolves the rate for the target month/year, not a fixed default', async () => {
+      mockFindOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+      const savedDoc = { _id: { toString: () => 'c-id' }, toObject: jest.fn(() => ({})) };
+      mockFindOneAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(savedDoc) });
+      mockRatesService.getRateFor.mockResolvedValue(2500);
+
+      await service.processPayment('s1', 3, 2022, 2500, ContributionSource.PayrollImport, 'uid', 'U');
+
+      expect(mockRatesService.getRateFor).toHaveBeenCalledWith(3, 2022);
+    });
   });
 
   describe('processLumpSum', () => {
@@ -176,6 +177,26 @@ describe('ContributionsService', () => {
       const results = await service.processLumpSum('s1', 6000, 1, 2025, 'uid', 'U');
       expect(results).toHaveLength(2);
       expect(mockFindOneAndUpdate).toHaveBeenCalledTimes(2);
+    });
+
+    it('looks up the rate for each month in the backfill loop', async () => {
+      mockFind.mockReturnValue({
+        sort: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue([
+          { month: 1, year: 2025, paidAmount: 0, surplusCarriedForward: 0 },
+          { month: 2, year: 2025, paidAmount: 0, surplusCarriedForward: 0 },
+        ]),
+      });
+      mockFindOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+      const mockSaved = { _id: { toString: () => 'c-id' }, surplusCarriedForward: 0, toObject: jest.fn(() => ({})) };
+      mockFindOneAndUpdate
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(mockSaved) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(mockSaved) });
+
+      await service.processLumpSum('s1', 6000, 1, 2025, 'uid', 'U');
+
+      expect(mockRatesService.getRateFor).toHaveBeenCalledWith(1, 2025);
+      expect(mockRatesService.getRateFor).toHaveBeenCalledWith(2, 2025);
     });
   });
 

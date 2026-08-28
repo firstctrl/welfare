@@ -4,12 +4,10 @@ import { Model } from 'mongoose';
 import { AuditAction, AuditEntity, ContributionSource, ContributionStatus, LoanStatus, PaginatedResult } from '@welfare/shared';
 import { Contribution, ContributionDocument } from './schemas/contribution.schema';
 import { Loan, LoanDocument } from '../loans/schemas/loan.schema';
-import { SystemConfigService } from '../system-config/system-config.service';
+import { ContributionRatesService } from './contribution-rates.service';
 import { AuditService } from '../audit/audit.service';
 import { StaffService } from '../staff/staff.service';
 import { ContributionQueryDto } from './dto/contribution-query.dto';
-
-type ConfigMap = Record<string, { value: string }>;
 
 function getPrevMonthYear(month: number, year: number): { month: number; year: number } {
   return month === 1 ? { month: 12, year: year - 1 } : { month: month - 1, year };
@@ -24,7 +22,7 @@ export class ContributionsService {
   constructor(
     @InjectModel(Contribution.name) private readonly contributionModel: Model<ContributionDocument>,
     @InjectModel(Loan.name) private readonly loanModel: Model<LoanDocument>,
-    private readonly configService: SystemConfigService,
+    private readonly ratesService: ContributionRatesService,
     private readonly auditService: AuditService,
     private readonly staffService: StaffService,
   ) {}
@@ -42,8 +40,8 @@ export class ContributionsService {
     return { totalPaid, surplusCarriedForward, status };
   }
 
-  private async getExpectedAmount(config: ConfigMap): Promise<number> {
-    return parseFloat(config['MONTHLY_CONTRIBUTION_AMOUNT']?.value ?? '0');
+  private async getExpectedAmount(month: number, year: number): Promise<number> {
+    return this.ratesService.getRateFor(month, year);
   }
 
   private async getPrevSurplus(staffId: string, month: number, year: number): Promise<number> {
@@ -62,8 +60,7 @@ export class ContributionsService {
     actorName: string,
     importBatchId?: string,
   ): Promise<ContributionDocument> {
-    const config = await this.configService.getAll() as unknown as ConfigMap;
-    const expectedAmount = await this.getExpectedAmount(config);
+    const expectedAmount = await this.getExpectedAmount(month, year);
     const existing = await this.contributionModel.findOne({ staffId, month, year }).exec();
     const existingPaid = existing?.paidAmount ?? 0;
     const prevSurplus = await this.getPrevSurplus(staffId, month, year);
@@ -97,9 +94,6 @@ export class ContributionsService {
     actorId: string,
     actorName: string,
   ): Promise<ContributionDocument[]> {
-    const config = await this.configService.getAll() as unknown as ConfigMap;
-    const expectedAmount = await this.getExpectedAmount(config);
-
     const unpaidMonths = await this.contributionModel
       .find({ staffId, status: { $in: [ContributionStatus.Missed, ContributionStatus.Partial] } })
       .sort({ year: 1, month: 1 })
@@ -117,6 +111,7 @@ export class ContributionsService {
 
     // Advance month by month until the full amount is allocated (cap at 120 months)
     for (let i = 0; remaining > 0 && i < 120; i++) {
+      const expectedAmount = await this.getExpectedAmount(current.month, current.year);
       const netNeeded = Math.max(0, expectedAmount - prevSurplus);
 
       if (netNeeded <= 0) {
