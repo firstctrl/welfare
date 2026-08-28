@@ -4,6 +4,7 @@ import { MulterModule } from '@nestjs/platform-express';
 import { ContributionsController } from './contributions.controller';
 import { ContributionsService } from './contributions.service';
 import { ImportService } from './import.service';
+import { ContributionRatesService } from './contribution-rates.service';
 import { Contribution, ContributionSchema } from './schemas/contribution.schema';
 import { ImportBatch, ImportBatchSchema } from './schemas/import-batch.schema';
 import { ContributionRate, ContributionRateSchema } from './schemas/contribution-rate.schema';
@@ -24,7 +25,7 @@ import { StaffModule } from '../staff/staff.module';
     StaffModule,
   ],
   controllers: [ContributionsController],
-  providers: [ContributionsService, ImportService],
+  providers: [ContributionsService, ImportService, ContributionRatesService],
   exports: [ContributionsService],
 })
 export class ContributionsModule {}
