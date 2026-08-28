@@ -128,6 +128,11 @@ export class ReportsService {
    * Missed and Partial month counts for one staff member over [start, end],
    * bounded by their contribution eligibility window (start) and today or their
    * exit date (end), whichever the caller passes in.
+   *
+   * A month with no contribution doc only counts as missed once it has fully
+   * ended — contributions for a month are typically received in the first
+   * week of the next month, so the current (still-open) month is never
+   * counted as missed just because nothing has posted yet.
    */
   private async getMissedAndPartialCounts(
     staffId: string,
@@ -145,12 +150,18 @@ export class ReportsService {
       .exec();
     const byKey = new Map((docs as any[]).map(d => [`${d.year}-${d.month}`, d.status]));
 
+    const now = new Date();
     let missedCount = 0;
     let partialCount = 0;
     for (const m of months) {
       const status = byKey.get(`${m.year}-${m.month}`);
-      if (!status) missedCount++;
-      else if (status === ContributionStatus.Partial) partialCount++;
+      if (!status) {
+        const monthEnd = new Date(m.year, m.month, 0, 23, 59, 59);
+        if (monthEnd > now) continue;
+        missedCount++;
+      } else if (status === ContributionStatus.Partial) {
+        partialCount++;
+      }
     }
     return { missedCount, partialCount };
   }

@@ -594,6 +594,35 @@ describe('ReportsService', () => {
       const result = await service.getStaffContributionStatement('staffA');
       expect(result.kpis.missedMonths).toBe(2); // 1 missed (Apr) + 1 partial (Feb)
     });
+
+    it('does not count the current (still-open) month as missed', async () => {
+      const now = new Date();
+      const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+
+      mockStaffFindById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: { toString: () => 'staffB' },
+          fullName: 'Eve',
+          staffId: 'GL011',
+          email: 'eve@example.com',
+          status: StaffStatus.Active,
+          dateOfFirstContribution: twoMonthsAgo,
+          dateOfEmployment: twoMonthsAgo,
+        }),
+      });
+      mockContribFind
+        .mockReturnValueOnce({ sort: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) })
+        // eligibility-window docs: the two past months are Paid; current month has no doc
+        .mockReturnValueOnce(chainable([
+          { month: twoMonthsAgo.getMonth() + 1, year: twoMonthsAgo.getFullYear(), status: ContributionStatus.Paid },
+          { month: oneMonthAgo.getMonth() + 1, year: oneMonthAgo.getFullYear(), status: ContributionStatus.Paid },
+        ]));
+
+      const result = await service.getStaffContributionStatement('staffB');
+      expect(result.kpis.missedMonths).toBe(0);
+    });
   });
 
   describe('getLoanStatement', () => {
