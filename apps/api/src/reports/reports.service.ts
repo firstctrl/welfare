@@ -125,6 +125,25 @@ export class ReportsService {
   }
 
   /**
+   * Earliest month a staff member actually has a contribution record for.
+   * Used as the missed/partial window fallback when dateOfFirstContribution
+   * is unset — dateOfEmployment predates fund enrollment for many staff
+   * (sometimes by decades) and produces bogus pre-enrollment "missed" months.
+   */
+  private async getEarliestContributionDate(staffId: string): Promise<Date | undefined> {
+    const earliest = await this.contribModel
+      .find({ staffId, isDebit: { $ne: true } })
+      .sort({ year: 1, month: 1 })
+      .limit(1)
+      .select('month year')
+      .lean()
+      .exec();
+    if (!earliest.length) return undefined;
+    const d = earliest[0] as any;
+    return new Date(d.year, d.month - 1, 1);
+  }
+
+  /**
    * Missed and Partial month counts for one staff member over [start, end],
    * bounded by their contribution eligibility window (start) and today or their
    * exit date (end), whichever the caller passes in.
@@ -693,7 +712,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
         outstandingLoanBalance += pending.reduce((s, r) => s + r.dueAmount - r.paidAmount, 0);
       }
 
-      const start = (staff as any).dateOfFirstContribution ?? staff.dateOfEmployment;
+      const start = (staff as any).dateOfFirstContribution ?? (await this.getEarliestContributionDate(sid));
       const now = new Date();
       const end = (staff as any).updatedAt && (staff as any).updatedAt < now ? (staff as any).updatedAt : now;
       const { missedCount, partialCount } = await this.getMissedAndPartialCounts(sid, start, end);
@@ -937,7 +956,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
     const totalPaid = contribs.reduce((s, c) => s + c.paidAmount, 0);
     const totalExpected = contribs.reduce((s, c) => s + c.expectedAmount, 0);
     const totalSurplus = contribs.reduce((s, c) => s + c.surplusCarriedForward, 0);
-    const missedStart = (staff as any).dateOfFirstContribution ?? staff.dateOfEmployment;
+    const missedStart = (staff as any).dateOfFirstContribution ?? (await this.getEarliestContributionDate(staffMongoId));
     const now = new Date();
     const staffUpdatedAt = (staff as any).updatedAt;
     const missedEnd = EXITED_STATUSES.includes(staff.status) && staffUpdatedAt && staffUpdatedAt < now ? staffUpdatedAt : now;
