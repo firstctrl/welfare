@@ -1,5 +1,5 @@
 import { apiClient } from './api-client';
-import type { IContribution, IImportBatch, PaginatedResult } from '@welfare/shared';
+import type { IContribution, IContributionRate, IImportBatch, PaginatedResult } from '@welfare/shared';
 
 export interface ContributionFilters {
   staffId?: string;
@@ -127,4 +127,18 @@ export async function manualContribution(payload: {
 }): Promise<IContribution[]> {
   const { data } = await apiClient.post('/contributions/manual', payload);
   return data;
+}
+
+export async function listContributionRates(): Promise<IContributionRate[]> {
+  const { data } = await apiClient.get('/contributions/rates');
+  return data;
+}
+
+export async function createContributionRate(payload: { month: number; year: number; amount: number }): Promise<IContributionRate> {
+  const { data } = await apiClient.post('/contributions/rates', payload);
+  return data;
+}
+
+export async function deleteContributionRate(id: string): Promise<void> {
+  await apiClient.delete(`/contributions/rates/${id}`);
 }
