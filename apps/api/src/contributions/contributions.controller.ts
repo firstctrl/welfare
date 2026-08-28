@@ -5,6 +5,8 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ContributionsService } from './contributions.service';
 import { ImportService } from './import.service';
+import { ContributionRatesService } from './contribution-rates.service';
+import { CreateContributionRateDto } from './dto/create-contribution-rate.dto';
 import { ManualEntryDto } from './dto/manual-entry.dto';
 import { ResolveFlaggedDto } from './dto/resolve-flagged.dto';
 import { ResolveByStaffIdDto } from './dto/resolve-by-staff-id.dto';
@@ -20,6 +22,7 @@ export class ContributionsController {
   constructor(
     private readonly contributionsService: ContributionsService,
     private readonly importService: ImportService,
+    private readonly ratesService: ContributionRatesService,
   ) {}
 
   @Post('import')
@@ -99,6 +102,31 @@ export class ContributionsController {
     @CurrentUser() user: { sub: string; displayName: string },
   ) {
     return this.importService.clearFlaggedEntries(batchId, user.sub, user.displayName);
+  }
+
+  @Get('rates')
+  @RequirePermission(AppModule.Settings, 'readonly')
+  listRates() {
+    return this.ratesService.list();
+  }
+
+  @Post('rates')
+  @RequirePermission(AppModule.Settings, 'full')
+  createRate(
+    @Body() dto: CreateContributionRateDto,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.ratesService.create(dto, user.sub, user.displayName);
+  }
+
+  @Delete('rates/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermission(AppModule.Settings, 'full')
+  async deleteRate(
+    @Param('id') id: string,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    await this.ratesService.delete(id, user.sub, user.displayName);
   }
 
   @Post('manual')
