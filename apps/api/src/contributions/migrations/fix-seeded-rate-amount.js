@@ -9,11 +9,8 @@
  */
 const mongoose = require('mongoose');
 
-const MONGO_USER = process.env.MONGO_USER;
-const MONGO_PASSWORD = process.env.MONGO_PASSWORD;
-const MONGO_URI = MONGO_USER && MONGO_PASSWORD
-  ? `mongodb://${encodeURIComponent(MONGO_USER)}:${encodeURIComponent(MONGO_PASSWORD)}@localhost:27017/welfare?authSource=admin`
-  : (process.env.MONGODB_URI ?? 'mongodb://localhost:27017/welfare');
+// Matches apps/api/src/config/configuration.ts's own resolution exactly.
+const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/welfare';
 
 async function run() {
   const rawAmount = process.argv[2];
