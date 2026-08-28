@@ -2,13 +2,17 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getConfig, updateConfig, testEmail, type ConfigMap } from '../../../lib/config';
 import { runBulkAnnualStatement } from '../../../lib/email';
+import { listContributionRates, createContributionRate, deleteContributionRate } from '../../../lib/contributions';
 import { AppModule } from '@welfare/shared';
+import type { IContributionRate } from '@welfare/shared';
 import { usePermission } from '@/hooks/use-permission';
 import { Card, CardHeader, CardBody } from '@/components/ui/card';
 import { Field, Input, Select } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
+import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { fmtDate } from '@/lib/format';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -101,44 +105,133 @@ const CRON_PRESETS: { label: string; value: string }[] = [
 
 // ─── section: Contributions ─────────────────────────────────────────────────
 
-const CONTRIBUTION_KEYS = ['MONTHLY_CONTRIBUTION_AMOUNT'] as const;
+function ContributionsSection({ canEdit }: { canEdit: boolean }) {
+  const qc = useQueryClient();
+  const [month, setMonth] = useState('');
+  const [year, setYear] = useState('');
+  const [amount, setAmount] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<IContributionRate | null>(null);
 
-function ContributionsSection({ cfg, onUpdate, onDirtyChange, canEdit }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void; canEdit: boolean }) {
-  const [amount, setAmount] = useState(cfg['MONTHLY_CONTRIBUTION_AMOUNT']?.value ?? '');
-  const [saving, setSaving] = useState(false);
+  const { data: rates } = useQuery({
+    queryKey: ['contribution-rates'],
+    queryFn: () => listContributionRates(),
+  });
 
-  const [original] = useState(() => cfg['MONTHLY_CONTRIBUTION_AMOUNT']?.value ?? '');
-  const dirty = amount !== original;
-  const meta = latestEntry(cfg, [...CONTRIBUTION_KEYS]);
+  const createMutation = useMutation({
+    mutationFn: () => createContributionRate({ month: parseInt(month, 10), year: parseInt(year, 10), amount: parseFloat(amount) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contribution-rates'] });
+      setMonth(''); setYear(''); setAmount('');
+      toast.success('Rate added');
+    },
+    onError: (err: unknown) => {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to add rate');
+    },
+  });
 
-  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteContributionRate(id),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      qc.invalidateQueries({ queryKey: ['contribution-rates'] });
+      toast.success('Rate deleted');
+    },
+    onError: (err: unknown) => {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to delete rate');
+    },
+  });
 
-  async function save() {
-    if (!dirty) return;
-    if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
-      toast.error('Contribution amount must be greater than 0');
-      return;
-    }
-    setSaving(true);
-    try {
-      const next = await updateConfig({ MONTHLY_CONTRIBUTION_AMOUNT: amount });
-      onUpdate(next);
-      setAmount(next['MONTHLY_CONTRIBUTION_AMOUNT']?.value ?? amount);
-      onDirtyChange(false);
-      toast.success('Contributions settings saved');
-    } catch {
-      toast.error('Failed to save contributions settings');
-    } finally {
-      setSaving(false);
-    }
+  function addRate() {
+    const m = parseInt(month, 10);
+    const y = parseInt(year, 10);
+    const a = parseFloat(amount);
+    if (!(m >= 1 && m <= 12)) { toast.error('Month must be between 1 and 12'); return; }
+    if (!(y >= 2000)) { toast.error('Year must be 2000 or later'); return; }
+    if (!(a > 0)) { toast.error('Amount must be greater than 0'); return; }
+    createMutation.mutate();
   }
 
+  const canDelete = (rates?.length ?? 0) > 1;
+
   return (
-    <SectionCard title="Contributions" meta={meta} onSave={save} saving={saving} dirty={dirty} canEdit={canEdit}>
-      <Field label="Monthly Contribution Amount" required>
-        <Input type="number" min={1} step={0.01} value={amount} onChange={(e) => setAmount(e.target.value)} disabled={saving} prefix="₵" />
-      </Field>
-    </SectionCard>
+    <Card>
+      <CardHeader
+        title="Contributions"
+        subtitle="Monthly contribution rate schedule — each entry applies from its month/year onward, until the next entry takes over."
+      />
+      <CardBody className="space-y-4">
+        {!rates?.length ? (
+          <p className="text-sm text-neutral-400">No rates defined yet.</p>
+        ) : (
+          <div className="overflow-x-auto border border-neutral-200 rounded-sm">
+            <table className="w-full text-sm border-collapse">
+              <thead className="bg-neutral-50">
+                <tr>
+                  {['Effective From', 'Amount', 'Added By', 'Date', ''].map((h) => (
+                    <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {rates.map((r) => (
+                  <tr key={r._id}>
+                    <td className="px-3 py-2 font-mono text-xs">{r.month}/{r.year}</td>
+                    <td className="px-3 py-2 font-mono tabular">₵{r.amount.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-neutral-500 text-xs">{r.createdBy}</td>
+                    <td className="px-3 py-2 text-neutral-500 text-xs font-mono">{fmt(r.createdAt)}</td>
+                    <td className="px-3 py-2">
+                      {canEdit && (
+                        <button
+                          onClick={() => setDeleteTarget(r)}
+                          disabled={!canDelete}
+                          title={canDelete ? undefined : 'At least one rate must always be defined'}
+                          className="text-neutral-500 hover:text-danger-600 hover:underline text-xs font-medium disabled:opacity-40 disabled:hover:no-underline disabled:cursor-not-allowed"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {canEdit && (
+          <div className="flex items-end gap-3">
+            <Field label="Month">
+              <Input type="number" min={1} max={12} step={1} value={month} onChange={(e) => setMonth(e.target.value)} style={{ width: 90 }} />
+            </Field>
+            <Field label="Year">
+              <Input type="number" min={2000} step={1} value={year} onChange={(e) => setYear(e.target.value)} style={{ width: 110 }} />
+            </Field>
+            <Field label="Amount">
+              <Input type="number" min={0.01} step={0.01} value={amount} onChange={(e) => setAmount(e.target.value)} prefix="₵" style={{ width: 140 }} />
+            </Field>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={addRate}
+              disabled={createMutation.isPending || !month || !year || !amount}
+              loading={createMutation.isPending}
+            >
+              Add
+            </Button>
+          </div>
+        )}
+      </CardBody>
+
+      <ConfirmModal
+        open={!!deleteTarget}
+        title="Delete this rate?"
+        body={`This removes the ${deleteTarget?.month}/${deleteTarget?.year} rate (₵${deleteTarget?.amount.toFixed(2)}) from the schedule. Contributions already recorded are not affected.`}
+        confirmLabel="Delete"
+        isPending={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate(deleteTarget!._id)}
+        onClose={() => setDeleteTarget(null)}
+      />
+    </Card>
   );
 }
 
@@ -769,7 +862,7 @@ export function SettingsClient() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <ContributionsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('contributions')} canEdit={canEdit} />
+      <ContributionsSection canEdit={canEdit} />
       <LoansSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('loans')} canEdit={canEdit} />
       <GuarantorsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('guarantors')} canEdit={canEdit} />
       <PaymentsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('payments')} canEdit={canEdit} />
