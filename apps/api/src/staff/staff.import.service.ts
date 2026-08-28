@@ -164,9 +164,13 @@ export class StaffImportService {
     return batch;
   }
 
-  async deleteBatch(batchId: string, actorId: string, actorName: string): Promise<void> {
-    const result = await this.batchModel.findByIdAndDelete(batchId).exec();
-    if (!result) throw new NotFoundException(`Import batch ${batchId} not found`);
-    this.auditService.log(actorId, actorName, AuditAction.Delete, AuditEntity.ImportBatch, batchId);
+  async clearFlaggedEntries(batchId: string, actorId: string, actorName: string): Promise<StaffImportBatchDocument> {
+    const batch = await this.getBatch(batchId);
+    batch.flaggedEntries = [];
+    batch.flaggedRows = 0;
+    batch.status = ImportBatchStatus.Completed;
+    await batch.save();
+    this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.ImportBatch, batchId);
+    return batch;
   }
 }

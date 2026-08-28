@@ -95,8 +95,9 @@ export async function dismissRemittanceFlaggedEntry(batchId: string, index: numb
   return data;
 }
 
-export async function deleteRemittanceImportBatch(batchId: string): Promise<void> {
-  await apiClient.delete(`/remittances/import/${batchId}`);
+export async function clearRemittanceFlaggedEntries(batchId: string): Promise<IRemittanceImportBatch> {
+  const { data } = await apiClient.patch(`/remittances/import/${batchId}/clear-flagged`);
+  return data;
 }
 
 export async function getRemittancesReport(params: RemittanceReportParams): Promise<IRemittanceReport> {

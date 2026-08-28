@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Upload, CheckCircle, AlertTriangle } from 'lucide-react';
 import { ImportBatchStatus } from '@welfare/shared';
 import type { IStaffImportBatch } from '@welfare/shared';
-import { importStaff, listStaffImportBatches, dismissStaffFlaggedEntry, deleteStaffImportBatch } from '@/lib/staff';
+import { importStaff, listStaffImportBatches, dismissStaffFlaggedEntry, clearStaffFlaggedEntries } from '@/lib/staff';
 import { Card, CardHeader, CardBody } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -46,7 +46,7 @@ export default function StaffImportClient() {
   const [result, setResult] = useState<{ batchId: string; created: number; flagged: number; total: number } | null>(null);
   const [activeBatch, setActiveBatch] = useState<IStaffImportBatch | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ batchId: string; fileName: string } | null>(null);
+  const [clearTarget, setClearTarget] = useState<{ batchId: string; fileName: string } | null>(null);
 
   const { data: batchHistory } = useQuery({
     queryKey: ['staff-import-batches'],
@@ -83,16 +83,16 @@ export default function StaffImportClient() {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (batchId: string) => deleteStaffImportBatch(batchId),
-    onSuccess: () => {
-      setDeleteTarget(null);
-      if (activeBatch && deleteTarget?.batchId === activeBatch._id) setActiveBatch(null);
+  const clearMutation = useMutation({
+    mutationFn: (batchId: string) => clearStaffFlaggedEntries(batchId),
+    onSuccess: (updated) => {
+      setClearTarget(null);
+      if (activeBatch && clearTarget?.batchId === activeBatch._id) setActiveBatch(updated);
       qc.invalidateQueries({ queryKey: ['staff-import-batches'] });
-      toast.success('Import deleted');
+      toast.success('Flagged entries cleared');
     },
     onError: (err: unknown) => {
-      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Delete failed');
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Clear failed');
     },
   });
 
@@ -340,12 +340,14 @@ export default function StaffImportClient() {
                               View Flagged
                             </button>
                           )}
-                          <button
-                            onClick={() => setDeleteTarget({ batchId: batch._id, fileName: batch.fileName })}
-                            className="text-neutral-500 hover:text-danger-600 hover:underline text-xs font-medium"
-                          >
-                            Delete
-                          </button>
+                          {batch.flaggedRows > 0 && (
+                            <button
+                              onClick={() => setClearTarget({ batchId: batch._id, fileName: batch.fileName })}
+                              className="text-neutral-500 hover:text-danger-600 hover:underline text-xs font-medium"
+                            >
+                              Clear Flagged
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -358,13 +360,13 @@ export default function StaffImportClient() {
       </Card>
 
       <ConfirmModal
-        open={!!deleteTarget}
-        title="Delete this import?"
-        body={`This permanently removes "${deleteTarget?.fileName}" from Import History, including its flagged entries. Staff already created from this import are not affected.`}
-        confirmLabel="Delete"
-        isPending={deleteMutation.isPending}
-        onConfirm={() => deleteMutation.mutate(deleteTarget!.batchId)}
-        onClose={() => setDeleteTarget(null)}
+        open={!!clearTarget}
+        title="Clear flagged entries?"
+        body={`This clears all flagged rows for "${clearTarget?.fileName}" and marks the import completed. The import stays in history — this does not undo any staff already created.`}
+        confirmLabel="Clear Flagged"
+        isPending={clearMutation.isPending}
+        onConfirm={() => clearMutation.mutate(clearTarget!.batchId)}
+        onClose={() => setClearTarget(null)}
       />
     </div>
   );

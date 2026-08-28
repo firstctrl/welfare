@@ -133,9 +133,12 @@ export class RemittancesImportService {
     return batch;
   }
 
-  async deleteBatch(batchId: string, actorId: string, actorName: string): Promise<void> {
-    const result = await this.batchModel.findByIdAndDelete(batchId).exec();
-    if (!result) throw new NotFoundException(`Import batch ${batchId} not found`);
-    this.auditService.log(actorId, actorName, AuditAction.Delete, AuditEntity.ImportBatch, batchId);
+  async clearFlaggedEntries(batchId: string, actorId: string, actorName: string): Promise<RemittanceImportBatchDocument> {
+    const batch = await this.getBatch(batchId);
+    batch.flaggedRows = [];
+    batch.flagged = 0;
+    await batch.save();
+    this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.ImportBatch, batchId);
+    return batch;
   }
 }

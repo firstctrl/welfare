@@ -70,6 +70,7 @@ export async function dismissInvestmentFlaggedEntry(batchId: string, index: numb
   return data;
 }
 
-export async function deleteInvestmentImportBatch(batchId: string): Promise<void> {
-  await apiClient.delete(`/investments/import/${batchId}`);
+export async function clearInvestmentFlaggedEntries(batchId: string): Promise<IInvestmentImportBatch> {
+  const { data } = await apiClient.patch(`/investments/import/${batchId}/clear-flagged`);
+  return data;
 }

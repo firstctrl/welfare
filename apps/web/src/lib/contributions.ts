@@ -104,8 +104,9 @@ export async function dismissContributionFlaggedEntry(batchId: string, index: nu
   return data;
 }
 
-export async function deleteContributionImportBatch(batchId: string): Promise<void> {
-  await apiClient.delete(`/contributions/import/${batchId}`);
+export async function clearContributionFlaggedEntries(batchId: string): Promise<IImportBatch> {
+  const { data } = await apiClient.patch(`/contributions/import/${batchId}/clear-flagged`);
+  return data;
 }
 
 export async function deleteContribution(id: string): Promise<void> {

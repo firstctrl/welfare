@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Upload, CheckCircle, AlertTriangle } from 'lucide-react';
 import { ImportBatchStatus } from '@welfare/shared';
 import type { IImportBatch } from '@welfare/shared';
-import { importContributions, listImportBatches, resolveFlaggedEntry, resolveContributionsByStaffId, dismissContributionFlaggedEntry, deleteContributionImportBatch } from '@/lib/contributions';
+import { importContributions, listImportBatches, resolveFlaggedEntry, resolveContributionsByStaffId, dismissContributionFlaggedEntry, clearContributionFlaggedEntries } from '@/lib/contributions';
 import { searchStaff } from '@/lib/staff';
 import { Card, CardHeader, CardBody } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -48,7 +48,7 @@ export default function ImportClient() {
   const [bulkResolveTarget, setBulkResolveTarget] = useState<string | null>(null);
   const [staffSearch, setStaffSearch] = useState('');
   const [staffOptions, setStaffOptions] = useState<{ _id: string; fullName: string; staffId: string }[]>([]);
-  const [deleteTarget, setDeleteTarget] = useState<{ batchId: string; fileName: string } | null>(null);
+  const [clearTarget, setClearTarget] = useState<{ batchId: string; fileName: string } | null>(null);
 
   const { data: batchHistory } = useQuery({ queryKey: ['import-batches'], queryFn: () => listImportBatches() });
 
@@ -139,16 +139,16 @@ export default function ImportClient() {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (batchId: string) => deleteContributionImportBatch(batchId),
-    onSuccess: () => {
-      setDeleteTarget(null);
-      if (activeBatch && deleteTarget?.batchId === activeBatch._id) setActiveBatch(null);
+  const clearMutation = useMutation({
+    mutationFn: (batchId: string) => clearContributionFlaggedEntries(batchId),
+    onSuccess: (updated) => {
+      setClearTarget(null);
+      if (activeBatch && clearTarget?.batchId === activeBatch._id) setActiveBatch(updated);
       qc.invalidateQueries({ queryKey: ['import-batches'] });
-      toast.success('Import deleted');
+      toast.success('Flagged entries cleared');
     },
     onError: (err: unknown) => {
-      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Delete failed');
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Clear failed');
     },
   });
 
@@ -380,12 +380,14 @@ export default function ImportClient() {
                               Resolve
                             </button>
                           )}
-                          <button
-                            onClick={() => setDeleteTarget({ batchId: batch._id, fileName: batch.fileName })}
-                            className="text-neutral-500 hover:text-danger-600 hover:underline text-xs font-medium"
-                          >
-                            Delete
-                          </button>
+                          {batch.flaggedRows > 0 && (
+                            <button
+                              onClick={() => setClearTarget({ batchId: batch._id, fileName: batch.fileName })}
+                              className="text-neutral-500 hover:text-danger-600 hover:underline text-xs font-medium"
+                            >
+                              Clear Flagged
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -468,13 +470,13 @@ export default function ImportClient() {
       )}
 
       <ConfirmModal
-        open={!!deleteTarget}
-        title="Delete this import?"
-        body={`This permanently removes "${deleteTarget?.fileName}" from Import History, including its flagged entries. Contributions already recorded from this import are not affected.`}
-        confirmLabel="Delete"
-        isPending={deleteMutation.isPending}
-        onConfirm={() => deleteMutation.mutate(deleteTarget!.batchId)}
-        onClose={() => setDeleteTarget(null)}
+        open={!!clearTarget}
+        title="Clear flagged entries?"
+        body={`This clears all flagged rows for "${clearTarget?.fileName}" and marks the import completed. The import stays in history — this does not undo any contributions already recorded.`}
+        confirmLabel="Clear Flagged"
+        isPending={clearMutation.isPending}
+        onConfirm={() => clearMutation.mutate(clearTarget!.batchId)}
+        onClose={() => setClearTarget(null)}
       />
     </div>
   );

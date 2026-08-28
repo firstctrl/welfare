@@ -92,14 +92,13 @@ export class ContributionsController {
     return this.importService.dismissFlaggedEntry(batchId, dto.index, user.sub, user.displayName);
   }
 
-  @Delete('import/:batchId')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @Patch('import/:batchId/clear-flagged')
   @RequirePermission(AppModule.Contributions, 'full')
-  async deleteImportBatch(
+  clearFlaggedEntries(
     @Param('batchId') batchId: string,
     @CurrentUser() user: { sub: string; displayName: string },
   ) {
-    await this.importService.deleteBatch(batchId, user.sub, user.displayName);
+    return this.importService.clearFlaggedEntries(batchId, user.sub, user.displayName);
   }
 
   @Post('manual')

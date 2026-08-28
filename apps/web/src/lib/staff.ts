@@ -120,8 +120,9 @@ export async function dismissStaffFlaggedEntry(batchId: string, index: number): 
   return data;
 }
 
-export async function deleteStaffImportBatch(batchId: string): Promise<void> {
-  await apiClient.delete(`/staff/import/${batchId}`);
+export async function clearStaffFlaggedEntries(batchId: string): Promise<IStaffImportBatch> {
+  const { data } = await apiClient.patch(`/staff/import/${batchId}/clear-flagged`);
+  return data;
 }
 
 export async function bulkDeleteStaff(ids: string[]): Promise<{ deleted: number }> {

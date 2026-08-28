@@ -7,7 +7,7 @@ import type { IRemittanceImportBatch } from '@welfare/shared';
 import {
   listRemittanceImportBatches,
   dismissRemittanceFlaggedEntry,
-  deleteRemittanceImportBatch,
+  clearRemittanceFlaggedEntries,
 } from '@/lib/remittances';
 import { Card, CardHeader, CardBody } from '@/components/ui/card';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
@@ -16,7 +16,7 @@ import { fmtDate } from '@/lib/format';
 export function ImportHistory() {
   const qc = useQueryClient();
   const [activeBatch, setActiveBatch] = useState<IRemittanceImportBatch | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ batchId: string; fileName: string } | null>(null);
+  const [clearTarget, setClearTarget] = useState<{ batchId: string; fileName: string } | null>(null);
 
   const { data: batchHistory } = useQuery({
     queryKey: ['remittance-import-batches'],
@@ -35,16 +35,16 @@ export function ImportHistory() {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (batchId: string) => deleteRemittanceImportBatch(batchId),
-    onSuccess: () => {
-      setDeleteTarget(null);
-      if (activeBatch && deleteTarget?.batchId === activeBatch._id) setActiveBatch(null);
+  const clearMutation = useMutation({
+    mutationFn: (batchId: string) => clearRemittanceFlaggedEntries(batchId),
+    onSuccess: (updated) => {
+      setClearTarget(null);
+      if (activeBatch && clearTarget?.batchId === activeBatch._id) setActiveBatch(updated);
       qc.invalidateQueries({ queryKey: ['remittance-import-batches'] });
-      toast.success('Import deleted');
+      toast.success('Flagged entries cleared');
     },
     onError: (err: unknown) => {
-      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Delete failed');
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Clear failed');
     },
   });
 
@@ -119,12 +119,14 @@ export function ImportHistory() {
                               View Flagged
                             </button>
                           )}
-                          <button
-                            onClick={() => setDeleteTarget({ batchId: batch._id, fileName: batch.fileName })}
-                            className="text-neutral-500 hover:text-danger-600 hover:underline text-xs font-medium"
-                          >
-                            Delete
-                          </button>
+                          {batch.flagged > 0 && (
+                            <button
+                              onClick={() => setClearTarget({ batchId: batch._id, fileName: batch.fileName })}
+                              className="text-neutral-500 hover:text-danger-600 hover:underline text-xs font-medium"
+                            >
+                              Clear Flagged
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -137,13 +139,13 @@ export function ImportHistory() {
       </Card>
 
       <ConfirmModal
-        open={!!deleteTarget}
-        title="Delete this import?"
-        body={`This permanently removes "${deleteTarget?.fileName}" from Import History, including its flagged entries. Remittances already created from this import are not affected.`}
-        confirmLabel="Delete"
-        isPending={deleteMutation.isPending}
-        onConfirm={() => deleteMutation.mutate(deleteTarget!.batchId)}
-        onClose={() => setDeleteTarget(null)}
+        open={!!clearTarget}
+        title="Clear flagged entries?"
+        body={`This clears all flagged rows for "${clearTarget?.fileName}". The import stays in history — this does not undo any remittances already created.`}
+        confirmLabel="Clear Flagged"
+        isPending={clearMutation.isPending}
+        onConfirm={() => clearMutation.mutate(clearTarget!.batchId)}
+        onClose={() => setClearTarget(null)}
       />
     </>
   );

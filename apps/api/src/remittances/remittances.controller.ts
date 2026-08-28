@@ -101,14 +101,13 @@ export class RemittancesController {
     return this.importService.dismissFlaggedEntry(batchId, dto.index, user._id.toString(), user.displayName);
   }
 
-  @Delete('import/:batchId')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @Patch('import/:batchId/clear-flagged')
   @RequirePermission(AppModule.Remittances, 'full')
-  async deleteImportBatch(
+  clearFlaggedEntries(
     @Param('batchId') batchId: string,
     @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    await this.importService.deleteBatch(batchId, user._id.toString(), user.displayName);
+    return this.importService.clearFlaggedEntries(batchId, user._id.toString(), user.displayName);
   }
 
   @Patch(':id')

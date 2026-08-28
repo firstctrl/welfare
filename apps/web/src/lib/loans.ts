@@ -134,8 +134,9 @@ export async function dismissLoanFlaggedEntry(batchId: string, index: number): P
   return data;
 }
 
-export async function deleteLoanImportBatch(batchId: string): Promise<void> {
-  await apiClient.delete(`/loans/import/${batchId}`);
+export async function clearLoanFlaggedEntries(batchId: string): Promise<ILoanRepaymentImportBatch> {
+  const { data } = await apiClient.patch(`/loans/import/${batchId}/clear-flagged`);
+  return data;
 }
 
 export interface LoanRecordsImportResult {
@@ -173,8 +174,9 @@ export async function dismissLoanRecordsFlaggedEntry(batchId: string, index: num
   return data;
 }
 
-export async function deleteLoanRecordsImportBatch(batchId: string): Promise<void> {
-  await apiClient.delete(`/loans/records-import/${batchId}`);
+export async function clearLoanRecordsFlaggedEntries(batchId: string): Promise<ILoanRecordsImportBatch> {
+  const { data } = await apiClient.patch(`/loans/records-import/${batchId}/clear-flagged`);
+  return data;
 }
 
 export async function deleteLoan(id: string): Promise<void> {

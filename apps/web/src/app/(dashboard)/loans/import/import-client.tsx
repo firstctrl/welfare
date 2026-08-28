@@ -13,7 +13,7 @@ import {
   resolveLoanFlaggedEntry,
   resolveLoanByStaffId,
   dismissLoanFlaggedEntry,
-  deleteLoanImportBatch,
+  clearLoanFlaggedEntries,
   listLoans,
 } from '@/lib/loans';
 import { searchStaff } from '@/lib/staff';
@@ -63,7 +63,7 @@ export default function LoanImportClient() {
   const [staffOptions, setStaffOptions] = useState<{ _id: string; fullName: string; staffId: string }[]>([]);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ batchId: string; fileName: string } | null>(null);
+  const [clearTarget, setClearTarget] = useState<{ batchId: string; fileName: string } | null>(null);
 
   const { data: batchHistory } = useQuery({
     queryKey: ['loan-import-batches'],
@@ -154,16 +154,16 @@ export default function LoanImportClient() {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (batchId: string) => deleteLoanImportBatch(batchId),
-    onSuccess: () => {
-      setDeleteTarget(null);
-      if (activeBatch && deleteTarget?.batchId === activeBatch._id) setActiveBatch(null);
+  const clearMutation = useMutation({
+    mutationFn: (batchId: string) => clearLoanFlaggedEntries(batchId),
+    onSuccess: (updated) => {
+      setClearTarget(null);
+      if (activeBatch && clearTarget?.batchId === activeBatch._id) setActiveBatch(updated);
       qc.invalidateQueries({ queryKey: ['loan-import-batches'] });
-      toast.success('Import deleted');
+      toast.success('Flagged entries cleared');
     },
     onError: (err: unknown) => {
-      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Delete failed');
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Clear failed');
     },
   });
 
@@ -423,12 +423,14 @@ export default function LoanImportClient() {
                               Resolve
                             </button>
                           )}
-                          <button
-                            onClick={() => setDeleteTarget({ batchId: batch._id, fileName: batch.fileName })}
-                            className="text-neutral-500 hover:text-danger-600 hover:underline text-xs font-medium"
-                          >
-                            Delete
-                          </button>
+                          {batch.flaggedRows > 0 && (
+                            <button
+                              onClick={() => setClearTarget({ batchId: batch._id, fileName: batch.fileName })}
+                              className="text-neutral-500 hover:text-danger-600 hover:underline text-xs font-medium"
+                            >
+                              Clear Flagged
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -601,13 +603,13 @@ export default function LoanImportClient() {
       )}
 
       <ConfirmModal
-        open={!!deleteTarget}
-        title="Delete this import?"
-        body={`This permanently removes "${deleteTarget?.fileName}" from Import History, including its flagged entries. Repayments already recorded from this import are not affected.`}
-        confirmLabel="Delete"
-        isPending={deleteMutation.isPending}
-        onConfirm={() => deleteMutation.mutate(deleteTarget!.batchId)}
-        onClose={() => setDeleteTarget(null)}
+        open={!!clearTarget}
+        title="Clear flagged entries?"
+        body={`This clears all flagged rows for "${clearTarget?.fileName}" and marks the import resolved. The import stays in history — this does not undo any repayments already recorded.`}
+        confirmLabel="Clear Flagged"
+        isPending={clearMutation.isPending}
+        onConfirm={() => clearMutation.mutate(clearTarget!.batchId)}
+        onClose={() => setClearTarget(null)}
       />
     </div>
   );

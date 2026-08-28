@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
+import { ImportBatchStatus } from '@welfare/shared';
 import { ImportService } from './import.service';
 import { ImportBatch } from './schemas/import-batch.schema';
 import { ContributionsService } from './contributions.service';
@@ -210,11 +211,30 @@ describe('ImportService (contributions) — dismiss/delete', () => {
     await expect(service.dismissFlaggedEntry('b1', 5, 'actor-1', 'Actor')).rejects.toThrow('Flagged entry index 5 out of range');
   });
 
-  it('deleteBatch deletes and throws NotFoundException when missing', async () => {
-    mockFindByIdAndDelete.mockReturnValue({ exec: jest.fn().mockResolvedValue({ _id: 'b1' }) });
-    await expect(service.deleteBatch('b1', 'actor-1', 'Actor')).resolves.toBeUndefined();
+  it('clearFlaggedEntries clears all flagged entries, marks Completed, and does not delete the batch', async () => {
+    const batch: any = {
+      _id: 'b1',
+      flaggedRows: 2,
+      flaggedEntries: [
+        { staffId: 'S1', employeeName: 'A', amount: 1, reason: 'x' },
+        { staffId: 'S2', employeeName: 'B', amount: 2, reason: 'y' },
+      ],
+      status: ImportBatchStatus.Pending,
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    mockFindById.mockReturnValue({ exec: jest.fn().mockResolvedValue(batch) });
 
-    mockFindByIdAndDelete.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
-    await expect(service.deleteBatch('missing', 'actor-1', 'Actor')).rejects.toThrow('Import batch missing not found');
+    const result = await service.clearFlaggedEntries('b1', 'actor-1', 'Actor');
+
+    expect(result.flaggedEntries).toEqual([]);
+    expect(result.flaggedRows).toBe(0);
+    expect(result.status).toBe(ImportBatchStatus.Completed);
+    expect(batch.save).toHaveBeenCalled();
+    expect(mockFindByIdAndDelete).not.toHaveBeenCalled();
+  });
+
+  it('clearFlaggedEntries throws NotFoundException when batch is missing', async () => {
+    mockFindById.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+    await expect(service.clearFlaggedEntries('missing', 'actor-1', 'Actor')).rejects.toThrow('Import batch missing not found');
   });
 });
