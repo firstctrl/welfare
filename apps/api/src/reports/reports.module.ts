@@ -12,6 +12,7 @@ import { Loan, LoanSchema } from '../loans/schemas/loan.schema';
 import { LoanRepayment, LoanRepaymentSchema } from '../loans/schemas/loan-repayment.schema';
 import { Staff, StaffSchema } from '../staff/schemas/staff.schema';
 import { Discount, DiscountSchema } from '../loans/schemas/discount.schema';
+import { Claim, ClaimSchema } from '../claims/schemas/claim.schema';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { Discount, DiscountSchema } from '../loans/schemas/discount.schema';
       { name: LoanRepayment.name, schema: LoanRepaymentSchema },
       { name: Staff.name, schema: StaffSchema },
       { name: Discount.name, schema: DiscountSchema },
+      { name: Claim.name, schema: ClaimSchema },
     ]),
     BullModule.registerQueue({ name: 'bulk-statements' }),
     SystemConfigModule,
