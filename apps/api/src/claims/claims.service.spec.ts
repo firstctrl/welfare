@@ -6,6 +6,7 @@ import { ClaimsService } from './claims.service';
 import { Claim } from './schemas/claim.schema';
 import { Contribution } from '../contributions/schemas/contribution.schema';
 import { AuditService } from '../audit/audit.service';
+import { StaffService } from '../staff/staff.service';
 
 const mockClaimModel = {
   create: jest.fn(),
@@ -17,6 +18,7 @@ const mockClaimModel = {
 };
 const mockContribModel = { aggregate: jest.fn() };
 const mockAuditService = { log: jest.fn() };
+const mockStaffService = { findManyByStaffIdPattern: jest.fn() };
 
 describe('ClaimsService', () => {
   let service: ClaimsService;
@@ -28,6 +30,7 @@ describe('ClaimsService', () => {
         { provide: getModelToken(Claim.name), useValue: mockClaimModel },
         { provide: getModelToken(Contribution.name), useValue: mockContribModel },
         { provide: AuditService, useValue: mockAuditService },
+        { provide: StaffService, useValue: mockStaffService },
       ],
     }).compile();
     service = module.get(ClaimsService);
@@ -104,5 +107,40 @@ describe('ClaimsService', () => {
   it('rejectClaim throws NotFoundException when claim is missing', async () => {
     mockClaimModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
     await expect(service.rejectClaim('missing', 'reason', 'actor-1', 'Actor')).rejects.toThrow(NotFoundException);
+  });
+
+  it('listClaims includes staffInfo (staffId, fullName) via aggregation lookup', async () => {
+    mockClaimModel.aggregate.mockReturnValue({
+      exec: jest.fn().mockResolvedValue([
+        { _id: 'claim-1', staffId: 'staff-mongo-1', amount: 500, staffInfo: { staffId: 'SCW001', fullName: 'Jane Doe' } },
+      ]),
+    });
+    mockClaimModel.countDocuments.mockReturnValue({ exec: jest.fn().mockResolvedValue(1) });
+
+    const result = await service.listClaims({ page: 1, limit: 20 });
+
+    expect(result.data[0].staffInfo).toEqual({ staffId: 'SCW001', fullName: 'Jane Doe' });
+    expect(mockStaffService.findManyByStaffIdPattern).not.toHaveBeenCalled();
+  });
+
+  it('listClaims resolves a staffId text filter to Mongo _id(s) before matching', async () => {
+    mockStaffService.findManyByStaffIdPattern.mockResolvedValue([{ _id: { toString: () => 'staff-mongo-1' } }]);
+    mockClaimModel.aggregate.mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+    mockClaimModel.countDocuments.mockReturnValue({ exec: jest.fn().mockResolvedValue(0) });
+
+    await service.listClaims({ staffId: 'SCW001', page: 1, limit: 20 });
+
+    expect(mockStaffService.findManyByStaffIdPattern).toHaveBeenCalledWith('SCW001');
+    const pipeline = mockClaimModel.aggregate.mock.calls[0][0];
+    expect(pipeline[0]).toEqual({ $match: { staffId: 'staff-mongo-1' } });
+  });
+
+  it('listClaims returns an empty page without querying claims when no staff matches the filter', async () => {
+    mockStaffService.findManyByStaffIdPattern.mockResolvedValue([]);
+
+    const result = await service.listClaims({ staffId: 'UNKNOWN', page: 1, limit: 20 });
+
+    expect(result).toEqual({ data: [], total: 0, page: 1, limit: 20, totalPages: 0 });
+    expect(mockClaimModel.aggregate).not.toHaveBeenCalled();
   });
 });

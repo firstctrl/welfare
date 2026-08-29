@@ -5,6 +5,7 @@ import { AuditAction, AuditEntity, ClaimSource, ClaimStatus, CreateClaimDto, Pag
 import { Claim, ClaimDocument } from './schemas/claim.schema';
 import { Contribution, ContributionDocument } from '../contributions/schemas/contribution.schema';
 import { AuditService } from '../audit/audit.service';
+import { StaffService } from '../staff/staff.service';
 import { ClaimQueryDto } from './dto/claim-query.dto';
 
 @Injectable()
@@ -13,6 +14,7 @@ export class ClaimsService {
     @InjectModel(Claim.name) private readonly claimModel: Model<ClaimDocument>,
     @InjectModel(Contribution.name) private readonly contributionModel: Model<ContributionDocument>,
     private readonly auditService: AuditService,
+    private readonly staffService: StaffService,
   ) {}
 
   async getStaffBalance(staffId: string): Promise<number> {
@@ -94,17 +96,44 @@ export class ClaimsService {
     return this.claimModel.find({ staffId }).sort({ year: -1, month: -1 }).exec();
   }
 
-  async listClaims(query: ClaimQueryDto): Promise<PaginatedResult<ClaimDocument>> {
+  async listClaims(query: ClaimQueryDto): Promise<PaginatedResult<any>> {
     const { page = 1, limit = 20, staffId, claimType, status, year } = query;
-    const filter: Record<string, unknown> = {};
-    if (staffId) filter.staffId = staffId;
-    if (claimType) filter.claimType = claimType;
-    if (status) filter.status = status;
-    if (year) filter.year = year;
+    const match: Record<string, unknown> = {};
+    if (staffId) {
+      // staffId query is the employee code (e.g. "SCW001"); resolve to MongoDB _id(s) via regex
+      const matched = await this.staffService.findManyByStaffIdPattern(staffId);
+      if (!matched.length) return { data: [], total: 0, page, limit, totalPages: 0 };
+      const ids = matched.map((s) => s._id.toString());
+      match.staffId = ids.length === 1 ? ids[0] : { $in: ids };
+    }
+    if (claimType) match.claimType = claimType;
+    if (status) match.status = status;
+    if (year) match.year = year;
     const skip = (page - 1) * limit;
     const [data, total] = await Promise.all([
-      this.claimModel.find(filter).sort({ year: -1, month: -1 }).skip(skip).limit(limit).exec(),
-      this.claimModel.countDocuments(filter).exec(),
+      this.claimModel.aggregate([
+        { $match: match },
+        { $sort: { year: -1, month: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        { $addFields: { _staffObjId: { $toObjectId: '$staffId' } } },
+        {
+          $lookup: {
+            from: 'staff',
+            localField: '_staffObjId',
+            foreignField: '_id',
+            as: '_staffArr',
+            pipeline: [{ $project: { staffId: 1, fullName: 1 } }],
+          },
+        },
+        {
+          $addFields: {
+            staffInfo: { $arrayElemAt: ['$_staffArr', 0] },
+          },
+        },
+        { $project: { _staffArr: 0, _staffObjId: 0 } },
+      ]).exec(),
+      this.claimModel.countDocuments(match).exec(),
     ]);
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
