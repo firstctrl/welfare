@@ -221,7 +221,7 @@ export function LoanDetailClient({ id }: { id: string }) {
             >
               Email Schedule
             </Button>
-            {loan.status === LoanStatus.Active && (
+            {(loan.status === LoanStatus.Active || loan.status === LoanStatus.Defaulted) && (
               <Button variant="primary" size="sm" Icon={CreditCard} onClick={() => setShowPaymentModal(true)}>
                 Record Payment
               </Button>
