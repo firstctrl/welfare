@@ -799,6 +799,50 @@ function SecuritySection({ cfg, onUpdate, onDirtyChange, canEdit }: { cfg: Confi
   );
 }
 
+// ─── section: Remittances ───────────────────────────────────────────────────
+
+const REMITTANCE_KEYS = ['REMITTANCE_CHARGE_RATE'] as const;
+
+function RemittancesSection({ cfg, onUpdate, onDirtyChange, canEdit }: { cfg: ConfigMap; onUpdate: (next: ConfigMap) => void; onDirtyChange: (dirty: boolean) => void; canEdit: boolean }) {
+  const [rate, setRate] = useState(cfg['REMITTANCE_CHARGE_RATE']?.value ?? '3');
+  const [saving, setSaving] = useState(false);
+
+  const [original] = useState(() => cfg['REMITTANCE_CHARGE_RATE']?.value ?? '3');
+  const dirty = rate !== original;
+  const meta = latestEntry(cfg, [...REMITTANCE_KEYS]);
+
+  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
+
+  async function save() {
+    if (!dirty) return;
+    const pct = parseFloat(rate);
+    if (isNaN(pct) || pct < 0 || pct > 100) {
+      toast.error('Charge rate must be between 0 and 100');
+      return;
+    }
+    setSaving(true);
+    try {
+      const next = await updateConfig({ REMITTANCE_CHARGE_RATE: rate });
+      onUpdate(next);
+      setRate(next['REMITTANCE_CHARGE_RATE']?.value ?? rate);
+      onDirtyChange(false);
+      toast.success('Remittance settings saved');
+    } catch {
+      toast.error('Failed to save remittance settings');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <SectionCard title="Remittances" meta={meta} onSave={save} saving={saving} dirty={dirty} canEdit={canEdit}>
+      <Field label="Charge Rate" helper="Percentage deducted from gross contributions when a remittance is recorded.">
+        <Input type="number" min={0} max={100} step={0.1} value={rate} onChange={(e) => setRate(e.target.value)} disabled={saving} suffix="%" />
+      </Field>
+    </SectionCard>
+  );
+}
+
 // ─── root client component ───────────────────────────────────────────────────
 
 export function SettingsClient() {
@@ -866,6 +910,7 @@ export function SettingsClient() {
       <LoansSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('loans')} canEdit={canEdit} />
       <GuarantorsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('guarantors')} canEdit={canEdit} />
       <PaymentsSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('payments')} canEdit={canEdit} />
+      <RemittancesSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('remittances')} canEdit={canEdit} />
       <EmailSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('email')} canEdit={canEdit} />
       <AuthenticationSection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('authentication')} canEdit={canEdit} />
       <SecuritySection cfg={cfg} onUpdate={setCfg} onDirtyChange={makeDirtyHandler('security')} canEdit={canEdit} />

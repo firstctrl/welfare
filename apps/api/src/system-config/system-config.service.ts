@@ -45,6 +45,7 @@ const SEED_DEFAULTS: Array<{ key: ConfigKey; value: string; description?: string
   { key: ConfigKey.EmailLoanScheduleEnabled, value: 'false' },
   { key: ConfigKey.SessionIdleTimeoutMinutes, value: '30' },
   { key: ConfigKey.AdLoginEnabled, value: 'true' },
+  { key: ConfigKey.RemittanceChargeRate, value: '3' },
 ];
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -287,6 +288,10 @@ export class SystemConfigService implements OnModuleInit {
             throw new UnprocessableEntityException(`SessionIdleTimeoutMinutes must be between 5 and 480`);
           break;
         }
+        case ConfigKey.RemittanceChargeRate:
+          if (!(parseFloat(value) >= 0 && parseFloat(value) <= 100))
+            throw new UnprocessableEntityException(`RemittanceChargeRate must be between 0 and 100`);
+          break;
         // Keys with no rules: accept any non-undefined string
         default:
           break;
