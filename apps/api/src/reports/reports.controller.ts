@@ -84,6 +84,11 @@ const CSV_COLUMNS = {
     { header: 'Bad Debt (GHS)',  field: 'badDebtAmount' },
     { header: 'Settled At',      field: 'settledAt' },
   ],
+  fundSummaryClaims: [
+    { header: 'Claim Type',   field: 'claimType' },
+    { header: 'Count',        field: 'count' },
+    { header: 'Total (GHS)',  field: 'totalAmount' },
+  ],
 };
 
 @Controller('reports')
@@ -416,6 +421,32 @@ export class ReportsController {
       return;
     }
     return summary.loanBreakdown;
+  }
+
+  @Get('fund-summary/claims')
+  @RequirePermission(AppModule.Reports, 'readonly')
+  async getFundSummaryClaims(
+    @Query() dto: FundSummaryQueryDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const quarterMap: Record<number, [number, number]> = { 1: [1,3], 2: [4,6], 3: [7,9], 4: [10,12] };
+    let fromMonth = dto.fromMonth ?? 1;
+    let toMonth   = dto.toMonth ?? 12;
+    if (dto.quarter) [fromMonth, toMonth] = quarterMap[dto.quarter];
+    const summary = await this.reportsService.getFundSummary(dto.year, fromMonth, toMonth);
+    if (dto.format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="fund-claims-${dto.year}.csv"`);
+      return this.reportsService.generateCsv(summary.claimsBreakdown, CSV_COLUMNS.fundSummaryClaims.map(c => c.field));
+    }
+    if (dto.format === 'pdf') {
+      const pdf = await this.reportsService.generatePdf(`Fund Summary — Welfare Claims ${dto.year}`, CSV_COLUMNS.fundSummaryClaims, summary.claimsBreakdown);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="fund-claims-${dto.year}.pdf"`);
+      res.end(pdf);
+      return;
+    }
+    return summary.claimsBreakdown;
   }
 
   @Get('fund-summary/defaults')
