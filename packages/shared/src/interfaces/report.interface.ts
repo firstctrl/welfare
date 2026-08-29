@@ -337,6 +337,18 @@ export interface IFundSummaryDiscountRow {
   dateGranted: string;
 }
 
+export interface IFundSummaryClaimsBreakdownRow {
+  claimType: string;
+  count: number;
+  totalAmount: number;
+}
+
+export interface IFundSummaryClaims {
+  totalAmount: number;
+  count: number;
+  byType: Record<string, number>;
+}
+
 export interface IFundSummaryReport {
   period: { year: number; fromMonth: number; toMonth: number };
   contributions: IFundSummaryContributions;
@@ -349,4 +361,6 @@ export interface IFundSummaryReport {
   defaultDetails: IFundSummaryDefaultRow[];
   totalDiscountsGiven: number;
   discountBreakdown: IFundSummaryDiscountRow[];
+  claims: IFundSummaryClaims;
+  claimsBreakdown: IFundSummaryClaimsBreakdownRow[];
 }

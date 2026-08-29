@@ -1,0 +1,120 @@
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { AuditAction, AuditEntity, ClaimSource, ClaimStatus, CreateClaimDto, PaginatedResult } from '@welfare/shared';
+import { Claim, ClaimDocument } from './schemas/claim.schema';
+import { Contribution, ContributionDocument } from '../contributions/schemas/contribution.schema';
+import { AuditService } from '../audit/audit.service';
+import { ClaimQueryDto } from './dto/claim-query.dto';
+
+@Injectable()
+export class ClaimsService {
+  constructor(
+    @InjectModel(Claim.name) private readonly claimModel: Model<ClaimDocument>,
+    @InjectModel(Contribution.name) private readonly contributionModel: Model<ContributionDocument>,
+    private readonly auditService: AuditService,
+  ) {}
+
+  async getStaffBalance(staffId: string): Promise<number> {
+    const [contribResult, claimResult] = await Promise.all([
+      this.contributionModel
+        .aggregate([
+          { $match: { staffId, isDebit: { $ne: true } } },
+          { $group: { _id: null, total: { $sum: '$paidAmount' } } },
+        ])
+        .exec(),
+      this.claimModel
+        .aggregate([
+          { $match: { staffId, status: ClaimStatus.Approved } },
+          { $group: { _id: null, total: { $sum: '$amount' } } },
+        ])
+        .exec(),
+    ]);
+    const totalPaid = (contribResult as { total: number }[])[0]?.total ?? 0;
+    const totalApprovedClaims = (claimResult as { total: number }[])[0]?.total ?? 0;
+    return totalPaid - totalApprovedClaims;
+  }
+
+  async createClaim(dto: CreateClaimDto, actorId: string, actorName: string): Promise<ClaimDocument> {
+    const balance = await this.getStaffBalance(dto.staffId);
+    if (dto.amount > balance) {
+      throw new BadRequestException(`Claim amount exceeds available balance of GHS ${balance.toFixed(2)}`);
+    }
+    const claim = await this.claimModel.create({
+      ...dto,
+      status: ClaimStatus.Pending,
+      source: ClaimSource.ManualEntry,
+      recordedBy: actorName,
+    });
+    this.auditService.log(
+      actorId, actorName, AuditAction.Create, AuditEntity.Claim,
+      claim._id.toString(), undefined, claim.toObject() as unknown as Record<string, unknown>,
+    );
+    return claim;
+  }
+
+  async approveClaim(id: string, actorId: string, actorName: string): Promise<ClaimDocument> {
+    const claim = await this.findById(id);
+    const balance = await this.getStaffBalance(claim.staffId);
+    if (claim.amount > balance) {
+      throw new BadRequestException(`Cannot approve — claim amount exceeds current available balance of GHS ${balance.toFixed(2)}`);
+    }
+    const before = claim.toObject() as unknown as Record<string, unknown>;
+    claim.status = ClaimStatus.Approved;
+    claim.approvedBy = actorName;
+    claim.approvedAt = new Date();
+    await claim.save();
+    this.auditService.log(
+      actorId, actorName, AuditAction.Approve, AuditEntity.Claim,
+      id, before, claim.toObject() as unknown as Record<string, unknown>,
+    );
+    return claim;
+  }
+
+  async rejectClaim(id: string, reason: string, actorId: string, actorName: string): Promise<ClaimDocument> {
+    const claim = await this.findById(id);
+    const before = claim.toObject() as unknown as Record<string, unknown>;
+    claim.status = ClaimStatus.Rejected;
+    claim.rejectedReason = reason;
+    await claim.save();
+    this.auditService.log(
+      actorId, actorName, AuditAction.Reject, AuditEntity.Claim,
+      id, before, claim.toObject() as unknown as Record<string, unknown>,
+    );
+    return claim;
+  }
+
+  async findById(id: string): Promise<ClaimDocument> {
+    const claim = await this.claimModel.findById(id).exec();
+    if (!claim) throw new NotFoundException(`Claim ${id} not found`);
+    return claim;
+  }
+
+  async findByStaff(staffId: string): Promise<ClaimDocument[]> {
+    return this.claimModel.find({ staffId }).sort({ year: -1, month: -1 }).exec();
+  }
+
+  async listClaims(query: ClaimQueryDto): Promise<PaginatedResult<ClaimDocument>> {
+    const { page = 1, limit = 20, staffId, claimType, status, year } = query;
+    const filter: Record<string, unknown> = {};
+    if (staffId) filter.staffId = staffId;
+    if (claimType) filter.claimType = claimType;
+    if (status) filter.status = status;
+    if (year) filter.year = year;
+    const skip = (page - 1) * limit;
+    const [data, total] = await Promise.all([
+      this.claimModel.find(filter).sort({ year: -1, month: -1 }).skip(skip).limit(limit).exec(),
+      this.claimModel.countDocuments(filter).exec(),
+    ]);
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  async deleteClaim(id: string, actorId: string, actorName: string): Promise<void> {
+    const claim = await this.findById(id);
+    await this.claimModel.findByIdAndDelete(id).exec();
+    this.auditService.log(
+      actorId, actorName, AuditAction.Delete, AuditEntity.Claim,
+      id, claim.toObject() as unknown as Record<string, unknown>, undefined,
+    );
+  }
+}

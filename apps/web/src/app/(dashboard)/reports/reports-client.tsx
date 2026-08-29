@@ -522,7 +522,7 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
     setShowDropdown(false);
   }
 
-  const { kpis, rows, years } = data ?? {};
+  const { kpis, rows, years, claimYears } = data ?? {};
 
   return (
     <div className="space-y-5">
@@ -629,6 +629,15 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
                 iconKind="danger"
               />
             )}
+            {(kpis.totalClaims ?? 0) > 0 && (
+              <KpiCard
+                label="Welfare Claims"
+                value={fmtGHS(kpis.totalClaims ?? 0)}
+                subtext="Deducted from contribution balance"
+                icon={AlertCircle}
+                iconKind="danger"
+              />
+            )}
           </div>
 
           {/* Crosstab */}
@@ -702,6 +711,41 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
           ) : (
             <div className="flex items-center justify-center py-12 border border-neutral-200 rounded-md text-neutral-400 text-sm">
               No contribution records found for this staff member
+            </div>
+          )}
+
+          {claimYears && claimYears.length > 0 && (
+            <div className="overflow-x-auto rounded-md border border-neutral-200">
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-primary-600 text-white">
+                    <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap w-16">Year</th>
+                    <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">Claim Type</th>
+                    <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {claimYears.flatMap((yearRow) =>
+                    yearRow.claims.map((c, i) => (
+                      <tr key={`${yearRow.year}-${i}`} className="hover:bg-neutral-50">
+                        {i === 0 && (
+                          <td rowSpan={yearRow.claims.length} className="px-4 py-2 font-bold text-neutral-700 bg-neutral-50 align-top">
+                            {yearRow.year}
+                          </td>
+                        )}
+                        <td className="px-4 py-2 text-neutral-700">{c.claimType}</td>
+                        <td className="px-4 py-2 text-right font-mono tabular text-neutral-900">{fmtGHS(c.amount)}</td>
+                      </tr>
+                    )),
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-neutral-50 border-t-2 border-neutral-200">
+                    <td colSpan={2} className="px-4 py-2 text-right font-bold text-neutral-700 text-xs uppercase tracking-wide">Total Welfare Claims</td>
+                    <td className="px-4 py-2 text-right font-bold font-mono tabular text-neutral-900">{fmtGHS(kpis.totalClaims ?? 0)}</td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           )}
 

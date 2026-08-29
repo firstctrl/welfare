@@ -106,11 +106,17 @@ export interface StaffStatementRow {
   yearOffsetTotal?: number;
 }
 
+export interface StaffStatementClaimYear {
+  year: number;
+  claims: Array<{ claimType: string; amount: number }>;
+}
+
 export interface StaffStatement {
   staff: { _id: string; fullName: string; staffId: string; email?: string };
-  kpis: { totalPaid: number; totalExpected: number; missedMonths: number; totalSurplus: number; collectionRate: number; totalOffsets?: number };
+  kpis: { totalPaid: number; totalExpected: number; missedMonths: number; totalSurplus: number; collectionRate: number; totalOffsets?: number; totalClaims?: number };
   years: number[];
   rows: StaffStatementRow[];
+  claimYears?: StaffStatementClaimYear[];
 }
 
 export async function getStaffStatement(staffMongoId: string): Promise<StaffStatement> {
@@ -241,7 +247,7 @@ export async function getFundSummary(params: FundSummaryParams): Promise<IFundSu
 }
 
 export async function downloadFundSummaryFile(
-  sub: 'contributions' | 'loans' | 'defaults',
+  sub: 'contributions' | 'loans' | 'defaults' | 'claims',
   params: FundSummaryParams,
   format: 'csv' | 'pdf',
 ): Promise<void> {

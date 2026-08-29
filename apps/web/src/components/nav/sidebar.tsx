@@ -15,6 +15,7 @@ import {
   Coins,
   Receipt,
   TrendingUp,
+  HandCoins,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -33,6 +34,7 @@ const navItems: NavItem[] = [
   { href: '/',              label: 'Dashboard',     icon: LayoutDashboard },
   { href: '/staff',         label: 'Staff',         icon: Users,         matchPrefix: true, module: AppModule.Staff },
   { href: '/contributions', label: 'Contributions', icon: Coins,         matchPrefix: true, module: AppModule.Contributions },
+  { href: '/claims',        label: 'Claims',        icon: HandCoins,     matchPrefix: true, module: AppModule.Claims },
   { href: '/loans',         label: 'Loans',         icon: Landmark,      matchPrefix: true, module: AppModule.Loans },
   { href: '/remittances',   label: 'Remittances',   icon: Receipt,       matchPrefix: true, module: AppModule.Remittances },
   { href: '/investments',   label: 'Investments',   icon: TrendingUp,    matchPrefix: true, module: AppModule.Investments },

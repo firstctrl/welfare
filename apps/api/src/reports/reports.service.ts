@@ -28,6 +28,8 @@ import {
   IFundSummaryContributionBreakdownRow,
   IFundSummaryLoanBreakdownRow,
   IFundSummaryDefaultRow,
+  IFundSummaryClaimsBreakdownRow,
+  ClaimStatus,
 } from '@welfare/shared';
 import { Contribution, ContributionDocument } from '../contributions/schemas/contribution.schema';
 import { Loan, LoanDocument } from '../loans/schemas/loan.schema';
@@ -35,6 +37,7 @@ import { LoanRepayment, LoanRepaymentDocument } from '../loans/schemas/loan-repa
 import { Staff, StaffDocument } from '../staff/schemas/staff.schema';
 import { ImportBatch, ImportBatchDocument } from '../contributions/schemas/import-batch.schema';
 import { Discount, DiscountDocument } from '../loans/schemas/discount.schema';
+import { Claim, ClaimDocument } from '../claims/schemas/claim.schema';
 
 const EXITED_STATUSES: StaffStatus[] = [
   StaffStatus.Resigned,
@@ -65,6 +68,7 @@ export class ReportsService {
     @InjectModel(Staff.name) private readonly staffModel: Model<StaffDocument>,
     @InjectModel(ImportBatch.name) private readonly batchModel: Model<ImportBatchDocument>,
     @InjectModel(Discount.name) private readonly discountModel: Model<DiscountDocument>,
+    @InjectModel(Claim.name) private readonly claimModel: Model<ClaimDocument>,
     @Optional() @Inject(MINIO_CLIENT) private readonly minioClient?: MinioClient,
   ) {}
 
@@ -869,7 +873,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
 
   async getStaffContributionStatement(staffMongoId: string): Promise<{
     staff: { _id: string; fullName: string; staffId: string; email?: string };
-    kpis: { totalPaid: number; totalExpected: number; missedMonths: number; totalSurplus: number; collectionRate: number; totalOffsets: number };
+    kpis: { totalPaid: number; totalExpected: number; missedMonths: number; totalSurplus: number; collectionRate: number; totalOffsets: number; totalClaims: number };
     years: number[];
     rows: Array<{
       year: number;
@@ -878,6 +882,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
       yearTotal: number;
       yearOffsetTotal: number;
     }>;
+    claimYears: Array<{ year: number; claims: Array<{ claimType: string; amount: number }> }>;
   }> {
     const staff = await this.staffModel.findById(staffMongoId).exec();
     if (!staff) throw new Error(`Staff ${staffMongoId} not found`);
@@ -965,16 +970,33 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
     const collectionRate = totalExpected > 0 ? Math.round((totalPaid / totalExpected) * 100) : 0;
     const totalOffsets = offsetDebits.reduce((s, d) => s + d.paidAmount, 0);
 
+    const approvedClaims = await this.claimModel
+      .find({ staffId: staffMongoId, status: ClaimStatus.Approved })
+      .sort({ year: 1 })
+      .exec();
+    const totalClaims = approvedClaims.reduce((s, c) => s + c.amount, 0);
+    const claimsByYear = new Map<number, Array<{ claimType: string; amount: number }>>();
+    for (const c of approvedClaims) {
+      const bucket = claimsByYear.get(c.year) ?? [];
+      bucket.push({ claimType: c.claimType, amount: c.amount });
+      claimsByYear.set(c.year, bucket);
+    }
+    const claimYears = [...claimsByYear.keys()].sort((a, b) => a - b).map((year) => ({
+      year,
+      claims: claimsByYear.get(year)!,
+    }));
+
     return {
       staff: { _id: staff._id.toString(), fullName: staff.fullName, staffId: staff.staffId, email: staff.email },
-      kpis: { totalPaid, totalExpected, missedMonths, totalSurplus, collectionRate, totalOffsets },
+      kpis: { totalPaid, totalExpected, missedMonths, totalSurplus, collectionRate, totalOffsets, totalClaims },
       years,
       rows,
+      claimYears,
     };
   }
 
   async generateStatementPdf(staffMongoId: string): Promise<Buffer> {
-    const { staff, kpis, years, rows } = await this.getStaffContributionStatement(staffMongoId);
+    const { staff, kpis, years, rows, claimYears } = await this.getStaffContributionStatement(staffMongoId);
     const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const fmt = (n: number) => `GHS ${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -1045,6 +1067,16 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
 </table></div>`
       : '';
 
+    const totalClaimsAmount = claimYears.reduce((s, y) => s + y.claims.reduce((s2, c) => s2 + c.amount, 0), 0);
+    const claimsTableHtml = claimYears.length
+      ? `<div style="margin-top:16px"><div style="font-size:11px;font-weight:bold;margin-bottom:6px;color:#1e293b">Welfare Claims</div>
+<table>
+  <thead><tr><th style="text-align:left">Year</th><th style="text-align:left">Claim Type</th><th style="text-align:right">Amount</th></tr></thead>
+  <tbody>${claimYears.map(y => y.claims.map((c, i) => `<tr>${i === 0 ? `<td rowspan="${y.claims.length}" class="year-label">${y.year}</td>` : ''}<td style="text-align:left">${c.claimType}</td><td style="text-align:right">${fmt(c.amount)}</td></tr>`).join('')).join('')}</tbody>
+  <tfoot><tr><td colspan="2" style="text-align:right;font-weight:bold">Total Welfare Claims</td><td style="text-align:right;font-weight:bold">${fmt(totalClaimsAmount)}</td></tr></tfoot>
+</table></div>`
+      : '';
+
     const html = `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"/>
@@ -1088,6 +1120,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   <div class="kpi"><div class="kpi-label">Collection Rate</div><div class="kpi-value">${kpis.collectionRate}%</div></div>
   <div class="kpi"><div class="kpi-label">Missed / Partial</div><div class="kpi-value">${kpis.missedMonths} months</div></div>
   <div class="kpi"><div class="kpi-label">Loan Deductions</div><div class="kpi-value" style="color:#dc2626">${fmt(kpis.totalOffsets)}</div></div>
+  <div class="kpi"><div class="kpi-label">Welfare Claims</div><div class="kpi-value" style="color:#dc2626">${fmt(kpis.totalClaims)}</div></div>
 </div>
 <table>
   <thead><tr><th>Year</th>${headerCells}</tr></thead>
@@ -1101,6 +1134,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
 </div>
 <div style="margin-top:8px;font-size:9px;color:#6b7280;font-style:italic">Red figures indicate amounts deducted from your contributions: either to settle a loan you guaranteed or to cover your own missed loan instalment.</div>
 ${offsetDetailHtml}
+${claimsTableHtml}
 </body></html>`;
 
     const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] });
@@ -1511,6 +1545,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
       defaultRows,
       allTimeDiscountsAgg,
       periodDiscounts,
+      claimGroups,
     ] = await Promise.all([
       // 1. Per-month contribution breakdown
       this.contribModel
@@ -1676,6 +1711,14 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
           { $sort: { dateGranted: -1 } },
         ])
         .exec(),
+
+      // 9. Claims breakdown by type (approved claims disbursed in period)
+      this.claimModel
+        .aggregate([
+          { $match: { year, month: { $gte: fromMonth, $lte: toMonth }, status: ClaimStatus.Approved } },
+          { $group: { _id: '$claimType', count: { $sum: 1 }, totalAmount: { $sum: '$amount' } } },
+        ])
+        .exec(),
     ]);
 
     // ── Contribution summary ──
@@ -1726,6 +1769,16 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
       settledAt:       r.settledAt ? new Date(r.settledAt).toISOString() : '',
     }));
 
+    // ── Claims summary ──
+    const claimsBreakdown: IFundSummaryClaimsBreakdownRow[] = (claimGroups as any[]).map(g => ({
+      claimType: g._id,
+      count: g.count,
+      totalAmount: g.totalAmount,
+    }));
+    const totalClaimsAmount = claimsBreakdown.reduce((s, r) => s + r.totalAmount, 0);
+    const totalClaimsCount = claimsBreakdown.reduce((s, r) => s + r.count, 0);
+    const claimsByType: Record<string, number> = Object.fromEntries(claimsBreakdown.map(r => [r.claimType, r.totalAmount]));
+
     return {
       period: { year, fromMonth, toMonth },
       contributions: {
@@ -1774,6 +1827,8 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
         amount: d.amount,
         dateGranted: d.dateGranted instanceof Date ? d.dateGranted.toISOString() : d.dateGranted,
       })),
+      claims: { totalAmount: totalClaimsAmount, count: totalClaimsCount, byType: claimsByType },
+      claimsBreakdown,
     };
   }
 }

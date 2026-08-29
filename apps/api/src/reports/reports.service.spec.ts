@@ -7,12 +7,15 @@ import { LoanRepayment } from '../loans/schemas/loan-repayment.schema';
 import { Staff } from '../staff/schemas/staff.schema';
 import { ImportBatch } from '../contributions/schemas/import-batch.schema';
 import { Discount } from '../loans/schemas/discount.schema';
+import { Claim } from '../claims/schemas/claim.schema';
 import {
   ContributionStatus,
   LoanStatus,
   LoanRepaymentStatus,
   StaffStatus,
   RepaymentSource,
+  ClaimStatus,
+  ClaimType,
 } from '@welfare/shared';
 
 const mockContribAggregate = jest.fn();
@@ -34,6 +37,9 @@ const mockStaffModel = { find: mockStaffFind, findById: mockStaffFindById };
 const mockBatchModel = { find: mockBatchFind };
 const mockDiscountAggregate = jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
 const mockDiscountModel = { aggregate: mockDiscountAggregate };
+const mockClaimFind = jest.fn().mockReturnValue({ sort: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }) });
+const mockClaimAggregate = jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+const mockClaimModel = { find: mockClaimFind, aggregate: mockClaimAggregate };
 
 // Supports both `.exec()` directly and `.select().lean().exec()` chains.
 const chainable = (docs: any[]) => ({
@@ -58,6 +64,7 @@ describe('ReportsService', () => {
         { provide: getModelToken(Staff.name), useValue: mockStaffModel },
         { provide: getModelToken(ImportBatch.name), useValue: mockBatchModel },
         { provide: getModelToken(Discount.name), useValue: mockDiscountModel },
+        { provide: getModelToken(Claim.name), useValue: mockClaimModel },
       ],
     }).compile();
     service = module.get<ReportsService>(ReportsService);
@@ -539,6 +546,25 @@ describe('ReportsService', () => {
       expect(result.defaultDetails[0].badDebtAmount).toBe(3000);
     });
 
+    it('includes a claims breakdown by type', async () => {
+      mockClaimAggregate.mockReturnValueOnce(agg([
+        { _id: ClaimType.Marriage, count: 2, totalAmount: 1000 },
+        { _id: ClaimType.Funeral, count: 1, totalAmount: 400 },
+      ]));
+
+      const result = await service.getFundSummary(year, fromMonth, toMonth);
+
+      expect(result.claimsBreakdown).toEqual([
+        { claimType: ClaimType.Marriage, count: 2, totalAmount: 1000 },
+        { claimType: ClaimType.Funeral, count: 1, totalAmount: 400 },
+      ]);
+      expect(result.claims).toEqual({
+        totalAmount: 1400,
+        count: 3,
+        byType: { [ClaimType.Marriage]: 1000, [ClaimType.Funeral]: 400 },
+      });
+    });
+
     it('handles zero totalExpected with collectionRate of 0', async () => {
       mockContribAggregate
         .mockReset()
@@ -622,6 +648,41 @@ describe('ReportsService', () => {
 
       const result = await service.getStaffContributionStatement('staffB');
       expect(result.kpis.missedMonths).toBe(0);
+    });
+
+    it('groups approved claims by year with rowspan-ready structure', async () => {
+      mockStaffFindById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: { toString: () => 'staffC' },
+          fullName: 'Jane Doe',
+          staffId: 'GL012',
+          email: 'jane@example.com',
+          status: StaffStatus.Active,
+          dateOfFirstContribution: new Date('2024-01-01'),
+          dateOfEmployment: new Date('2024-01-01'),
+        }),
+      });
+      mockContribFind
+        .mockReturnValueOnce({ sort: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) })
+        .mockReturnValueOnce(chainable([]));
+      mockClaimFind.mockReturnValueOnce({
+        sort: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([
+            { year: 2024, claimType: ClaimType.Marriage, amount: 500, status: ClaimStatus.Approved },
+            { year: 2024, claimType: ClaimType.Funeral, amount: 300, status: ClaimStatus.Approved },
+            { year: 2025, claimType: ClaimType.Birth, amount: 200, status: ClaimStatus.Approved },
+          ]),
+        }),
+      });
+
+      const result = await service.getStaffContributionStatement('staffC');
+
+      expect(result.claimYears).toEqual([
+        { year: 2024, claims: [{ claimType: ClaimType.Marriage, amount: 500 }, { claimType: ClaimType.Funeral, amount: 300 }] },
+        { year: 2025, claims: [{ claimType: ClaimType.Birth, amount: 200 }] },
+      ]);
+      expect(result.kpis.totalClaims).toBe(1000);
     });
   });
 

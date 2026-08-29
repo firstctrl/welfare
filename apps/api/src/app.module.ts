@@ -23,6 +23,7 @@ import { SystemConfigModule } from './system-config/system-config.module';
 import { StaffModule } from './staff/staff.module';
 import { SearchModule } from './search/search.module';
 import { ContributionsModule } from './contributions/contributions.module';
+import { ClaimsModule } from './claims/claims.module';
 import { LoansModule } from './loans/loans.module';
 import { ReportsModule } from './reports/reports.module';
 import { RemittancesModule } from './remittances/remittances.module';
@@ -69,6 +70,7 @@ import { ImportProgressModule } from './common/import-progress.module';
     StaffModule,
     SearchModule,
     ContributionsModule,
+    ClaimsModule,
     LoansModule,
     RemittancesModule,
     InvestmentsModule,
