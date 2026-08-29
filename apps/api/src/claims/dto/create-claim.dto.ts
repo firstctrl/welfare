@@ -1,10 +1,13 @@
 import { IsEnum, IsMongoId, IsNumber, Max, Min, ValidateIf } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { ClaimType, CessationReason } from '@welfare/shared';
 
 export class CreateClaimDto {
   @IsMongoId() staffId!: string;
   @IsEnum(ClaimType) claimType!: ClaimType;
+  // Empty-string values reach here from cleared/unselected form fields — normalize to
+  // undefined so a non-Cessation submission never forwards '' into the Mongoose enum.
+  @Transform(({ value }) => (value === '' ? undefined : value))
   @ValidateIf((o) => o.claimType === ClaimType.Cessation)
   @IsEnum(CessationReason)
   subReason?: CessationReason;

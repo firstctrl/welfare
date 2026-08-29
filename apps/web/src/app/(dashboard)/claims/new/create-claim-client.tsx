@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -34,6 +34,10 @@ export default function CreateClaimClient() {
   const watchAmount = watch('amount');
   const watchStaffId = watch('staffId');
 
+  useEffect(() => {
+    if (watchClaimType !== ClaimType.Cessation) setValue('subReason', undefined);
+  }, [watchClaimType, setValue]);
+
   const { data: balanceData } = useQuery({
     queryKey: ['claim-balance', watchStaffId],
     queryFn: () => getStaffClaimBalance(watchStaffId),
@@ -58,7 +62,7 @@ export default function CreateClaimClient() {
     mutationFn: (values: ClaimFormValues) => createClaim({
       staffId: values.staffId,
       claimType: values.claimType as ClaimType,
-      subReason: values.subReason as CessationReason | undefined,
+      subReason: values.claimType === ClaimType.Cessation ? (values.subReason as CessationReason) : undefined,
       month: values.month,
       year: values.year,
       amount: values.amount,
