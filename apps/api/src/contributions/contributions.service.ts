@@ -377,19 +377,34 @@ export class ContributionsService {
     actorId: string,
     actorName: string,
   ): Promise<void> {
-    // Match any unsettled loan owed to a guarantor — borrower's new payments
-    // redirect to the guarantor until the offset is fully restituted.
+    const leftover = await this.redirectToGuarantorRestitution(staffId, newPayment, actorId, actorName);
+    if (leftover > 0) {
+      await this.redirectToBadDebtRecovery(staffId, leftover, actorId, actorName);
+    }
+  }
+
+  /**
+   * Match any unsettled loan owed to a guarantor — borrower's new payments
+   * redirect to the guarantor until the offset is fully restituted.
+   * Returns whatever portion of newPayment was not redirected.
+   */
+  private async redirectToGuarantorRestitution(
+    staffId: string,
+    newPayment: number,
+    actorId: string,
+    actorName: string,
+  ): Promise<number> {
     const restitutionLoan = await this.loanModel.findOne({
       staffId,
       status: { $in: [LoanStatus.Active, LoanStatus.Defaulted] },
       $expr: { $gt: ['$guarantorRestitutionOwed', '$guarantorRestitutionPaid'] },
     }).exec();
 
-    if (!restitutionLoan) return;
+    if (!restitutionLoan) return newPayment;
 
     const remainingOwed = restitutionLoan.guarantorRestitutionOwed - restitutionLoan.guarantorRestitutionPaid;
     const redirectAmount = Math.min(newPayment, remainingOwed);
-    if (redirectAmount <= 0) return;
+    if (redirectAmount <= 0) return newPayment;
 
     const now = new Date();
     const month = now.getMonth() + 1;
@@ -405,6 +420,7 @@ export class ContributionsService {
       isDebit: true,
       status: ContributionStatus.Paid,
       source: ContributionSource.DefaulterRestitution,
+      loanId: restitutionLoan._id.toString(),
       recordedBy: actorName,
     });
 
@@ -418,17 +434,78 @@ export class ContributionsService {
       isDebit: false,
       status: ContributionStatus.Paid,
       source: ContributionSource.DefaulterRestitution,
+      loanId: restitutionLoan._id.toString(),
+      borrowerStaffId: staffId,
       recordedBy: actorName,
     });
 
+    const guarantorFullyRestituted = redirectAmount >= remainingOwed;
+    const noBadDebtToRecover = (restitutionLoan.badDebtAmount ?? 0) <= 0;
+
     await this.loanModel.findByIdAndUpdate(restitutionLoan._id, {
       $inc: { guarantorRestitutionPaid: redirectAmount },
+      ...(guarantorFullyRestituted && noBadDebtToRecover ? { $set: { recoveredAt: now } } : {}),
     }).exec();
 
     this.auditService.log(
       actorId, actorName, AuditAction.Update, AuditEntity.Loan,
       restitutionLoan._id.toString(), undefined,
       { redirectAmount, guarantorId: restitutionLoan.guarantorId, staffId },
+    );
+
+    return newPayment - redirectAmount;
+  }
+
+  /**
+   * Once a loan's guarantor has been fully restituted, further borrower
+   * payments redirect to recover the fund's badDebtAmount loss instead.
+   * No counterparty is credited — this money goes back into the fund.
+   */
+  private async redirectToBadDebtRecovery(
+    staffId: string,
+    amount: number,
+    actorId: string,
+    actorName: string,
+  ): Promise<void> {
+    const badDebtLoan = await this.loanModel.findOne({
+      staffId,
+      status: { $in: [LoanStatus.Active, LoanStatus.Defaulted] },
+      $expr: { $gt: ['$badDebtAmount', '$badDebtRecovered'] },
+    }).exec();
+
+    if (!badDebtLoan) return;
+
+    const remainingBadDebt = (badDebtLoan.badDebtAmount ?? 0) - (badDebtLoan.badDebtRecovered ?? 0);
+    const redirectAmount = Math.min(amount, remainingBadDebt);
+    if (redirectAmount <= 0) return;
+
+    const now = new Date();
+
+    await this.contributionModel.create({
+      staffId,
+      month: now.getMonth() + 1,
+      year: now.getFullYear(),
+      expectedAmount: 0,
+      paidAmount: redirectAmount,
+      surplusCarriedForward: 0,
+      isDebit: true,
+      status: ContributionStatus.Paid,
+      source: ContributionSource.BadDebtRecovery,
+      loanId: badDebtLoan._id.toString(),
+      recordedBy: actorName,
+    });
+
+    const fullyRecovered = redirectAmount >= remainingBadDebt;
+
+    await this.loanModel.findByIdAndUpdate(badDebtLoan._id, {
+      $inc: { badDebtRecovered: redirectAmount },
+      ...(fullyRecovered ? { $set: { recoveredAt: now } } : {}),
+    }).exec();
+
+    this.auditService.log(
+      actorId, actorName, AuditAction.Update, AuditEntity.Loan,
+      badDebtLoan._id.toString(), undefined,
+      { event: 'bad_debt_recovered', redirectAmount, staffId, fullyRecovered },
     );
   }
 }

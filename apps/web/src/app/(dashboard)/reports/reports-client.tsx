@@ -22,6 +22,7 @@ import {
   getRepaidLoans,
   getGuarantorExposure,
   getBadDebt,
+  getRecoveryActivity,
   getExitClearance,
   getStaffStatement,
   sendStaffStatement,
@@ -46,6 +47,7 @@ import type {
   IRepaidLoanRow,
   IGuarantorExposureRow,
   IBadDebtRow,
+  IRecoveryActivityRow,
   IExitClearanceRow,
   ILoan,
   ILoanBorrower,
@@ -140,11 +142,24 @@ const COLS_EXPOSURE = [
 const colBad = createColumnHelper<IBadDebtRow>();
 const COLS_BAD = [
   colBad.accessor('staffName', { header: 'Staff Name' }),
+  colBad.accessor('status', { header: 'Status' }),
   colBad.accessor('principalAmount', { header: 'Principal', cell: i => fmtGHS(i.getValue()) }),
   colBad.accessor('exitDeductionAmount', { header: 'Exit Deduction', cell: i => fmtGHS(i.getValue()) }),
   colBad.accessor('guarantorOffsetAmount', { header: 'Guarantor Offset', cell: i => fmtGHS(i.getValue()) }),
   colBad.accessor('badDebtAmount', { header: 'Bad Debt', cell: i => fmtGHS(i.getValue()) }),
-  colBad.accessor('settledAt', { header: 'Settled At', cell: i => fmtDate(new Date(i.getValue())) }),
+  colBad.accessor('badDebtRecovered', { header: 'Recovered', cell: i => fmtGHS(i.getValue()) }),
+  colBad.accessor('outstandingBadDebt', { header: 'Outstanding', cell: i => fmtGHS(i.getValue()) }),
+  colBad.accessor('eventDate', { header: 'Date', cell: i => fmtDate(i.getValue()) }),
+];
+
+const colRecovery = createColumnHelper<IRecoveryActivityRow>();
+const COLS_RECOVERY = [
+  colRecovery.accessor('date', { header: 'Date', cell: i => fmtDate(i.getValue()) }),
+  colRecovery.accessor('kind', { header: 'Kind', cell: i => i.getValue() === 'BadDebtRecovery' ? 'Bad Debt Recovery' : 'Guarantor Restitution' }),
+  colRecovery.accessor('direction', { header: 'Direction' }),
+  colRecovery.accessor('staffName', { header: 'Staff Name' }),
+  colRecovery.accessor('borrowerName', { header: 'Borrower', cell: i => i.getValue() ?? '—' }),
+  colRecovery.accessor('amount', { header: 'Amount', cell: i => fmtGHS(i.getValue()) }),
 ];
 
 const colExit = createColumnHelper<IExitClearanceRow>();
@@ -1192,6 +1207,7 @@ const SECTIONS = [
   { id: 'repaid-loans', label: 'Repaid Loans' },
   { id: 'guarantor-exposure', label: 'Guarantor Exposure' },
   { id: 'bad-debt', label: 'Bad Debt' },
+  { id: 'recovery-activity', label: 'Recovery Activity' },
   { id: 'exit-clearance', label: 'Exit Clearance' },
   { id: 'remittances', label: 'Remittances' },
 ];
@@ -1284,6 +1300,14 @@ export function ReportsClient() {
                 queryFn={getBadDebt}
                 columns={COLS_BAD}
                 downloadPath="loans/bad-debt"
+              />
+            )}
+            {active === 'recovery-activity' && (
+              <SimplePanel
+                queryKey="report-recovery-activity"
+                queryFn={getRecoveryActivity}
+                columns={COLS_RECOVERY}
+                downloadPath="loans/recovery-activity"
               />
             )}
             {active === 'exit-clearance' && (

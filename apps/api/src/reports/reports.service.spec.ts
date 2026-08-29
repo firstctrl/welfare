@@ -296,6 +296,92 @@ describe('ReportsService', () => {
       const result = await service.getBadDebt();
       expect(result).toHaveLength(1);
       expect(result[0].badDebtAmount).toBe(2900);
+      expect(result[0].eventDate).toBe(new Date('2025-05-01').toISOString());
+    });
+
+    it('includes Defaulted loans with unrecovered bad debt, falling back to defaultedAt for the date', async () => {
+      mockLoanFind.mockReturnValue({
+        sort: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([
+            {
+              _id: { toString: () => 'loan4' },
+              staffId: 'staff1',
+              principalAmount: 10000,
+              totalRepayable: 11000,
+              exitDeductionAmount: 0,
+              guarantorOffsetAmount: 0,
+              badDebtAmount: 3693.34,
+              badDebtRecovered: 0,
+              guarantorRestitutionOwed: 640,
+              status: LoanStatus.Defaulted,
+              defaultedAt: new Date('2026-06-06'),
+            },
+          ]),
+        }),
+      });
+      mockStaffFind.mockReturnValue({
+        exec: jest.fn().mockResolvedValue([
+          { _id: { toString: () => 'staff1' }, fullName: 'Alice', staffId: 'S001' },
+        ]),
+      });
+
+      const result = await service.getBadDebt();
+      expect(result).toHaveLength(1);
+      expect(result[0].status).toBe(LoanStatus.Defaulted);
+      expect(result[0].outstandingBadDebt).toBe(3693.34);
+      expect(result[0].guarantorOffsetAmount).toBe(640);
+      expect(result[0].eventDate).toBe(new Date('2026-06-06').toISOString());
+    });
+  });
+
+  describe('getRecoveryActivity', () => {
+    it('returns DefaulterRestitution and BadDebtRecovery contribution rows enriched with staff names', async () => {
+      mockContribFind.mockReturnValue({
+        sort: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([
+            {
+              _id: { toString: () => 'c1' },
+              staffId: 'staff1',
+              isDebit: true,
+              source: 'DefaulterRestitution',
+              loanId: 'loan1',
+              paidAmount: 640,
+              createdAt: new Date('2026-08-29'),
+            },
+            {
+              _id: { toString: () => 'c2' },
+              staffId: 'staff2',
+              isDebit: false,
+              source: 'DefaulterRestitution',
+              loanId: 'loan1',
+              borrowerStaffId: 'staff1',
+              paidAmount: 640,
+              createdAt: new Date('2026-08-29'),
+            },
+            {
+              _id: { toString: () => 'c3' },
+              staffId: 'staff1',
+              isDebit: true,
+              source: 'BadDebtRecovery',
+              loanId: 'loan1',
+              paidAmount: 200,
+              createdAt: new Date('2026-08-30'),
+            },
+          ]),
+        }),
+      });
+      mockStaffFind.mockReturnValue({
+        exec: jest.fn().mockResolvedValue([
+          { _id: { toString: () => 'staff1' }, fullName: 'Alice', staffId: 'S001' },
+          { _id: { toString: () => 'staff2' }, fullName: 'Bob', staffId: 'S002' },
+        ]),
+      });
+
+      const result = await service.getRecoveryActivity();
+      expect(result).toHaveLength(3);
+      expect(result[0]).toMatchObject({ staffName: 'Alice', direction: 'Debit', kind: 'GuarantorRestitution', amount: 640 });
+      expect(result[1]).toMatchObject({ staffName: 'Bob', direction: 'Credit', kind: 'GuarantorRestitution', borrowerName: 'Alice', amount: 640 });
+      expect(result[2]).toMatchObject({ staffName: 'Alice', direction: 'Debit', kind: 'BadDebtRecovery', amount: 200 });
     });
   });
 

@@ -49,6 +49,7 @@ export type {
   IRepaidLoanRow,
   IGuarantorExposureRow,
   IBadDebtRow,
+  IRecoveryActivityRow,
   IExitClearanceRow,
   IDashboardStats,
   ILoanBorrower,

@@ -107,7 +107,23 @@ export interface IBadDebtRow {
   exitDeductionAmount: number;
   guarantorOffsetAmount: number;
   badDebtAmount: number;
-  settledAt: string;
+  badDebtRecovered: number;
+  outstandingBadDebt: number;
+  status: LoanStatus;
+  eventDate: string;
+}
+
+export interface IRecoveryActivityRow {
+  id: string;
+  date: string;
+  kind: 'GuarantorRestitution' | 'BadDebtRecovery';
+  direction: 'Debit' | 'Credit';
+  staffId: string;
+  staffName: string;
+  loanId: string;
+  borrowerStaffId?: string;
+  borrowerName?: string;
+  amount: number;
 }
 
 export interface IExitClearanceRow {

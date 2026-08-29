@@ -124,7 +124,9 @@ export class DefaultRecoveryJob {
     );
 
     if (outstanding <= 0) {
-      await this.loanModel.findByIdAndUpdate(loan._id, { $set: { recoveryRanAt: today } }).exec();
+      await this.loanModel.findByIdAndUpdate(loan._id, {
+        $set: { recoveryRanAt: today, recoveredAt: today },
+      }).exec();
       return;
     }
 
@@ -193,12 +195,23 @@ export class DefaultRecoveryJob {
       }
     }
 
+    // Prior mechanisms (e.g. per-instalment overdue offsetting) may have already
+    // recorded restitution/bad-debt against this loan — accumulate onto that,
+    // don't clobber it.
+    const totalGuarantorRestitutionOwed = round2((loan.guarantorRestitutionOwed ?? 0) + guarantorRestitutionOwed);
+    const totalBadDebtAmount = round2((loan.badDebtAmount ?? 0) + badDebtAmount);
+
     await this.loanModel.findByIdAndUpdate(loan._id, {
-      $set: {
+      $inc: {
         defaulterContributionDebited: defaulterDebited,
         guarantorRestitutionOwed,
         badDebtAmount,
+      },
+      $set: {
         recoveryRanAt: today,
+        ...(totalGuarantorRestitutionOwed <= (loan.guarantorRestitutionPaid ?? 0) && totalBadDebtAmount === 0
+          ? { recoveredAt: today }
+          : {}),
       },
     }).exec();
 
@@ -206,7 +219,10 @@ export class DefaultRecoveryJob {
       'system', 'DefaultRecoveryJob',
       AuditAction.Update, AuditEntity.Loan,
       loanId, undefined,
-      { defaulterDebited, guarantorRestitutionOwed, badDebtAmount },
+      {
+        defaulterDebited, guarantorRestitutionOwed, badDebtAmount,
+        totalGuarantorRestitutionOwed, totalBadDebtAmount,
+      },
     );
   }
 }

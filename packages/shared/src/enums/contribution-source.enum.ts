@@ -5,4 +5,5 @@ export enum ContributionSource {
   GuarantorOffset = 'GuarantorOffset',
   DefaulterDeduction = 'DefaulterDeduction',
   DefaulterRestitution = 'DefaulterRestitution',
+  BadDebtRecovery = 'BadDebtRecovery',
 }

@@ -153,7 +153,7 @@ describe('DefaultRecoveryJob', () => {
       expect(loanModel.findByIdAndUpdate).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
-          $set: expect.objectContaining({
+          $inc: expect.objectContaining({
             defaulterContributionDebited: 2000,
             guarantorRestitutionOwed: 3000,
             badDebtAmount: 0,
@@ -180,14 +180,90 @@ describe('DefaultRecoveryJob', () => {
       expect(loanModel.findByIdAndUpdate).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
-          $set: expect.objectContaining({
+          $inc: expect.objectContaining({
             defaulterContributionDebited: 0,
             guarantorRestitutionOwed: 2000,
             badDebtAmount: 3000,
+          }),
+          $set: expect.objectContaining({
             recoveryRanAt: expect.any(Date),
           }),
         }),
       );
+    });
+
+    it('accumulates onto guarantorRestitutionOwed/badDebtAmount already recorded by an earlier mechanism instead of overwriting them', async () => {
+      const loan = { ...makeDefaultedLoan(), guarantorRestitutionOwed: 640, guarantorRestitutionPaid: 0, badDebtAmount: 0 };
+      const inst = makeInstalment(5000);
+
+      loanModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([loan]) });
+      repaymentModel.find
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([inst]) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
+      loanModel.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+
+      contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 0, remaining: 5000 });
+      contributionsService.debitGuarantorOffset.mockResolvedValue({ debited: 0, remaining: 5000 });
+
+      await job.runGracePeriodRecovery();
+
+      expect(loanModel.findByIdAndUpdate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          $inc: expect.objectContaining({
+            guarantorRestitutionOwed: 0,
+            badDebtAmount: 5000,
+          }),
+        }),
+      );
+      const call = loanModel.findByIdAndUpdate.mock.calls[0];
+      expect(call[1].$set.recoveredAt).toBeUndefined();
+    });
+
+    it('sets recoveredAt when defaulter contribution alone covers the full outstanding', async () => {
+      const loan = makeDefaultedLoan();
+      const inst = makeInstalment(5000);
+
+      loanModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([loan]) });
+      repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
+      loanModel.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+
+      contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 5000, remaining: 0 });
+
+      await job.runGracePeriodRecovery();
+
+      expect(contributionsService.debitGuarantorOffset).not.toHaveBeenCalled();
+      expect(loanModel.findByIdAndUpdate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          $inc: expect.objectContaining({
+            guarantorRestitutionOwed: 0,
+            badDebtAmount: 0,
+          }),
+          $set: expect.objectContaining({
+            recoveredAt: expect.any(Date),
+          }),
+        }),
+      );
+    });
+
+    it('does not set recoveredAt when a shortfall remains', async () => {
+      const loan = makeDefaultedLoan();
+      const inst = makeInstalment(5000);
+
+      loanModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([loan]) });
+      repaymentModel.find
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([inst]) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([inst]) });
+      loanModel.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+
+      contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 2000, remaining: 3000 });
+      contributionsService.debitGuarantorOffset.mockResolvedValue({ debited: 3000, remaining: 0 });
+
+      await job.runGracePeriodRecovery();
+
+      const call = loanModel.findByIdAndUpdate.mock.calls[0];
+      expect(call[1].$set.recoveredAt).toBeUndefined();
     });
 
     it('skips when no defaulted loans past grace expiry', async () => {
@@ -208,7 +284,7 @@ describe('DefaultRecoveryJob', () => {
 
       expect(loanModel.findByIdAndUpdate).toHaveBeenCalledWith(
         expect.anything(),
-        { $set: { recoveryRanAt: expect.any(Date) } },
+        { $set: { recoveryRanAt: expect.any(Date), recoveredAt: expect.any(Date) } },
       );
       expect(contributionsService.debitDefaulterContribution).not.toHaveBeenCalled();
     });

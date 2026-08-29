@@ -51,11 +51,23 @@ const CSV_COLUMNS = {
   ],
   badDebt: [
     { header: 'Staff Name', field: 'staffName' },
+    { header: 'Status', field: 'status' },
     { header: 'Principal (GHS)', field: 'principalAmount' },
     { header: 'Exit Deduction (GHS)', field: 'exitDeductionAmount' },
     { header: 'Guarantor Offset (GHS)', field: 'guarantorOffsetAmount' },
     { header: 'Bad Debt (GHS)', field: 'badDebtAmount' },
-    { header: 'Settled At', field: 'settledAt' },
+    { header: 'Recovered (GHS)', field: 'badDebtRecovered' },
+    { header: 'Outstanding (GHS)', field: 'outstandingBadDebt' },
+    { header: 'Date', field: 'eventDate' },
+  ],
+  recoveryActivity: [
+    { header: 'Date', field: 'date' },
+    { header: 'Kind', field: 'kind' },
+    { header: 'Direction', field: 'direction' },
+    { header: 'Staff Name', field: 'staffName' },
+    { header: 'Borrower', field: 'borrowerName' },
+    { header: 'Loan Id', field: 'loanId' },
+    { header: 'Amount (GHS)', field: 'amount' },
   ],
   exitClearance: [
     { header: 'Staff Name', field: 'staffName' },
@@ -275,6 +287,18 @@ export class ReportsController {
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename="bad-debt.csv"');
       return this.reportsService.generateCsv(rows, CSV_COLUMNS.badDebt.map(c => c.field));
+    }
+    return rows;
+  }
+
+  @Get('loans/recovery-activity')
+  @RequirePermission(AppModule.Reports, 'readonly')
+  async getRecoveryActivity(@Query() q: ReportQueryDto, @Res({ passthrough: true }) res: Response) {
+    const rows = await this.reportsService.getRecoveryActivity();
+    if (q.format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="recovery-activity.csv"');
+      return this.reportsService.generateCsv(rows, CSV_COLUMNS.recoveryActivity.map(c => c.field));
     }
     return rows;
   }

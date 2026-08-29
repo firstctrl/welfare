@@ -20,6 +20,7 @@ import {
   IRepaidLoanRow,
   IGuarantorExposureRow,
   IBadDebtRow,
+  IRecoveryActivityRow,
   IExitClearanceRow,
   IDashboardStats,
   ILoanBorrower,
@@ -462,7 +463,19 @@ export class ReportsService {
   }
 
   async getBadDebt(): Promise<IBadDebtRow[]> {
-    const loans = await this.loanModel.find({ status: LoanStatus.BadDebt }).sort({ settledAt: -1 }).exec();
+    // Two sources of bad debt: loans settled BadDebt via exit-settlement, and
+    // Defaulted loans still carrying an unrecovered badDebtAmount from the
+    // end-of-tenure recovery job (that job never flips status away from
+    // Defaulted, so those loans wouldn't otherwise show up here).
+    const loans = await this.loanModel.find({
+      $or: [
+        { status: LoanStatus.BadDebt },
+        {
+          status: LoanStatus.Defaulted,
+          $expr: { $gt: ['$badDebtAmount', { $ifNull: ['$badDebtRecovered', 0] }] },
+        },
+      ],
+    }).sort({ settledAt: -1, defaultedAt: -1 }).exec();
     if (loans.length === 0) return [];
 
     const staffIds = [...new Set(loans.map(l => l.staffId))];
@@ -476,10 +489,51 @@ export class ReportsService {
       principalAmount: l.principalAmount,
       totalRepayable: l.totalRepayable,
       exitDeductionAmount: l.exitDeductionAmount ?? 0,
-      guarantorOffsetAmount: l.guarantorOffsetAmount ?? 0,
+      // guarantorOffsetAmount is only set by the exit-settlement flow;
+      // guarantorRestitutionOwed is the end-of-tenure recovery job's equivalent
+      // (per-instalment overdue offsets + the lump-sum recovery debit). A given
+      // loan realistically only has one path populated, but sum both so this
+      // column reflects total guarantor exposure regardless of which path a
+      // loan took.
+      guarantorOffsetAmount: Math.round(((l.guarantorOffsetAmount ?? 0) + (l.guarantorRestitutionOwed ?? 0)) * 100) / 100,
       badDebtAmount: l.badDebtAmount ?? 0,
-      settledAt: l.settledAt?.toISOString() ?? '',
+      badDebtRecovered: l.badDebtRecovered ?? 0,
+      outstandingBadDebt: Math.round(((l.badDebtAmount ?? 0) - (l.badDebtRecovered ?? 0)) * 100) / 100,
+      status: l.status,
+      eventDate: (l.settledAt ?? l.defaultedAt)?.toISOString() ?? '',
     }));
+  }
+
+  async getRecoveryActivity(): Promise<IRecoveryActivityRow[]> {
+    const rows = await this.contribModel.find({
+      source: { $in: ['DefaulterRestitution', 'BadDebtRecovery'] },
+    }).sort({ createdAt: -1 }).exec();
+    if (rows.length === 0) return [];
+
+    const staffIds = [
+      ...new Set([
+        ...rows.map(r => r.staffId),
+        ...rows.filter(r => r.borrowerStaffId).map(r => r.borrowerStaffId as string),
+      ]),
+    ];
+    const staffDocs = await this.staffModel.find({ _id: { $in: staffIds } }).exec();
+    const staffMap = new Map(staffDocs.map(s => [s._id.toString(), s]));
+
+    return rows.map(r => {
+      const createdAt = (r as unknown as { createdAt?: Date }).createdAt;
+      return {
+        id: r._id.toString(),
+        date: createdAt ? createdAt.toISOString() : '',
+        kind: r.source === 'BadDebtRecovery' ? 'BadDebtRecovery' : 'GuarantorRestitution',
+        direction: r.isDebit ? 'Debit' : 'Credit',
+        staffId: r.staffId,
+        staffName: staffMap.get(r.staffId)?.fullName ?? 'Unknown',
+        loanId: r.loanId ?? '',
+        borrowerStaffId: r.borrowerStaffId,
+        borrowerName: r.borrowerStaffId ? (staffMap.get(r.borrowerStaffId)?.fullName ?? 'Unknown') : undefined,
+        amount: r.paidAmount,
+      };
+    });
   }
 
   // ─────────────────────────── LOAN STATEMENT ───────────────────────────

@@ -29,6 +29,8 @@ export class Loan {
   @Prop({ min: 0, default: 0 }) defaulterContributionDebited!: number;
   @Prop({ min: 0, default: 0 }) guarantorRestitutionOwed!: number;
   @Prop({ min: 0, default: 0 }) guarantorRestitutionPaid!: number;
+  @Prop({ min: 0, default: 0 }) badDebtRecovered!: number;
+  @Prop() recoveredAt?: Date;
   @Prop() recoveryRanAt?: Date;
   @Prop() forfeitedAt?: Date;
   @Prop() payOffDate?: Date;

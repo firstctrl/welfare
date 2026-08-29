@@ -8,6 +8,7 @@ import type {
   IRepaidLoanRow,
   IGuarantorExposureRow,
   IBadDebtRow,
+  IRecoveryActivityRow,
   IExitClearanceRow,
   IDashboardStats,
   ILoanBorrower,
@@ -71,6 +72,11 @@ export async function getGuarantorExposure(): Promise<IGuarantorExposureRow[]> {
 
 export async function getBadDebt(): Promise<IBadDebtRow[]> {
   const { data } = await apiClient.get('/reports/loans/bad-debt');
+  return data;
+}
+
+export async function getRecoveryActivity(): Promise<IRecoveryActivityRow[]> {
+  const { data } = await apiClient.get('/reports/loans/recovery-activity');
   return data;
 }
 
