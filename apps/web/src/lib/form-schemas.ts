@@ -31,6 +31,18 @@ export const contributionSchema = z.object({
   note:    z.string().optional(),
 });
 
+export const claimSchema = z.object({
+  staffId:   z.string().min(24, 'Select a staff member'),
+  claimType: z.string().min(1, 'Required'),
+  subReason: z.string().optional(),
+  month:     z.coerce.number().min(1).max(12),
+  year:      z.coerce.number().min(2000),
+  amount:    z.coerce.number().min(1, 'Amount must be > 0'),
+}).refine(
+  (v) => v.claimType !== 'Cessation' || !!v.subReason,
+  { message: 'Sub Reason is required for Cessation claims', path: ['subReason'] },
+);
+
 export const loginSchema = z.object({
   username: z.string().min(1, 'Required'),
   password: z.string().min(1, 'Required'),
@@ -39,4 +51,5 @@ export const loginSchema = z.object({
 export type StaffFormValues = z.infer<typeof staffSchema>;
 export type LoanFormValues = z.infer<typeof loanSchema>;
 export type ContributionFormValues = z.infer<typeof contributionSchema>;
+export type ClaimFormValues = z.infer<typeof claimSchema>;
 export type LoginFormValues = z.infer<typeof loginSchema>;
