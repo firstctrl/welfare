@@ -1086,7 +1086,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   .org{font-size:18px;font-weight:bold;color:#bc4680}
   .title{font-size:13px;font-weight:bold;margin-top:4px}
   .meta{color:#666;font-size:10px;margin-top:2px}
-  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:16px}
   .kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px}
   .kpi-label{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em}
   .kpi-value{font-size:15px;font-weight:bold;color:#1e293b;margin-top:2px}
@@ -1118,9 +1118,9 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   <div class="kpi"><div class="kpi-label">Total Paid</div><div class="kpi-value">${fmt(kpis.totalPaid)}</div></div>
   <div class="kpi"><div class="kpi-label">Total Expected</div><div class="kpi-value">${fmt(kpis.totalExpected)}</div></div>
   <div class="kpi"><div class="kpi-label">Collection Rate</div><div class="kpi-value">${kpis.collectionRate}%</div></div>
-  <div class="kpi"><div class="kpi-label">Missed / Partial</div><div class="kpi-value">${kpis.missedMonths} months</div></div>
-  <div class="kpi"><div class="kpi-label">Loan Deductions</div><div class="kpi-value" style="color:#dc2626">${fmt(kpis.totalOffsets)}</div></div>
-  <div class="kpi"><div class="kpi-label">Welfare Claims</div><div class="kpi-value" style="color:#dc2626">${fmt(kpis.totalClaims)}</div></div>
+  ${kpis.missedMonths > 0 ? `<div class="kpi"><div class="kpi-label">Missed / Partial</div><div class="kpi-value">${kpis.missedMonths} months</div></div>` : ''}
+  ${kpis.totalOffsets > 0 ? `<div class="kpi"><div class="kpi-label">Loan Deductions</div><div class="kpi-value" style="color:#dc2626">${fmt(kpis.totalOffsets)}</div></div>` : ''}
+  ${kpis.totalClaims > 0 ? `<div class="kpi"><div class="kpi-label">Welfare Claims</div><div class="kpi-value" style="color:#dc2626">${fmt(kpis.totalClaims)}</div></div>` : ''}
 </div>
 <table>
   <thead><tr><th>Year</th>${headerCells}</tr></thead>
