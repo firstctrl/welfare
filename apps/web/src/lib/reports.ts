@@ -247,7 +247,7 @@ export async function getFundSummary(params: FundSummaryParams): Promise<IFundSu
 }
 
 export async function downloadFundSummaryFile(
-  sub: 'contributions' | 'loans' | 'defaults',
+  sub: 'contributions' | 'loans' | 'defaults' | 'claims',
   params: FundSummaryParams,
   format: 'csv' | 'pdf',
 ): Promise<void> {

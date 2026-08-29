@@ -11,6 +11,7 @@ import type {
   IFundSummaryLoanBreakdownRow,
   IFundSummaryDefaultRow,
   IFundSummaryDiscountRow,
+  IFundSummaryClaimsBreakdownRow,
 } from '@welfare/shared';
 import { KpiCard } from '@/components/ui/kpi-card';
 import { Field, Input, Select } from '@/components/ui/field';
@@ -57,6 +58,13 @@ const COLS_DISCOUNTS = [
   colDiscount.accessor('rate',          { header: 'Rate (%)', cell: i => `${i.getValue()}%` }),
   colDiscount.accessor('amount',        { header: 'Amount (GHS)', cell: i => fmtGHS(i.getValue()) }),
   colDiscount.accessor('dateGranted',   { header: 'Date Granted', cell: i => i.getValue() ? new Date(i.getValue()).toLocaleDateString('en-GB') : '—' }),
+];
+
+const colClaim = createColumnHelper<IFundSummaryClaimsBreakdownRow>();
+const COLS_CLAIMS = [
+  colClaim.accessor('claimType',   { header: 'Claim Type' }),
+  colClaim.accessor('count',       { header: 'Count' }),
+  colClaim.accessor('totalAmount', { header: 'Total (GHS)', cell: i => fmtGHS(i.getValue()) }),
 ];
 
 // ── Generic table ──────────────────────────────────────────────────────────────
@@ -392,6 +400,16 @@ export function FundSummaryPanel() {
               ]}
             >
               <SummaryTable columns={COLS_LOANS} data={data.loanBreakdown} />
+            </Section>
+
+            <Section
+              title="Welfare Claims Breakdown"
+              downloadLinks={[
+                { label: 'CSV', onClick: () => downloadFundSummaryFile('claims', params, 'csv') },
+                { label: 'PDF', onClick: () => downloadFundSummaryFile('claims', params, 'pdf') },
+              ]}
+            >
+              <SummaryTable columns={COLS_CLAIMS} data={data.claimsBreakdown} />
             </Section>
 
             <Section
