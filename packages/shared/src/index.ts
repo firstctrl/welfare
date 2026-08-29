@@ -17,6 +17,10 @@ export { AuditAction } from './enums/audit-action.enum';
 export { AuditEntity } from './enums/audit-entity.enum';
 export { EmailTriggerSource } from './enums/email-trigger-source.enum';
 export { RepaymentSource } from './enums/repayment-source.enum';
+export { ClaimType } from './enums/claim-type.enum';
+export { CessationReason } from './enums/cessation-reason.enum';
+export { ClaimStatus } from './enums/claim-status.enum';
+export { ClaimSource } from './enums/claim-source.enum';
 
 // Interfaces
 export type { IStaff } from './interfaces/staff.interface';
@@ -24,6 +28,8 @@ export type { IContribution } from './interfaces/contribution.interface';
 export type { ILoan } from './interfaces/loan.interface';
 export type { ILoanRepayment } from './interfaces/loan-repayment.interface';
 export type { IFlaggedEntry, IImportBatch } from './interfaces/import-batch.interface';
+export type { IClaim } from './interfaces/claim.interface';
+export type { IClaimFlaggedEntry, IClaimImportBatch } from './interfaces/claim-import-batch.interface';
 export type { ILoanRepaymentFlaggedEntry, ILoanRepaymentImportBatch } from './interfaces/loan-import-batch.interface';
 export type { IStaffFlaggedEntry, IStaffImportBatch } from './interfaces/staff-import-batch.interface';
 export type { ILoanRecordFlaggedEntry, ILoanRecordsImportBatch } from './interfaces/loan-records-import-batch.interface';
@@ -63,6 +69,8 @@ export type {
   IFundSummaryDefaultRow,
   IFundSummaryContributionBreakdownRow,
   IFundSummaryLoanBreakdownRow,
+  IFundSummaryClaims,
+  IFundSummaryClaimsBreakdownRow,
 } from './interfaces/report.interface';
 
 // DTOs
@@ -72,6 +80,8 @@ export type { CreateContributionDto, ContributionResponseDto } from './dto/contr
 export type { CreateLoanDto, UpdateLoanDto, LoanResponseDto } from './dto/loan.dto';
 export type { RecordPaymentDto, LoanRepaymentResponseDto } from './dto/loan-repayment.dto';
 export type { FlaggedEntryDto, ImportBatchResponseDto } from './dto/import-batch.dto';
+export type { CreateClaimDto, ClaimResponseDto } from './dto/claim.dto';
+export type { ClaimFlaggedEntryDto, ClaimImportBatchResponseDto } from './dto/claim-import-batch.dto';
 export type { UpdateConfigDto, ConfigResponseDto } from './dto/config.dto';
 
 // Constants

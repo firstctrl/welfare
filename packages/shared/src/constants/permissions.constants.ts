@@ -7,6 +7,7 @@ export type PermissionMatrix = Record<UserRole, Record<AppModule, AccessLevel>>;
 export const PERMISSIONS: PermissionMatrix = {
   [UserRole.WelfareOfficer]: {
     [AppModule.Contributions]:  'full',
+    [AppModule.Claims]:         'full',
     [AppModule.Staff]:          'full',
     [AppModule.Loans]:          'full',
     [AppModule.Remittances]:    'full',
@@ -19,6 +20,7 @@ export const PERMISSIONS: PermissionMatrix = {
   },
   [UserRole.WelfareManager]: {
     [AppModule.Contributions]:  'full',
+    [AppModule.Claims]:         'full',
     [AppModule.Staff]:          'full',
     [AppModule.Loans]:          'full',
     [AppModule.Remittances]:    'full',
@@ -31,6 +33,7 @@ export const PERMISSIONS: PermissionMatrix = {
   },
   [UserRole.WelfareDirector]: {
     [AppModule.Contributions]:  'readonly',
+    [AppModule.Claims]:         'readonly',
     [AppModule.Staff]:          'readonly',
     [AppModule.Loans]:          'readonly',
     [AppModule.Remittances]:    'readonly',
@@ -43,6 +46,7 @@ export const PERMISSIONS: PermissionMatrix = {
   },
   [UserRole.Admin]: {
     [AppModule.Contributions]:  'full',
+    [AppModule.Claims]:         'full',
     [AppModule.Staff]:          'full',
     [AppModule.Loans]:          'full',
     [AppModule.Remittances]:    'full',

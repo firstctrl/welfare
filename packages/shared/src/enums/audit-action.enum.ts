@@ -4,6 +4,7 @@ export enum AuditAction {
   Delete = 'Delete',
   Import = 'Import',
   Approve = 'Approve',
+  Reject = 'Reject',
   Disburse = 'Disburse',
   Settle = 'Settle',
   WriteOff = 'WriteOff',

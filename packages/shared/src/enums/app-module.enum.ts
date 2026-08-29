@@ -1,5 +1,6 @@
 export enum AppModule {
   Contributions  = 'contributions',
+  Claims         = 'claims',
   Staff          = 'staff',
   Loans          = 'loans',
   Remittances    = 'remittances',
