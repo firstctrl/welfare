@@ -1,5 +1,6 @@
 export default () => ({
   port: parseInt(process.env.APP_PORT || '4000', 10),
+  logLevel: process.env.LOG_LEVEL || 'info',
   mongodb: { uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/welfare' },
   redis: {
     host: process.env.REDIS_HOST || 'localhost',

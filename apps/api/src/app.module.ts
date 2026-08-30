@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { LoggerModule } from 'nestjs-pino';
+import { randomUUID } from 'crypto';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
@@ -33,6 +35,34 @@ import { ImportProgressModule } from './common/import-progress.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
+    LoggerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (cs: ConfigService) => ({
+        pinoHttp: {
+          level: cs.get<string>('logLevel') || 'info',
+          genReqId: (req: any) => req.headers['x-request-id'] || randomUUID(),
+          redact: {
+            paths: [
+              'req.headers.authorization',
+              'req.headers.cookie',
+              'res.headers["set-cookie"]',
+              'req.body.password',
+              'req.body.currentPassword',
+              'req.body.newPassword',
+            ],
+            censor: '[REDACTED]',
+          },
+          autoLogging: {
+            ignore: (req: any) => req.url === '/health',
+          },
+          transport:
+            process.env.NODE_ENV !== 'production'
+              ? { target: 'pino-pretty', options: { singleLine: true, colorize: true } }
+              : undefined,
+        },
+      }),
+    }),
     ScheduleModule.forRoot(),
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
