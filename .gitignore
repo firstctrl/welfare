@@ -46,3 +46,7 @@ packages/shared/src/**/*.d.ts
 
 # Design files
 docs/design-handoff/
+
+# Playwright
+apps/web/test-results/
+apps/web/playwright-report/
