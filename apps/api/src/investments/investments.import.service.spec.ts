@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
+import * as XLSX from 'xlsx';
 import { InvestmentsImportService } from './investments.import.service';
 import { InvestmentImportBatch } from './schemas/investment-import-batch.schema';
 import { InvestmentsService } from './investments.service';
@@ -32,7 +33,6 @@ describe('InvestmentsImportService — progress tracking', () => {
   });
 
   function excelBuffer(): Buffer {
-    const XLSX = require('xlsx');
     const ws = XLSX.utils.json_to_sheet([
       {
         'Purchase Date': '01/01/2026', Description: 'T-Bill', Cost: 1000,

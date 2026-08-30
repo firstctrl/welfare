@@ -7,7 +7,6 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
-  type Table as TTable,
   type RowData,
   type Header,
   type SortingState,

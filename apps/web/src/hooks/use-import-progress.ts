@@ -18,7 +18,6 @@ export function useImportProgress(jobId: string | null): ImportProgress | null {
       return;
     }
     let cancelled = false;
-    let interval: ReturnType<typeof setInterval>;
 
     async function poll() {
       try {
@@ -31,8 +30,8 @@ export function useImportProgress(jobId: string | null): ImportProgress | null {
       }
     }
 
+    const interval = setInterval(poll, 500);
     poll();
-    interval = setInterval(poll, 500);
     return () => {
       cancelled = true;
       clearInterval(interval);

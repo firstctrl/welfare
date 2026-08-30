@@ -12,6 +12,13 @@ module.exports = tseslint.config(
     },
   },
   {
-    ignores: ['**/dist/**', '**/.next/**', '**/node_modules/**'],
+    ignores: [
+      '**/dist/**',
+      '**/.next/**',
+      '**/node_modules/**',
+      // Plain-JS ops scripts meant to run standalone via `node` in the prod
+      // container (no ts-node available there) — not part of the app bundle.
+      'apps/api/src/**/migrations/*.js',
+    ],
   },
 );

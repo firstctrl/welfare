@@ -387,6 +387,10 @@ export function FundSummaryPanel() {
                   label: 'CSV',
                   onClick: () => downloadFundSummaryFile('contributions', params, 'csv'),
                 },
+                {
+                  label: 'Excel',
+                  onClick: () => downloadFundSummaryFile('contributions', params, 'xlsx'),
+                },
               ]}
             >
               <SummaryTable columns={COLS_CONTRIB} data={data.contributionBreakdown} />
@@ -396,6 +400,7 @@ export function FundSummaryPanel() {
               title="Loans Breakdown"
               downloadLinks={[
                 { label: 'CSV', onClick: () => downloadFundSummaryFile('loans', params, 'csv') },
+                { label: 'Excel', onClick: () => downloadFundSummaryFile('loans', params, 'xlsx') },
                 { label: 'PDF', onClick: () => downloadFundSummaryFile('loans', params, 'pdf') },
               ]}
             >
@@ -406,6 +411,7 @@ export function FundSummaryPanel() {
               title="Welfare Claims Breakdown"
               downloadLinks={[
                 { label: 'CSV', onClick: () => downloadFundSummaryFile('claims', params, 'csv') },
+                { label: 'Excel', onClick: () => downloadFundSummaryFile('claims', params, 'xlsx') },
                 { label: 'PDF', onClick: () => downloadFundSummaryFile('claims', params, 'pdf') },
               ]}
             >
@@ -416,6 +422,7 @@ export function FundSummaryPanel() {
               title="Defaulted Loans Detail"
               downloadLinks={[
                 { label: 'CSV', onClick: () => downloadFundSummaryFile('defaults', params, 'csv') },
+                { label: 'Excel', onClick: () => downloadFundSummaryFile('defaults', params, 'xlsx') },
                 { label: 'PDF', onClick: () => downloadFundSummaryFile('defaults', params, 'pdf') },
               ]}
             >

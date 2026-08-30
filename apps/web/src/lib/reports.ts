@@ -196,7 +196,7 @@ export async function getBulkSendStatus(jobId: string): Promise<BulkSendStatus> 
   return data;
 }
 
-export function buildDownloadUrl(path: string, format: 'csv' | 'pdf'): string {
+export function buildDownloadUrl(path: string, format: 'csv' | 'pdf' | 'xlsx'): string {
   const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
   return `${base}/reports/${path}?format=${format}`;
 }
@@ -255,13 +255,19 @@ export async function getFundSummary(params: FundSummaryParams): Promise<IFundSu
 export async function downloadFundSummaryFile(
   sub: 'contributions' | 'loans' | 'defaults' | 'claims',
   params: FundSummaryParams,
-  format: 'csv' | 'pdf',
+  format: 'csv' | 'pdf' | 'xlsx',
 ): Promise<void> {
   const { data, headers } = await apiClient.get(`/reports/fund-summary/${sub}`, {
     params: { year: params.year, ...(params.fromMonth ? { fromMonth: params.fromMonth } : {}), ...(params.toMonth ? { toMonth: params.toMonth } : {}), ...(params.quarter ? { quarter: params.quarter } : {}), format },
     responseType: 'blob',
   });
-  const mime = String(headers['content-type'] ?? (format === 'pdf' ? 'application/pdf' : 'text/csv'));
+  const defaultMime =
+    format === 'pdf'
+      ? 'application/pdf'
+      : format === 'xlsx'
+        ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        : 'text/csv';
+  const mime = String(headers['content-type'] ?? defaultMime);
   const blob = new Blob([data as BlobPart], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

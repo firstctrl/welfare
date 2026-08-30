@@ -32,13 +32,11 @@ function computeDueDate(disbursedDate: Date, n: number): Date {
 function round2(n: number) { return Math.round(n * 100) / 100; }
 
 function StaffPicker({
-  label,
   value,
   excludeId,
   onSelect,
   disabled,
 }: {
-  label: string;
   value: string;
   excludeId?: string;
   onSelect: (staff: IStaff) => void;
@@ -182,7 +180,6 @@ export function NewLoanClient() {
                 <div className="space-y-1.5">
                   <Field label="Staff Member" required error={errors.staffId?.message}>
                     <StaffPicker
-                      label="Staff Member"
                       value={selectedStaff?.fullName ?? ''}
                       excludeId={watchGuarantorId}
                       onSelect={selectStaff}
@@ -215,7 +212,6 @@ export function NewLoanClient() {
                 <div className="space-y-1.5">
                   <Field label="Guarantor" required error={errors.guarantorId?.message}>
                     <StaffPicker
-                      label="Guarantor"
                       value={selectedGuarantor?.fullName ?? ''}
                       excludeId={watchStaffId}
                       onSelect={selectGuarantor}

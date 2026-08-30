@@ -1,5 +1,4 @@
 import { EmailLog, EmailLogSchema } from './email-log.schema';
-import { EmailLogStatus, EmailLogType, EmailProvider, EmailTriggerSource } from '@welfare/shared';
 
 describe('EmailLog schema', () => {
   it('exports EmailLog class and schema', () => {

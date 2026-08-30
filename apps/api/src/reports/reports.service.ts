@@ -5,7 +5,6 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as fs from 'fs';
 import * as path from 'path';
-import { parse as toCsv } from 'json2csv';
 import puppeteer from 'puppeteer';
 import {
   ContributionStatus,
@@ -1050,7 +1049,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   }
 
   async generateStatementPdf(staffMongoId: string): Promise<Buffer> {
-    const { staff, kpis, years, rows, claimYears } = await this.getStaffContributionStatement(staffMongoId);
+    const { staff, kpis, rows, claimYears } = await this.getStaffContributionStatement(staffMongoId);
     const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const fmt = (n: number) => `GHS ${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -1216,10 +1215,6 @@ ${claimsTableHtml}
   }
 
   // ─────────────────────────── EXPORT HELPERS ───────────────────────────
-
-  async generateCsv(data: object[], fields: string[]): Promise<string> {
-    return toCsv(data, { fields });
-  }
 
   async generatePdf(
     title: string,

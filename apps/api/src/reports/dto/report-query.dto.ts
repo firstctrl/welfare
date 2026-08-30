@@ -45,8 +45,8 @@ export class ReportQueryDto {
   toMonth?: number;
 
   @IsOptional()
-  @IsEnum(['json', 'pdf', 'csv'])
-  format?: 'json' | 'pdf' | 'csv';
+  @IsEnum(['json', 'pdf', 'csv', 'xlsx'])
+  format?: 'json' | 'pdf' | 'csv' | 'xlsx';
 
   @IsOptional()
   @IsNumber()
@@ -91,6 +91,6 @@ export class FundSummaryQueryDto {
   quarter?: number;
 
   @IsOptional()
-  @IsEnum(['json', 'pdf', 'csv'])
-  format?: 'json' | 'pdf' | 'csv';
+  @IsEnum(['json', 'pdf', 'csv', 'xlsx'])
+  format?: 'json' | 'pdf' | 'csv' | 'xlsx';
 }

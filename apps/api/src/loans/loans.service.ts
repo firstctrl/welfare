@@ -695,7 +695,7 @@ export class LoansService implements OnModuleInit {
     const outstanding = round2(
       unpaidInstalments.reduce((sum, i) => sum + i.dueAmount + i.penaltyAmount - i.paidAmount, 0),
     );
-    let remaining = round2(Math.max(0, outstanding - dto.exitDeductionAmount));
+    const remaining = round2(Math.max(0, outstanding - dto.exitDeductionAmount));
 
     let guarantorOffsetAmount = 0;
     let badDebtAmount = 0;

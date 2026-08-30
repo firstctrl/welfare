@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
-import { ImportBatchStatus, ClaimStatus, ClaimSource, ClaimType } from '@welfare/shared';
+import { ClaimStatus, ClaimSource, ClaimType } from '@welfare/shared';
+import * as XLSX from 'xlsx';
 import { ImportService } from './import.service';
 import { ClaimImportBatch } from './schemas/claim-import-batch.schema';
 import { Claim } from './schemas/claim.schema';
@@ -40,7 +41,6 @@ describe('ImportService (claims)', () => {
   });
 
   function excelBuffer(rows: Record<string, unknown>[]): Buffer {
-    const XLSX = require('xlsx');
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');

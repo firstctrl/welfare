@@ -6,5 +6,5 @@ export class RemittanceQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() fromYear?: number;
   @IsOptional() @Type(() => Number) @IsInt() toMonth?: number;
   @IsOptional() @Type(() => Number) @IsInt() toYear?: number;
-  @IsOptional() @IsString() format?: 'csv' | 'pdf';
+  @IsOptional() @IsString() format?: 'csv' | 'pdf' | 'xlsx';
 }

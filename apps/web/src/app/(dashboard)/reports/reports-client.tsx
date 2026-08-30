@@ -9,12 +9,11 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { Download, Send, FileText, TrendingUp, AlertCircle, Banknote, BarChart3, Search, Users, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Download, Send, FileText, TrendingUp, AlertCircle, Banknote, BarChart3, Search, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { AppModule } from '@welfare/shared';
 import { usePermission } from '@/hooks/use-permission';
 import {
-  getMonthlyContributions,
   getArrears,
   getGuarantorOffsets,
   getActiveLoans,
@@ -39,7 +38,6 @@ import { listLoans } from '@/lib/loans';
 import { getRemittancesReport, buildRemittancesReportDownloadUrl } from '@/lib/remittances';
 import { searchStaff } from '@/lib/staff';
 import type {
-  IMonthlyContributionRow,
   IArrearRow,
   IGuarantorOffsetRow,
   IActiveLoanRow,
@@ -67,16 +65,6 @@ const CUR_MONTH = now.getMonth() + 1;
 const CUR_YEAR = now.getFullYear();
 
 // ── Column definitions ────────────────────────────────────────────────────────
-
-const colContrib = createColumnHelper<IMonthlyContributionRow>();
-const COLS_CONTRIB = [
-  colContrib.accessor('staffName', { header: 'Staff Name' }),
-  colContrib.accessor('staffNo', { header: 'Staff No' }),
-  colContrib.accessor('expectedAmount', { header: 'Expected', cell: i => fmtGHS(i.getValue()) }),
-  colContrib.accessor('paidAmount', { header: 'Paid', cell: i => fmtGHS(i.getValue()) }),
-  colContrib.accessor('surplusCarriedForward', { header: 'Surplus C/F', cell: i => fmtGHS(i.getValue()) }),
-  colContrib.accessor('status', { header: 'Status' }),
-];
 
 const colArrear = createColumnHelper<IArrearRow>();
 const COLS_ARREARS = [
@@ -216,7 +204,7 @@ function ReportTable<T>({ columns, data }: { columns: any[]; data: T[] }) {
 
 // ── Download button ───────────────────────────────────────────────────────────
 
-function DownloadBtn({ path, formats }: { path: string; formats: ('csv' | 'pdf')[] }) {
+function DownloadBtn({ path, formats }: { path: string; formats: ('csv' | 'pdf' | 'xlsx')[] }) {
   return (
     <div className="flex gap-2">
       {formats.map(fmt => (
@@ -537,7 +525,7 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
     setShowDropdown(false);
   }
 
-  const { kpis, rows, years, claimYears } = data ?? {};
+  const { kpis, rows, claimYears } = data ?? {};
 
   return (
     <div className="space-y-5">
@@ -582,7 +570,7 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
               size="sm"
               Icon={FileText}
               onClick={() =>
-                downloadStatementPdf(selectedStaff._id, selectedStaff.staffId).catch((err) =>
+                downloadStatementPdf(selectedStaff._id, selectedStaff.staffId).catch(() =>
                   toast.error('Download failed'),
                 )
               }
@@ -1131,14 +1119,14 @@ function SimplePanel<T>({
   queryFn,
   columns,
   downloadPath,
-  formats = ['csv'],
+  formats = ['csv', 'xlsx'],
 }: {
   queryKey: string;
   queryFn: () => Promise<T[]>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   columns: any[];
   downloadPath: string;
-  formats?: ('csv' | 'pdf')[];
+  formats?: ('csv' | 'pdf' | 'xlsx')[];
 }) {
   const { data = [], isLoading } = useQuery({ queryKey: [queryKey], queryFn });
   return (
@@ -1188,7 +1176,7 @@ function RemittancesReportPanel() {
     setParams({ fromMonth, fromYear, toMonth, toYear });
   };
 
-  const downloadUrl = (format: 'csv' | 'pdf') =>
+  const downloadUrl = (format: 'csv' | 'pdf' | 'xlsx') =>
     params ? buildRemittancesReportDownloadUrl({ ...params, format }) : '#';
 
   return (
@@ -1217,6 +1205,9 @@ function RemittancesReportPanel() {
           <div className="flex gap-2">
             <a href={downloadUrl('csv')} download>
               <Button variant="secondary" size="sm" Icon={Download}>CSV</Button>
+            </a>
+            <a href={downloadUrl('xlsx')} download>
+              <Button variant="secondary" size="sm" Icon={Download}>Excel</Button>
             </a>
             <a href={downloadUrl('pdf')} download>
               <Button variant="secondary" size="sm" Icon={Download}>PDF</Button>
@@ -1343,7 +1334,7 @@ export function ReportsClient() {
                 queryFn={getActiveLoans}
                 columns={COLS_ACTIVE}
                 downloadPath="loans/active"
-                formats={['csv', 'pdf']}
+                formats={['csv', 'xlsx', 'pdf']}
               />
             )}
             {active === 'overdue-loans' && (
@@ -1392,7 +1383,7 @@ export function ReportsClient() {
                 queryFn={getExitClearance}
                 columns={COLS_EXIT}
                 downloadPath="staff/exit"
-                formats={['csv', 'pdf']}
+                formats={['csv', 'xlsx', 'pdf']}
               />
             )}
             {active === 'remittances' && <RemittancesReportPanel />}

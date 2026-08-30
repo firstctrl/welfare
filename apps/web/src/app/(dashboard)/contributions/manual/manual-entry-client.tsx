@@ -15,7 +15,6 @@ import { Field, Input, Select } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { fmtGHS } from '@/lib/format';
-import { cn } from '@/lib/utils';
 
 type FormValues = ContributionFormValues;
 

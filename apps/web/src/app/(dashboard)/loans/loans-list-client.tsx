@@ -78,7 +78,6 @@ export function LoansListClient() {
       m.set(loan._id, Math.round(val * 100) / 100);
     });
     return m;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, JSON.stringify(scheduleQueries.map((q) => q.status))]);
 
   const filtered = useMemo(() => {

@@ -7,6 +7,7 @@ import { ContributionsService } from './contributions.service';
 import { StaffService } from '../staff/staff.service';
 import { AuditService } from '../audit/audit.service';
 import { ImportProgressService } from '../common/import-progress.service';
+import * as XLSX from 'xlsx';
 
 const mockCreate = jest.fn();
 const mockFindByIdAndUpdate = jest.fn();
@@ -39,7 +40,6 @@ describe('ImportService (contributions) — progress tracking', () => {
   });
 
   function excelBuffer(): Buffer {
-    const XLSX = require('xlsx');
     const ws = XLSX.utils.json_to_sheet([
       { 'Staff ID': 'S1', 'Employee Name': 'Jane', Month: 1, Year: 2026, Amount: 100 },
       { 'Staff ID': 'S2', 'Employee Name': 'Joe', Month: 1, Year: 2026, Amount: 200 },

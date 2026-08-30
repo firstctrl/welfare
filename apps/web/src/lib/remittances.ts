@@ -105,7 +105,7 @@ export async function getRemittancesReport(params: RemittanceReportParams): Prom
   return data;
 }
 
-export function buildRemittancesReportDownloadUrl(params: RemittanceReportParams & { format: 'csv' | 'pdf' }): string {
+export function buildRemittancesReportDownloadUrl(params: RemittanceReportParams & { format: 'csv' | 'pdf' | 'xlsx' }): string {
   const base = apiClient.defaults.baseURL ?? '';
   const q = new URLSearchParams(
     Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])),

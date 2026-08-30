@@ -121,7 +121,7 @@ export class SystemConfigService implements OnModuleInit {
     // Cross-field validation: LoanMinAmount vs LoanMaxAmount
     const touchesMin = ConfigKey.LoanMinAmount in updates;
     const touchesMax = ConfigKey.LoanMaxAmount in updates;
-    let current = await this.getAll();
+    const current = await this.getAll();
     if (touchesMin || touchesMax) {
       const resolvedMin = parseFloat(
         touchesMin ? updates[ConfigKey.LoanMinAmount] : (current[ConfigKey.LoanMinAmount]?.value ?? '0'),

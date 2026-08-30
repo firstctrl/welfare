@@ -13,7 +13,6 @@ import {
   LoanStatus,
   LoanRepaymentStatus,
   StaffStatus,
-  RepaymentSource,
   ClaimStatus,
   ClaimType,
 } from '@welfare/shared';
@@ -469,18 +468,6 @@ describe('ReportsService', () => {
       expect(result.thisMonth.year).toBe(now.getFullYear());
       expect(result.loans.activeCount).toBe(10);
       expect(result.monthlyTrend).toHaveLength(12);
-    });
-  });
-
-  // ─── CSV GENERATION ───
-
-  describe('generateCsv', () => {
-    it('returns CSV string with headers and data', async () => {
-      const data = [{ name: 'Alice', amount: 100 }, { name: 'Bob', amount: 200 }];
-      const csv = await service.generateCsv(data, ['name', 'amount']);
-      expect(csv).toContain('name');
-      expect(csv).toContain('Alice');
-      expect(csv).toContain('200');
     });
   });
 

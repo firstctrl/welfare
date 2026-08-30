@@ -12,6 +12,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { AppModule } from '@welfare/shared';
 import { Staff, StaffDocument } from '../staff/schemas/staff.schema';
+import { sendCsv, sendExcel, ExportColumn } from '../common/utils/export.util';
 
 const CSV_COLUMNS = {
   monthlyContributions: [
@@ -143,7 +144,7 @@ export class ReportsController {
   @RequirePermission(AppModule.Reports, 'full')
   async sendStaffStatement(
     @Body('staffId') staffId: string,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() _user: { sub: string; displayName: string },
   ) {
     if (!staffId) throw new BadRequestException('staffId is required');
     const { staff } = await this.reportsService.getStaffContributionStatement(staffId);
@@ -171,9 +172,12 @@ export class ReportsController {
     const report = await this.reportsService.getMonthlyContributions(month, year);
 
     if (q.format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="contributions-${year}-${month}.csv"`);
-      return this.reportsService.generateCsv(report.rows, CSV_COLUMNS.monthlyContributions.map(c => c.field));
+      sendCsv(res, `contributions-${year}-${month}.csv`, report.rows, CSV_COLUMNS.monthlyContributions.map(c => c.field));
+      return;
+    }
+    if (q.format === 'xlsx') {
+      sendExcel(res, `contributions-${year}-${month}.xlsx`, report.rows, CSV_COLUMNS.monthlyContributions);
+      return;
     }
     if (q.format === 'pdf') {
       const pdf = await this.reportsService.generatePdf(
@@ -200,9 +204,12 @@ export class ReportsController {
     const rows = await this.reportsService.getArrearsReport(fromMonth, fromYear, toMonth, toYear);
 
     if (q.format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename="arrears.csv"');
-      return this.reportsService.generateCsv(rows, CSV_COLUMNS.arrears.map(c => c.field));
+      sendCsv(res, 'arrears.csv', rows, CSV_COLUMNS.arrears.map(c => c.field));
+      return;
+    }
+    if (q.format === 'xlsx') {
+      sendExcel(res, 'arrears.xlsx', rows, CSV_COLUMNS.arrears);
+      return;
     }
     if (q.format === 'pdf') {
       const pdf = await this.reportsService.generatePdf('Contribution Arrears Report', CSV_COLUMNS.arrears, rows);
@@ -218,12 +225,21 @@ export class ReportsController {
   @RequirePermission(AppModule.Reports, 'readonly')
   async getGuarantorOffsets(@Query() q: ReportQueryDto, @Res({ passthrough: true }) res: Response) {
     const rows = await this.reportsService.getGuarantorOffsets();
+    const columns: ExportColumn[] = [
+      { header: 'Guarantor Name', field: 'guarantorName' },
+      { header: 'Borrower Name', field: 'borrowerName' },
+      { header: 'Loan ID', field: 'loanId' },
+      { header: 'Instalment #', field: 'instalmentNumber' },
+      { header: 'Offset Amount', field: 'offsetAmount' },
+      { header: 'Offset Date', field: 'offsetDate' },
+    ];
     if (q.format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename="guarantor-offsets.csv"');
-      return this.reportsService.generateCsv(rows, [
-        'guarantorName', 'borrowerName', 'loanId', 'instalmentNumber', 'offsetAmount', 'offsetDate',
-      ]);
+      sendCsv(res, 'guarantor-offsets.csv', rows, columns.map(c => c.field));
+      return;
+    }
+    if (q.format === 'xlsx') {
+      sendExcel(res, 'guarantor-offsets.xlsx', rows, columns);
+      return;
     }
     return rows;
   }
@@ -233,9 +249,12 @@ export class ReportsController {
   async getActiveLoans(@Query() q: ReportQueryDto, @Res({ passthrough: true }) res: Response) {
     const rows = await this.reportsService.getActiveLoans();
     if (q.format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename="active-loans.csv"');
-      return this.reportsService.generateCsv(rows, CSV_COLUMNS.activeLoans.map(c => c.field));
+      sendCsv(res, 'active-loans.csv', rows, CSV_COLUMNS.activeLoans.map(c => c.field));
+      return;
+    }
+    if (q.format === 'xlsx') {
+      sendExcel(res, 'active-loans.xlsx', rows, CSV_COLUMNS.activeLoans);
+      return;
     }
     if (q.format === 'pdf') {
       const pdf = await this.reportsService.generatePdf('Active Loans Report', CSV_COLUMNS.activeLoans, rows);
@@ -252,9 +271,12 @@ export class ReportsController {
   async getOverdueLoans(@Query() q: ReportQueryDto, @Res({ passthrough: true }) res: Response) {
     const rows = await this.reportsService.getOverdueLoans();
     if (q.format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename="overdue-loans.csv"');
-      return this.reportsService.generateCsv(rows, CSV_COLUMNS.overdueLoans.map(c => c.field));
+      sendCsv(res, 'overdue-loans.csv', rows, CSV_COLUMNS.overdueLoans.map(c => c.field));
+      return;
+    }
+    if (q.format === 'xlsx') {
+      sendExcel(res, 'overdue-loans.xlsx', rows, CSV_COLUMNS.overdueLoans);
+      return;
     }
     return rows;
   }
@@ -263,12 +285,21 @@ export class ReportsController {
   @RequirePermission(AppModule.Reports, 'readonly')
   async getRepaidLoans(@Query() q: ReportQueryDto, @Res({ passthrough: true }) res: Response) {
     const rows = await this.reportsService.getRepaidLoans();
+    const columns: ExportColumn[] = [
+      { header: 'Staff Name', field: 'staffName' },
+      { header: 'Principal Amount', field: 'principalAmount' },
+      { header: 'Total Repayable', field: 'totalRepayable' },
+      { header: 'Disbursed Date', field: 'disbursedDate' },
+      { header: 'Settled At', field: 'settledAt' },
+      { header: 'Tenure (Months)', field: 'tenureMonths' },
+    ];
     if (q.format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename="repaid-loans.csv"');
-      return this.reportsService.generateCsv(rows, [
-        'staffName', 'principalAmount', 'totalRepayable', 'disbursedDate', 'settledAt', 'tenureMonths',
-      ]);
+      sendCsv(res, 'repaid-loans.csv', rows, columns.map(c => c.field));
+      return;
+    }
+    if (q.format === 'xlsx') {
+      sendExcel(res, 'repaid-loans.xlsx', rows, columns);
+      return;
     }
     return rows;
   }
@@ -284,9 +315,12 @@ export class ReportsController {
   async getBadDebt(@Query() q: ReportQueryDto, @Res({ passthrough: true }) res: Response) {
     const rows = await this.reportsService.getBadDebt();
     if (q.format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename="bad-debt.csv"');
-      return this.reportsService.generateCsv(rows, CSV_COLUMNS.badDebt.map(c => c.field));
+      sendCsv(res, 'bad-debt.csv', rows, CSV_COLUMNS.badDebt.map(c => c.field));
+      return;
+    }
+    if (q.format === 'xlsx') {
+      sendExcel(res, 'bad-debt.xlsx', rows, CSV_COLUMNS.badDebt);
+      return;
     }
     return rows;
   }
@@ -296,9 +330,12 @@ export class ReportsController {
   async getRecoveryActivity(@Query() q: ReportQueryDto, @Res({ passthrough: true }) res: Response) {
     const rows = await this.reportsService.getRecoveryActivity();
     if (q.format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename="recovery-activity.csv"');
-      return this.reportsService.generateCsv(rows, CSV_COLUMNS.recoveryActivity.map(c => c.field));
+      sendCsv(res, 'recovery-activity.csv', rows, CSV_COLUMNS.recoveryActivity.map(c => c.field));
+      return;
+    }
+    if (q.format === 'xlsx') {
+      sendExcel(res, 'recovery-activity.xlsx', rows, CSV_COLUMNS.recoveryActivity);
+      return;
     }
     return rows;
   }
@@ -411,12 +448,12 @@ export class ReportsController {
     if (dto.quarter) [fromMonth, toMonth] = quarterMap[dto.quarter];
     const summary = await this.reportsService.getFundSummary(dto.year, fromMonth, toMonth);
     if (dto.format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="fund-contributions-${dto.year}.csv"`);
-      return this.reportsService.generateCsv(
-        summary.contributionBreakdown,
-        CSV_COLUMNS.fundSummaryContributions.map(c => c.field),
-      );
+      sendCsv(res, `fund-contributions-${dto.year}.csv`, summary.contributionBreakdown, CSV_COLUMNS.fundSummaryContributions.map(c => c.field));
+      return;
+    }
+    if (dto.format === 'xlsx') {
+      sendExcel(res, `fund-contributions-${dto.year}.xlsx`, summary.contributionBreakdown, CSV_COLUMNS.fundSummaryContributions);
+      return;
     }
     return summary.contributionBreakdown;
   }
@@ -433,9 +470,12 @@ export class ReportsController {
     if (dto.quarter) [fromMonth, toMonth] = quarterMap[dto.quarter];
     const summary = await this.reportsService.getFundSummary(dto.year, fromMonth, toMonth);
     if (dto.format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="fund-loans-${dto.year}.csv"`);
-      return this.reportsService.generateCsv(summary.loanBreakdown, CSV_COLUMNS.fundSummaryLoans.map(c => c.field));
+      sendCsv(res, `fund-loans-${dto.year}.csv`, summary.loanBreakdown, CSV_COLUMNS.fundSummaryLoans.map(c => c.field));
+      return;
+    }
+    if (dto.format === 'xlsx') {
+      sendExcel(res, `fund-loans-${dto.year}.xlsx`, summary.loanBreakdown, CSV_COLUMNS.fundSummaryLoans);
+      return;
     }
     if (dto.format === 'pdf') {
       const pdf = await this.reportsService.generatePdf(`Fund Summary — Loans ${dto.year}`, CSV_COLUMNS.fundSummaryLoans, summary.loanBreakdown);
@@ -459,9 +499,12 @@ export class ReportsController {
     if (dto.quarter) [fromMonth, toMonth] = quarterMap[dto.quarter];
     const summary = await this.reportsService.getFundSummary(dto.year, fromMonth, toMonth);
     if (dto.format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="fund-claims-${dto.year}.csv"`);
-      return this.reportsService.generateCsv(summary.claimsBreakdown, CSV_COLUMNS.fundSummaryClaims.map(c => c.field));
+      sendCsv(res, `fund-claims-${dto.year}.csv`, summary.claimsBreakdown, CSV_COLUMNS.fundSummaryClaims.map(c => c.field));
+      return;
+    }
+    if (dto.format === 'xlsx') {
+      sendExcel(res, `fund-claims-${dto.year}.xlsx`, summary.claimsBreakdown, CSV_COLUMNS.fundSummaryClaims);
+      return;
     }
     if (dto.format === 'pdf') {
       const pdf = await this.reportsService.generatePdf(`Fund Summary — Welfare Claims ${dto.year}`, CSV_COLUMNS.fundSummaryClaims, summary.claimsBreakdown);
@@ -485,9 +528,12 @@ export class ReportsController {
     if (dto.quarter) [fromMonth, toMonth] = quarterMap[dto.quarter];
     const summary = await this.reportsService.getFundSummary(dto.year, fromMonth, toMonth);
     if (dto.format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="fund-defaults-${dto.year}.csv"`);
-      return this.reportsService.generateCsv(summary.defaultDetails, CSV_COLUMNS.fundSummaryDefaults.map(c => c.field));
+      sendCsv(res, `fund-defaults-${dto.year}.csv`, summary.defaultDetails, CSV_COLUMNS.fundSummaryDefaults.map(c => c.field));
+      return;
+    }
+    if (dto.format === 'xlsx') {
+      sendExcel(res, `fund-defaults-${dto.year}.xlsx`, summary.defaultDetails, CSV_COLUMNS.fundSummaryDefaults);
+      return;
     }
     if (dto.format === 'pdf') {
       const pdf = await this.reportsService.generatePdf(`Fund Summary — Defaulted Loans ${dto.year}`, CSV_COLUMNS.fundSummaryDefaults, summary.defaultDetails);
@@ -538,9 +584,12 @@ export class ReportsController {
   async getExitClearance(@Query() q: ReportQueryDto, @Res({ passthrough: true }) res: Response) {
     const rows = await this.reportsService.getExitClearanceReport();
     if (q.format === 'csv') {
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename="exit-clearance.csv"');
-      return this.reportsService.generateCsv(rows, CSV_COLUMNS.exitClearance.map(c => c.field));
+      sendCsv(res, 'exit-clearance.csv', rows, CSV_COLUMNS.exitClearance.map(c => c.field));
+      return;
+    }
+    if (q.format === 'xlsx') {
+      sendExcel(res, 'exit-clearance.xlsx', rows, CSV_COLUMNS.exitClearance);
+      return;
     }
     if (q.format === 'pdf') {
       const pdf = await this.reportsService.generatePdf(

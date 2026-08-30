@@ -18,9 +18,9 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import * as path from 'path';
 import * as fs from 'fs';
-import { parse as toCsv } from 'json2csv';
 import puppeteer from 'puppeteer';
 import { AppModule } from '@welfare/shared';
+import { sendCsv, sendExcel } from '../common/utils/export.util';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 import { RemittancesService } from './remittances.service';
@@ -151,11 +151,17 @@ export class RemittancesController {
     const report = await this.service.getReport(fm, fy, tm, ty);
 
     if (q.format === 'csv') {
-      const fields = CSV_COLUMNS.map(c => c.field);
-      const csv = toCsv(report.rows, { fields });
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="remittances-${fy}-${fm}-to-${ty}-${tm}.csv"`);
-      res.send(csv);
+      sendCsv(
+        res,
+        `remittances-${fy}-${fm}-to-${ty}-${tm}.csv`,
+        report.rows,
+        CSV_COLUMNS.map(c => c.field),
+      );
+      return;
+    }
+
+    if (q.format === 'xlsx') {
+      sendExcel(res, `remittances-${fy}-${fm}-to-${ty}-${tm}.xlsx`, report.rows, CSV_COLUMNS);
       return;
     }
 

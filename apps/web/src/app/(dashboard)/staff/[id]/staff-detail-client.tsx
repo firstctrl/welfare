@@ -18,7 +18,7 @@ import { toast } from 'sonner';
 import { UserCog, Send, Pencil, Plus, Download } from 'lucide-react';
 import Link from 'next/link';
 import { StaffStatus, ContributionStatus, LoanStatus } from '@welfare/shared';
-import type { IStaff, IContribution, ILoan, ILoanRepayment } from '@welfare/shared';
+import type { IStaff, IContribution, ILoan } from '@welfare/shared';
 import { Pagination, SortableTh } from '@/components/ui/data-table';
 import { getStaff, updateStaff, changeStaffStatus, uploadStaffPhoto } from '@/lib/staff';
 import { getContributionsByStaff } from '@/lib/contributions';
@@ -122,7 +122,6 @@ export default function StaffDetailClient({ id }: { id: string }) {
     }),
     contribCol.accessor('source', { header: 'Source', cell: (i) => <span className="text-neutral-500">{i.getValue()}</span> }),
     contribCol.accessor('recordedBy', { header: 'Recorded By', cell: (i) => <span className="text-neutral-500">{i.getValue()}</span> }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   ], []);
 
   const contribTable = useReactTable({
@@ -217,7 +216,6 @@ export default function StaffDetailClient({ id }: { id: string }) {
       if (data) map.set(sid, data);
     });
     return map;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [borrowerStaffIds, JSON.stringify(borrowerStaffQueries.map((q) => q.status))]);
 
   const profileForm = useForm<ProfileForm>({ resolver: zodResolver(profileSchema) });
