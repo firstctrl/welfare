@@ -548,17 +548,21 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
             <div className="relative">
               <input
                 value={staffInput}
-                onChange={e => handleSearch(e.target.value)}
+                onChange={(e) => handleSearch(e.target.value)}
                 onFocus={() => staffOptions.length > 0 && setShowDropdown(true)}
                 placeholder="Search by name or staff ID…"
                 className="w-full px-3 pr-8 h-[var(--row-default)] rounded-sm border border-neutral-200 bg-white text-base outline-none focus:border-primary-500 focus:shadow-focus placeholder:text-neutral-400"
               />
-              <Search size={14} strokeWidth={1.75} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+              <Search
+                size={14}
+                strokeWidth={1.75}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none"
+              />
             </div>
           </Field>
           {showDropdown && (
             <div className="absolute z-20 w-full mt-1 bg-white border border-neutral-200 rounded-sm shadow-lg overflow-hidden">
-              {staffOptions.map(s => (
+              {staffOptions.map((s) => (
                 <button
                   key={s._id}
                   onMouseDown={() => selectStaff(s)}
@@ -577,7 +581,11 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
               variant="secondary"
               size="sm"
               Icon={FileText}
-              onClick={() => downloadStatementPdf(selectedStaff._id, selectedStaff.staffId).catch(err => toast.error('Download failed'))}
+              onClick={() =>
+                downloadStatementPdf(selectedStaff._id, selectedStaff.staffId).catch((err) =>
+                  toast.error('Download failed'),
+                )
+              }
             >
               Download PDF
             </Button>
@@ -603,7 +611,9 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
       )}
 
       {selectedStaff && isLoading && (
-        <div className="flex items-center justify-center py-16 text-neutral-400 text-sm">Loading…</div>
+        <div className="flex items-center justify-center py-16 text-neutral-400 text-sm">
+          Loading…
+        </div>
       )}
 
       {data && kpis && (
@@ -626,14 +636,22 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
               label="Collection Rate"
               value={`${kpis.collectionRate}%`}
               icon={BarChart3}
-              iconKind={kpis.collectionRate >= 90 ? 'success' : kpis.collectionRate >= 70 ? 'warning' : 'danger'}
+              iconKind={
+                kpis.collectionRate >= 90
+                  ? 'success'
+                  : kpis.collectionRate >= 70
+                    ? 'warning'
+                    : 'danger'
+              }
             />
             <KpiCard
               label="Missed / Partial"
-              value={`${kpis.missedMonths} months`}
+              value={`${kpis.missedMonths} mo`}
               subtext={kpis.totalSurplus > 0 ? `Surplus: ${fmtGHS(kpis.totalSurplus)}` : undefined}
               icon={AlertCircle}
-              iconKind={kpis.missedMonths === 0 ? 'success' : kpis.missedMonths <= 3 ? 'warning' : 'danger'}
+              iconKind={
+                kpis.missedMonths === 0 ? 'success' : kpis.missedMonths <= 3 ? 'warning' : 'danger'
+              }
             />
             {(kpis.totalOffsets ?? 0) > 0 && (
               <KpiCard
@@ -661,17 +679,28 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
               <table className="w-full border-collapse text-xs">
                 <thead>
                   <tr className="bg-primary-600 text-white">
-                    <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap w-16">Year</th>
-                    {MONTHS.map(m => (
-                      <th key={m} className="px-3 py-2.5 text-center font-semibold whitespace-nowrap min-w-[72px]">{m}</th>
+                    <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap w-16">
+                      Year
+                    </th>
+                    {MONTHS.map((m) => (
+                      <th
+                        key={m}
+                        className="px-3 py-2.5 text-center font-semibold whitespace-nowrap min-w-[72px]"
+                      >
+                        {m}
+                      </th>
                     ))}
-                    <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap">Total</th>
+                    <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap">
+                      Total
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
-                  {rows.map(row => (
+                  {rows.map((row) => (
                     <tr key={row.year} className="hover:bg-neutral-50 group">
-                      <td className="px-4 py-2 font-bold text-neutral-700 bg-neutral-50 group-hover:bg-neutral-100 transition-colors">{row.year}</td>
+                      <td className="px-4 py-2 font-bold text-neutral-700 bg-neutral-50 group-hover:bg-neutral-100 transition-colors">
+                        {row.year}
+                      </td>
                       {Array.from({ length: 12 }, (_, i) => {
                         const cell = row.cells[i + 1];
                         const offset = row.offsetCells?.[i + 1];
@@ -679,7 +708,10 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
                           <td key={i} className="px-1 py-1 text-center align-top">
                             {cell ? (
                               <span
-                                className={cn('inline-block w-full px-1.5 py-1 rounded text-xs font-mono tabular leading-tight', STATUS_BG[cell.status] ?? 'bg-neutral-100 text-neutral-600')}
+                                className={cn(
+                                  'inline-block w-full px-1.5 py-1 rounded text-xs font-mono tabular leading-tight',
+                                  STATUS_BG[cell.status] ?? 'bg-neutral-100 text-neutral-600',
+                                )}
                                 title={`${cell.status} · Expected: ${fmtGHS(cell.expectedAmount)}`}
                               >
                                 {fmtGHS(cell.paidAmount)}
@@ -690,7 +722,13 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
                             {offset && offset.totalAmount > 0 && (
                               <div
                                 className="mt-0.5 text-[10px] font-mono tabular text-danger-700"
-                                title={offset.items.map(it => it.kind === 'Defaulter' ? `Own missed instalment: ${fmtGHS(it.amount)}` : `Guarantor offset for ${it.borrowerName} (${it.borrowerStaffNo}): ${fmtGHS(it.amount)}`).join('\n')}
+                                title={offset.items
+                                  .map((it) =>
+                                    it.kind === 'Defaulter'
+                                      ? `Own missed instalment: ${fmtGHS(it.amount)}`
+                                      : `Guarantor offset for ${it.borrowerName} (${it.borrowerStaffNo}): ${fmtGHS(it.amount)}`,
+                                  )
+                                  .join('\n')}
                               >
                                 −{fmtGHS(offset.totalAmount)}
                               </div>
@@ -701,7 +739,9 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
                       <td className="px-4 py-2 text-right font-bold font-mono tabular text-neutral-900 align-top">
                         {fmtGHS(row.yearTotal)}
                         {(row.yearOffsetTotal ?? 0) > 0 && (
-                          <div className="mt-0.5 text-[10px] font-normal text-danger-700">−{fmtGHS(row.yearOffsetTotal ?? 0)}</div>
+                          <div className="mt-0.5 text-[10px] font-normal text-danger-700">
+                            −{fmtGHS(row.yearOffsetTotal ?? 0)}
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -709,16 +749,30 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
                 </tbody>
                 <tfoot>
                   <tr className="bg-neutral-50 border-t-2 border-neutral-200">
-                    <td className="px-4 py-2 font-bold text-neutral-700 text-xs uppercase tracking-wide">Total</td>
+                    <td className="px-4 py-2 font-bold text-neutral-700 text-xs uppercase tracking-wide">
+                      Total
+                    </td>
                     {Array.from({ length: 12 }, (_, i) => {
-                      const monthTotal = (rows ?? []).reduce((s, r) => s + (r.cells[i + 1]?.paidAmount ?? 0), 0);
+                      const monthTotal = (rows ?? []).reduce(
+                        (s, r) => s + (r.cells[i + 1]?.paidAmount ?? 0),
+                        0,
+                      );
                       return (
-                        <td key={i} className="px-1 py-2 text-center font-bold font-mono tabular text-xs text-neutral-700">
-                          {monthTotal > 0 ? fmtGHS(monthTotal) : <span className="text-neutral-300">—</span>}
+                        <td
+                          key={i}
+                          className="px-1 py-2 text-center font-bold font-mono tabular text-xs text-neutral-700"
+                        >
+                          {monthTotal > 0 ? (
+                            fmtGHS(monthTotal)
+                          ) : (
+                            <span className="text-neutral-300">—</span>
+                          )}
                         </td>
                       );
                     })}
-                    <td className="px-4 py-2 text-right font-bold font-mono tabular text-neutral-900">{fmtGHS(kpis.totalPaid)}</td>
+                    <td className="px-4 py-2 text-right font-bold font-mono tabular text-neutral-900">
+                      {fmtGHS(kpis.totalPaid)}
+                    </td>
                   </tr>
                 </tfoot>
               </table>
@@ -734,9 +788,15 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
               <table className="w-full border-collapse text-xs">
                 <thead>
                   <tr className="bg-primary-600 text-white">
-                    <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap w-16">Year</th>
-                    <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">Claim Type</th>
-                    <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap">Amount</th>
+                    <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap w-16">
+                      Year
+                    </th>
+                    <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">
+                      Claim Type
+                    </th>
+                    <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap">
+                      Amount
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
@@ -744,20 +804,32 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
                     yearRow.claims.map((c, i) => (
                       <tr key={`${yearRow.year}-${i}`} className="hover:bg-neutral-50">
                         {i === 0 && (
-                          <td rowSpan={yearRow.claims.length} className="px-4 py-2 font-bold text-neutral-700 bg-neutral-50 align-top">
+                          <td
+                            rowSpan={yearRow.claims.length}
+                            className="px-4 py-2 font-bold text-neutral-700 bg-neutral-50 align-top"
+                          >
                             {yearRow.year}
                           </td>
                         )}
                         <td className="px-4 py-2 text-neutral-700">{c.claimType}</td>
-                        <td className="px-4 py-2 text-right font-mono tabular text-neutral-900">{fmtGHS(c.amount)}</td>
+                        <td className="px-4 py-2 text-right font-mono tabular text-neutral-900">
+                          {fmtGHS(c.amount)}
+                        </td>
                       </tr>
                     )),
                   )}
                 </tbody>
                 <tfoot>
                   <tr className="bg-neutral-50 border-t-2 border-neutral-200">
-                    <td colSpan={2} className="px-4 py-2 text-right font-bold text-neutral-700 text-xs uppercase tracking-wide">Total Welfare Claims</td>
-                    <td className="px-4 py-2 text-right font-bold font-mono tabular text-neutral-900">{fmtGHS(kpis.totalClaims ?? 0)}</td>
+                    <td
+                      colSpan={2}
+                      className="px-4 py-2 text-right font-bold text-neutral-700 text-xs uppercase tracking-wide"
+                    >
+                      Total Welfare Claims
+                    </td>
+                    <td className="px-4 py-2 text-right font-bold font-mono tabular text-neutral-900">
+                      {fmtGHS(kpis.totalClaims ?? 0)}
+                    </td>
                   </tr>
                 </tfoot>
               </table>
@@ -768,12 +840,16 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
           <div className="flex items-center gap-4 text-xs text-neutral-500">
             <span className="font-medium">Status:</span>
             {Object.entries(STATUS_BG).map(([status, cls]) => (
-              <span key={status} className={cn('px-2 py-0.5 rounded font-medium', cls)}>{status}</span>
+              <span key={status} className={cn('px-2 py-0.5 rounded font-medium', cls)}>
+                {status}
+              </span>
             ))}
           </div>
           {(kpis.totalOffsets ?? 0) > 0 && (
             <p className="text-xs text-neutral-500">
-              <span className="text-danger-700 font-mono">−amount</span> indicates contributions deducted to settle a loan this staff guaranteed or their own missed instalment (hover for detail).
+              <span className="text-danger-700 font-mono">−amount</span> indicates contributions
+              deducted to settle a loan this staff guaranteed or their own missed instalment (hover
+              for detail).
             </p>
           )}
         </>

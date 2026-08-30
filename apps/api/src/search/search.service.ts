@@ -50,7 +50,7 @@ export class SearchService {
     const claimItems: SearchResultItem[] = (claimsRes.hits as any[]).map((h) => ({
       type: 'claim' as const,
       id: h.id,
-      title: `${h.claimType} claim — ${h.staffName}`,
+      title: `${h.claimType} claim - ${h.staffName}`,
       subtitle: `${h.status} · GHS ${Number(h.amount).toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       url: `/claims/${h.id}`,
     }));
