@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import { CheckCircle2, XCircle, Trash2 } from 'lucide-react';
@@ -30,6 +31,7 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 type ClaimRow = IClaim & { staffInfo?: { staffId: string; fullName: string } };
 
 export default function ClaimsListClient() {
+  const router = useRouter();
   const qc = useQueryClient();
   const permission = usePermission(AppModule.Claims);
   const [page, setPage] = useState(1);
@@ -172,9 +174,20 @@ export default function ClaimsListClient() {
                 <tr><td colSpan={columns.length}><EmptyState heading="No claims found" body="Import legacy claims or record a new one to get started." /></td></tr>
               ) : (
                 table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-neutral-50 transition-colors duration-fast" style={{ height: 'var(--row-default)' }}>
+                  <tr
+                    key={row.id}
+                    className="hover:bg-neutral-50 cursor-pointer transition-colors duration-fast"
+                    style={{ height: 'var(--row-default)' }}
+                    onClick={() => router.push(`/claims/${row.original._id}`)}
+                  >
                     {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 text-neutral-800">{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                      <td
+                        key={cell.id}
+                        className="px-4 text-neutral-800"
+                        onClick={cell.column.id === 'actions' ? (e) => e.stopPropagation() : undefined}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
                     ))}
                   </tr>
                 ))

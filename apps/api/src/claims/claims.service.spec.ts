@@ -7,6 +7,7 @@ import { Claim } from './schemas/claim.schema';
 import { Contribution } from '../contributions/schemas/contribution.schema';
 import { AuditService } from '../audit/audit.service';
 import { StaffService } from '../staff/staff.service';
+import { MEILISEARCH_CLIENT } from '../search/meilisearch.module';
 
 const mockClaimModel = {
   create: jest.fn(),
@@ -18,7 +19,12 @@ const mockClaimModel = {
 };
 const mockContribModel = { aggregate: jest.fn() };
 const mockAuditService = { log: jest.fn() };
-const mockStaffService = { findManyByStaffIdPattern: jest.fn() };
+const mockStaffService = {
+  findManyByStaffIdPattern: jest.fn(),
+  findById: jest.fn().mockResolvedValue({ fullName: 'Jane Doe', staffId: 'SCW001' }),
+};
+const mockMeiliIndex = { updateSettings: jest.fn().mockResolvedValue(undefined), addDocuments: jest.fn().mockResolvedValue(undefined) };
+const mockMeiliClient = { index: jest.fn(() => mockMeiliIndex) };
 
 describe('ClaimsService', () => {
   let service: ClaimsService;
@@ -31,10 +37,12 @@ describe('ClaimsService', () => {
         { provide: getModelToken(Contribution.name), useValue: mockContribModel },
         { provide: AuditService, useValue: mockAuditService },
         { provide: StaffService, useValue: mockStaffService },
+        { provide: MEILISEARCH_CLIENT, useValue: mockMeiliClient },
       ],
     }).compile();
     service = module.get(ClaimsService);
     jest.clearAllMocks();
+    mockStaffService.findById.mockResolvedValue({ fullName: 'Jane Doe', staffId: 'SCW001' });
   });
 
   function mockBalance(paid: number, approvedClaims: number) {

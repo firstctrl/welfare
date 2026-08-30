@@ -2,6 +2,15 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
+import {
+  createColumnHelper,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  getPaginationRowModel,
+  useReactTable,
+  type SortingState,
+} from '@tanstack/react-table';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,6 +19,7 @@ import { UserCog, Send, Pencil, Plus, Download } from 'lucide-react';
 import Link from 'next/link';
 import { StaffStatus, ContributionStatus, LoanStatus } from '@welfare/shared';
 import type { IStaff, IContribution, ILoan, ILoanRepayment } from '@welfare/shared';
+import { Pagination, SortableTh } from '@/components/ui/data-table';
 import { getStaff, updateStaff, changeStaffStatus, uploadStaffPhoto } from '@/lib/staff';
 import { getContributionsByStaff } from '@/lib/contributions';
 import { getLoansByStaff, getLoansByGuarantor, getLoanSchedule } from '@/lib/loans';
@@ -64,6 +74,9 @@ export default function StaffDetailClient({ id }: { id: string }) {
   const [sendingStatement, setSendingStatement] = useState(false);
   const [downloadingRecord, setDownloadingRecord] = useState(false);
   const [statementYear, setStatementYear] = useState(new Date().getFullYear());
+  const [contribSorting, setContribSorting] = useState<SortingState>([]);
+  const [contribPage, setContribPage] = useState(1);
+  const [contribLimit, setContribLimit] = useState(20);
 
   const { data: staff, isLoading } = useQuery({ queryKey: ['staff', id], queryFn: () => getStaff(id) });
 
@@ -71,6 +84,64 @@ export default function StaffDetailClient({ id }: { id: string }) {
     queryKey: ['contributions', 'staff', id],
     queryFn: () => getContributionsByStaff(id),
     enabled: activeTab === 'Contributions' || activeTab === 'Guaranteeing',
+  });
+
+  const contribStats = useMemo(() => {
+    const rows = contributions ?? [];
+    const totalExpected = rows.reduce((s, c) => s + c.expectedAmount, 0);
+    const totalPaid = rows.reduce((s, c) => s + c.paidAmount, 0);
+    const missedCount = rows.filter((c) => c.status === ContributionStatus.Missed).length;
+    return { totalExpected, totalPaid, outstanding: Math.max(0, totalExpected - totalPaid), missedCount };
+  }, [contributions]);
+
+  const contribCol = createColumnHelper<IContribution>();
+  const contribColumns = useMemo(() => [
+    contribCol.accessor('month', { header: 'Month', cell: (i) => MONTHS[i.getValue() - 1] }),
+    contribCol.accessor('year', { header: 'Year' }),
+    contribCol.accessor('expectedAmount', { header: 'Expected', cell: (i) => <span className="font-mono tabular">{fmtGHS(i.getValue())}</span> }),
+    contribCol.accessor('paidAmount', { header: 'Paid', cell: (i) => <span className="font-mono tabular">{fmtGHS(i.getValue())}</span> }),
+    contribCol.accessor('surplusCarriedForward', { header: 'Surplus C/F', cell: (i) => <span className="font-mono tabular">{fmtGHS(i.getValue())}</span> }),
+    contribCol.accessor('status', {
+      header: 'Status',
+      cell: (i) => (
+        <span
+          className={cn(
+            'px-2 py-0.5 rounded-xs text-xs font-medium',
+            i.getValue() === ContributionStatus.Paid
+              ? 'bg-success-50 text-success-700'
+              : i.getValue() === ContributionStatus.Partial
+                ? 'bg-warning-50 text-warning-700'
+                : i.getValue() === ContributionStatus.Missed
+                  ? 'bg-danger-50 text-danger-700'
+                  : 'bg-info-50 text-info-700',
+          )}
+        >
+          {i.getValue()}
+        </span>
+      ),
+    }),
+    contribCol.accessor('source', { header: 'Source', cell: (i) => <span className="text-neutral-500">{i.getValue()}</span> }),
+    contribCol.accessor('recordedBy', { header: 'Recorded By', cell: (i) => <span className="text-neutral-500">{i.getValue()}</span> }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], []);
+
+  const contribTable = useReactTable({
+    data: contributions ?? [],
+    columns: contribColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onSortingChange: setContribSorting,
+    onPaginationChange: (updater) => {
+      const current = { pageIndex: contribPage - 1, pageSize: contribLimit };
+      const next = typeof updater === 'function' ? updater(current) : updater;
+      setContribPage(next.pageIndex + 1);
+      setContribLimit(next.pageSize);
+    },
+    state: {
+      sorting: contribSorting,
+      pagination: { pageIndex: contribPage - 1, pageSize: contribLimit },
+    },
   });
 
   const { data: staffLoans, isLoading: loansLoading } = useQuery({
@@ -424,110 +495,92 @@ export default function StaffDetailClient({ id }: { id: string }) {
 
       {/* Contributions Tab */}
       {activeTab === 'Contributions' && (
-        <Card>
-          <CardHeader
-            title="Contribution Ledger"
-            action={
-              <Button
-                variant="secondary"
-                size="sm"
-                Icon={Plus}
-                onClick={() => (window.location.href = '/contributions/manual')}
-              >
-                Add Manual Entry
-              </Button>
-            }
-          />
-          <CardBody noPadding>
-            {contribLoading ? (
-              <p className="px-5 py-4 text-sm text-neutral-400">Loading…</p>
-            ) : !contributions?.length ? (
-              <p className="px-5 py-8 text-sm text-neutral-400 text-center">
-                No contributions recorded yet.
-              </p>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm border-collapse">
-                    <thead>
-                      <tr className="border-b border-neutral-200 bg-neutral-50">
-                        {[
-                          'Month',
-                          'Year',
-                          'Expected',
-                          'Paid',
-                          'Surplus C/F',
-                          'Status',
-                          'Source',
-                          'Recorded By',
-                        ].map((h) => (
-                          <th
-                            key={h}
-                            className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide"
-                          >
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-100">
-                      {contributions.map((c: IContribution) => (
-                        <tr key={c._id} className="hover:bg-neutral-50">
-                          <td className="px-4 py-2">{MONTHS[c.month - 1]}</td>
-                          <td className="px-4 py-2">{c.year}</td>
-                          <td className="px-4 py-2 text-right font-mono tabular">
-                            {fmtGHS(c.expectedAmount)}
-                          </td>
-                          <td className="px-4 py-2 text-right font-mono tabular">
-                            {fmtGHS(c.paidAmount)}
-                          </td>
-                          <td className="px-4 py-2 text-right font-mono tabular">
-                            {fmtGHS(c.surplusCarriedForward)}
-                          </td>
-                          <td className="px-4 py-2">
-                            <span
-                              className={cn(
-                                'px-2 py-0.5 rounded-xs text-xs font-medium',
-                                c.status === ContributionStatus.Paid
-                                  ? 'bg-success-50 text-success-700'
-                                  : c.status === ContributionStatus.Partial
-                                    ? 'bg-warning-50 text-warning-700'
-                                    : c.status === ContributionStatus.Missed
-                                      ? 'bg-danger-50 text-danger-700'
-                                      : 'bg-info-50 text-info-700',
-                              )}
-                            >
-                              {c.status}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2 text-neutral-500">{c.source}</td>
-                          <td className="px-4 py-2 text-neutral-500">{c.recordedBy}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="border-t border-neutral-200 bg-neutral-50">
-                      <tr>
-                        <td
-                          colSpan={2}
-                          className="px-4 py-2 text-xs font-semibold text-neutral-600"
-                        >
-                          Totals
-                        </td>
-                        <td className="px-4 py-2 text-right text-xs font-semibold text-neutral-700 font-mono tabular">
-                          {fmtGHS(contributions.reduce((s, c) => s + c.expectedAmount, 0))}
-                        </td>
-                        <td className="px-4 py-2 text-right text-xs font-semibold text-neutral-700 font-mono tabular">
-                          {fmtGHS(contributions.reduce((s, c) => s + c.paidAmount, 0))}
-                        </td>
-                        <td colSpan={4} />
-                      </tr>
-                    </tfoot>
-                  </table>
+        <div className="space-y-5">
+          {!contribLoading && !!contributions?.length && (
+            <Card>
+              <CardBody className="flex flex-wrap gap-6">
+                <div>
+                  <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">Total Expected</p>
+                  <p className="text-xl font-bold text-neutral-900 mt-0.5 font-mono tabular">{fmtGHS(contribStats.totalExpected)}</p>
                 </div>
-              </>
-            )}
-          </CardBody>
-        </Card>
+                <div>
+                  <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">Total Paid</p>
+                  <p className="text-xl font-bold text-neutral-900 mt-0.5 font-mono tabular">{fmtGHS(contribStats.totalPaid)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-neutral-500 uppercase tracking-wide font-medium">Outstanding</p>
+                  <p className="text-xl font-bold text-neutral-900 mt-0.5 font-mono tabular">{fmtGHS(contribStats.outstanding)}</p>
+                </div>
+                {contribStats.missedCount > 0 && (
+                  <div className="flex items-center">
+                    <span className="px-2 py-0.5 rounded-xs text-xs font-medium bg-danger-100 text-danger-700">
+                      {contribStats.missedCount} missed
+                    </span>
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader
+              title="Contribution Ledger"
+              action={
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  Icon={Plus}
+                  onClick={() => (window.location.href = '/contributions/manual')}
+                >
+                  Add Manual Entry
+                </Button>
+              }
+            />
+            <CardBody noPadding>
+              {contribLoading ? (
+                <p className="px-5 py-4 text-sm text-neutral-400">Loading…</p>
+              ) : !contributions?.length ? (
+                <p className="px-5 py-8 text-sm text-neutral-400 text-center">
+                  No contributions recorded yet.
+                </p>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        {contribTable.getHeaderGroups().map((hg) => (
+                          <tr key={hg.id} className="border-b border-neutral-200 bg-neutral-50">
+                            {hg.headers.map((h) => (
+                              <SortableTh key={h.id} header={h} />
+                            ))}
+                          </tr>
+                        ))}
+                      </thead>
+                      <tbody className="divide-y divide-neutral-100">
+                        {contribTable.getRowModel().rows.map((row) => (
+                          <tr key={row.id} className="hover:bg-neutral-50">
+                            {row.getVisibleCells().map((cell) => (
+                              <td key={cell.id} className="px-4 py-2">
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <Pagination
+                    page={contribPage}
+                    total={contributions.length}
+                    limit={contribLimit}
+                    onPageChange={setContribPage}
+                    onLimitChange={(n) => { setContribLimit(n); setContribPage(1); }}
+                  />
+                </>
+              )}
+            </CardBody>
+          </Card>
+        </div>
       )}
 
       {/* Loans Tab */}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   createColumnHelper,
@@ -13,17 +13,17 @@ import {
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Search, Upload, UserPlus, Trash2 } from 'lucide-react';
+import { Upload, UserPlus, Trash2 } from 'lucide-react';
 import type { IStaff } from '@welfare/shared';
 import { StaffStatus, AppModule } from '@welfare/shared';
 import { usePermission } from '@/hooks/use-permission';
-import { listStaff, searchStaff, bulkDeleteStaff } from '@/lib/staff';
+import { listStaff, bulkDeleteStaff } from '@/lib/staff';
 import AddStaffModal from './add-staff-modal';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input, Select } from '@/components/ui/field';
+import { Select } from '@/components/ui/field';
 import { Pagination, SortableTh } from '@/components/ui/data-table';
 import { Avatar } from '@/components/ui/avatar';
 import { Modal } from '@/components/ui/modal';
@@ -37,9 +37,6 @@ export default function StaffListClient() {
   const permission = usePermission(AppModule.Staff);
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<StaffStatus | ''>('');
-  const [level, setLevel] = useState('');
-  const [q, setQ] = useState('');
-  const [searchInput, setSearchInput] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
@@ -47,27 +44,14 @@ export default function StaffListClient() {
   const [limit, setLimit] = useState(20);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['staff', { page, status, level, q, limit }],
+    queryKey: ['staff', { page, status, limit }],
     queryFn: () =>
-      q
-        ? searchStaff(q, {
-            page,
-            limit,
-            status: status || undefined,
-            level: level || undefined,
-          })
-        : listStaff({
-            page,
-            limit,
-            status: status || undefined,
-            level: level || undefined,
-          }),
+      listStaff({
+        page,
+        limit,
+        status: status || undefined,
+      }),
   });
-
-  const handleSearch = useCallback(() => {
-    setQ(searchInput);
-    setPage(1);
-  }, [searchInput]);
 
   const bulkDeleteMutation = useMutation({
     mutationFn: (ids: string[]) => bulkDeleteStaff(ids),
@@ -113,7 +97,7 @@ export default function StaffListClient() {
     }),
     col.accessor('fullName', { header: 'Full Name' }),
     col.accessor('staffId', { header: 'Staff ID' }),
-    col.accessor('level', { header: 'Level' }),
+    col.accessor('pfNo', { header: 'PF No' }),
     col.accessor('status', {
       header: 'Status',
       cell: (info) => <StatusBadge status={info.getValue()} />,
@@ -162,31 +146,6 @@ export default function StaffListClient() {
           ]}
           style={{ width: 160 }}
         />
-        <Input
-          placeholder="Level (e.g. GL 10)"
-          value={level}
-          onChange={(e) => {
-            setLevel(e.target.value);
-            setPage(1);
-          }}
-          style={{ width: 140 }}
-        />
-        <span className="inline-flex items-center w-72 rounded-sm border border-neutral-200 bg-white h-[var(--row-default)] focus-within:border-primary-500 focus-within:shadow-focus overflow-hidden">
-          <input
-            placeholder="Search name, staff ID, PF No..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            className="flex-1 px-3 h-full bg-transparent outline-none placeholder:text-neutral-400 text-base"
-          />
-          <button
-            onClick={handleSearch}
-            className="px-3 h-full border-l border-neutral-200 bg-neutral-50 text-neutral-500 hover:text-neutral-700 transition-colors duration-fast"
-            aria-label="Search"
-          >
-            <Search size={16} strokeWidth={1.75} />
-          </button>
-        </span>
         {selectedIds.length > 0 && (
           <div className="ml-auto flex items-center gap-3">
             <span className="text-sm text-neutral-600">{selectedIds.length} selected</span>
@@ -237,7 +196,7 @@ export default function StaffListClient() {
                     <EmptyState
                       heading="No staff members found"
                       body={
-                        q || status
+                        status
                           ? 'Try adjusting your filters.'
                           : 'Add the first staff member to get started.'
                       }

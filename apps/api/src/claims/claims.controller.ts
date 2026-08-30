@@ -132,6 +132,12 @@ export class ClaimsController {
     return this.claimsService.listClaims(query);
   }
 
+  @Get(':id')
+  @RequirePermission(AppModule.Claims, 'readonly')
+  findOne(@Param('id') id: string) {
+    return this.claimsService.findByIdWithStaff(id);
+  }
+
   @Delete(':id')
   @RequirePermission(AppModule.Claims, 'full')
   @HttpCode(HttpStatus.NO_CONTENT)

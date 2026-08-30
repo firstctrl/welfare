@@ -1,5 +1,5 @@
 export interface RecentItem {
-  type: 'staff' | 'loan';
+  type: 'staff' | 'loan' | 'claim';
   id: string;
   title: string;
   subtitle: string;

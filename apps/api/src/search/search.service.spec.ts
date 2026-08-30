@@ -3,6 +3,7 @@ import { SearchService } from './search.service';
 import { MEILISEARCH_CLIENT } from './meilisearch.module';
 import { StaffService } from '../staff/staff.service';
 import { LoansService } from '../loans/loans.service';
+import { ClaimsService } from '../claims/claims.service';
 
 const mockStaffIndex = {
   search: jest.fn(),
@@ -10,8 +11,13 @@ const mockStaffIndex = {
 const mockLoansIndex = {
   search: jest.fn(),
 };
+const mockClaimsIndex = {
+  search: jest.fn(),
+};
 const mockMeili = {
-  index: jest.fn((name: string) => (name === 'staff' ? mockStaffIndex : mockLoansIndex)),
+  index: jest.fn((name: string) =>
+    name === 'staff' ? mockStaffIndex : name === 'loans' ? mockLoansIndex : mockClaimsIndex,
+  ),
 };
 
 describe('SearchService', () => {
@@ -24,13 +30,15 @@ describe('SearchService', () => {
         { provide: MEILISEARCH_CLIENT, useValue: mockMeili },
         { provide: StaffService, useValue: { reindexAll: jest.fn() } },
         { provide: LoansService, useValue: { reindexAll: jest.fn() } },
+        { provide: ClaimsService, useValue: { reindexAll: jest.fn() } },
       ],
     }).compile();
     service = module.get<SearchService>(SearchService);
     jest.clearAllMocks();
+    mockClaimsIndex.search.mockResolvedValue({ hits: [], estimatedTotalHits: 0 });
   });
 
-  it('queries both indexes in parallel', async () => {
+  it('queries all indexes in parallel', async () => {
     mockStaffIndex.search.mockResolvedValue({
       hits: [{ id: 's1', fullName: 'John Doe', staffId: 'STF001', level: 'GL10', status: 'Active' }],
       estimatedTotalHits: 1,
@@ -44,6 +52,7 @@ describe('SearchService', () => {
 
     expect(mockStaffIndex.search).toHaveBeenCalledWith('doe', { limit: 5 });
     expect(mockLoansIndex.search).toHaveBeenCalledWith('doe', { limit: 5 });
+    expect(mockClaimsIndex.search).toHaveBeenCalledWith('doe', { limit: 5 });
     expect(result.results).toHaveLength(2);
     const staffResult = result.results.find((r: { type: string }) => r.type === 'staff');
     expect(staffResult).toMatchObject({ type: 'staff', id: 's1', title: 'John Doe', url: '/staff/s1' });

@@ -94,32 +94,35 @@ export class LoansService implements OnModuleInit {
 
   async reindexAll(): Promise<{ indexed: number }> {
     const allLoans = await this.loanModel.find().lean().exec();
-    const staffIds = [...new Set(allLoans.map((l) => l.staffId))];
-    const staffMap = new Map<string, string>();
+    const staffMongoIds = [...new Set(allLoans.map((l) => l.staffId))];
+    const staffMap = new Map<string, { fullName: string; staffId: string }>();
     await Promise.all(
-      staffIds.map(async (id) => {
-        const s = await this.staffService.findByStaffId(id);
-        if (s) staffMap.set(id, s.fullName);
+      staffMongoIds.map(async (id) => {
+        const s = await this.staffService.findById(id).catch(() => null);
+        if (s) staffMap.set(id, { fullName: s.fullName, staffId: s.staffId });
       }),
     );
-    const docs = allLoans.map((l) => ({
-      id: (l._id as any).toString(),
-      staffId: l.staffId,
-      staffName: staffMap.get(l.staffId) ?? l.staffId,
-      principalAmount: l.principalAmount,
-      status: l.status,
-      disbursedDate: l.disbursedDate,
-    }));
+    const docs = allLoans.map((l) => {
+      const staff = staffMap.get(l.staffId);
+      return {
+        id: (l._id as any).toString(),
+        staffId: staff?.staffId ?? l.staffId,
+        staffName: staff?.fullName ?? l.staffId,
+        principalAmount: l.principalAmount,
+        status: l.status,
+        disbursedDate: l.disbursedDate,
+      };
+    });
     if (docs.length > 0) {
       await this.meiliClient.index('loans').addDocuments(docs, { primaryKey: 'id' });
     }
     return { indexed: docs.length };
   }
 
-  private syncLoanToMeilisearch(loan: LoanDocument, staffName: string): void {
+  private syncLoanToMeilisearch(loan: LoanDocument, staffName: string, staffBusinessId: string): void {
     const doc = {
       id: loan._id.toString(),
-      staffId: loan.staffId,
+      staffId: staffBusinessId,
       staffName,
       principalAmount: loan.principalAmount,
       status: loan.status,
@@ -206,7 +209,7 @@ export class LoansService implements OnModuleInit {
       recordedBy: actorName,
     });
 
-    this.syncLoanToMeilisearch(loan, staff.fullName);
+    this.syncLoanToMeilisearch(loan, staff.fullName, staff.staffId);
 
     const loanId = loan._id.toString();
     const totalInterest = round2(totalRepayable - dto.principalAmount);
@@ -564,7 +567,7 @@ export class LoansService implements OnModuleInit {
         });
         await this.contributionsService.settleGuarantorRestitution(loanId, actorId, actorName);
         this.staffService.findById(completedLoan.staffId)
-          .then(staff => this.syncLoanToMeilisearch(completedLoan, staff.fullName))
+          .then(staff => this.syncLoanToMeilisearch(completedLoan, staff.fullName, staff.staffId))
           .catch(() => { /* non-fatal */ });
       }
     }
@@ -785,7 +788,7 @@ export class LoansService implements OnModuleInit {
 
     if (updated) {
       this.staffService.findById(updated.staffId)
-        .then(staff => this.syncLoanToMeilisearch(updated, staff.fullName))
+        .then(staff => this.syncLoanToMeilisearch(updated, staff.fullName, staff.staffId))
         .catch(() => { /* non-fatal */ });
     }
 

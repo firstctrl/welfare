@@ -55,8 +55,8 @@ export function LoansListClient() {
     staleTime: 10 * 60 * 1000,
   });
   const staffMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const s of staffData?.data ?? []) m.set(s._id, s.fullName);
+    const m = new Map<string, { fullName: string; staffId: string }>();
+    for (const s of staffData?.data ?? []) m.set(s._id, { fullName: s.fullName, staffId: s.staffId });
     return m;
   }, [staffData]);
 
@@ -130,12 +130,15 @@ export function LoansListClient() {
     })] : []),
     col.accessor('staffId', {
       header: 'Staff',
-      cell: (info) => (
-        <div>
-          <div className="font-medium text-neutral-900">{staffMap.get(info.getValue()) ?? '—'}</div>
-          <div className="text-xs text-neutral-400 font-mono">{info.getValue().slice(-8)}</div>
-        </div>
-      ),
+      cell: (info) => {
+        const s = staffMap.get(info.getValue());
+        return (
+          <div>
+            <div className="font-medium text-neutral-900">{s?.fullName ?? '—'}</div>
+            <div className="text-xs text-neutral-400 font-mono">{s?.staffId ?? '—'}</div>
+          </div>
+        );
+      },
     }),
     col.accessor('principalAmount', {
       header: 'Principal',

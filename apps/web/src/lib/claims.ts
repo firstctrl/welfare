@@ -22,6 +22,11 @@ export async function listClaims(filters: ClaimFilters = {}): Promise<PaginatedR
   return data;
 }
 
+export async function getClaim(id: string): Promise<IClaim & { staffInfo?: { staffId: string; fullName: string } }> {
+  const { data } = await apiClient.get(`/claims/${id}`);
+  return data;
+}
+
 export async function getClaimsByStaff(staffId: string): Promise<IClaim[]> {
   const { data } = await apiClient.get(`/claims/staff/${staffId}`);
   return data;

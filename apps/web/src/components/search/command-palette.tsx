@@ -7,7 +7,7 @@ import { apiClient } from '../../lib/api-client';
 import { getRecentItems, pushRecentItem, type RecentItem } from '../../lib/recent-items';
 
 interface SearchResult {
-  type: 'staff' | 'loan';
+  type: 'staff' | 'loan' | 'claim';
   id: string;
   title: string;
   subtitle: string;
@@ -59,6 +59,7 @@ export function CommandPalette({ open, onClose }: Props) {
 
   const staffResults = results.filter(r => r.type === 'staff');
   const loanResults = results.filter(r => r.type === 'loan');
+  const claimResults = results.filter(r => r.type === 'claim');
   const showRecent = !query.trim() && recent.length > 0;
 
   return (
@@ -73,7 +74,7 @@ export function CommandPalette({ open, onClose }: Props) {
             <Command.Input
               value={query}
               onValueChange={setQuery}
-              placeholder="Search staff or loans…"
+              placeholder="Search staff, loans, or claims…"
               className="flex-1 px-3 py-4 text-sm outline-none bg-transparent placeholder:text-gray-400"
               autoFocus
             />
@@ -104,6 +105,13 @@ export function CommandPalette({ open, onClose }: Props) {
                 ))}
               </Command.Group>
             )}
+            {claimResults.length > 0 && (
+              <Command.Group heading={<span className="px-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">Claims</span>}>
+                {claimResults.map(item => (
+                  <ResultRow key={item.id} item={item} onSelect={() => navigate(item)} />
+                ))}
+              </Command.Group>
+            )}
           </Command.List>
         </Command>
       </div>
@@ -118,8 +126,16 @@ function ResultRow({ item, onSelect }: { item: SearchResult | RecentItem; onSele
       onSelect={onSelect}
       className="flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer aria-selected:bg-blue-50 text-sm"
     >
-      <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${item.type === 'staff' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-        {item.type === 'staff' ? 'Staff' : 'Loan'}
+      <span
+        className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+          item.type === 'staff'
+            ? 'bg-green-100 text-green-700'
+            : item.type === 'loan'
+              ? 'bg-orange-100 text-orange-700'
+              : 'bg-purple-100 text-purple-700'
+        }`}
+      >
+        {item.type === 'staff' ? 'Staff' : item.type === 'loan' ? 'Loan' : 'Claim'}
       </span>
       <span className="flex-1 min-w-0">
         <span className="block font-medium text-gray-900 truncate">{item.title}</span>

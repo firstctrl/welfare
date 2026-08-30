@@ -1,21 +1,81 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
+import { MeiliSearch } from 'meilisearch';
 import { AuditAction, AuditEntity, ClaimSource, ClaimStatus, CreateClaimDto, PaginatedResult } from '@welfare/shared';
 import { Claim, ClaimDocument } from './schemas/claim.schema';
 import { Contribution, ContributionDocument } from '../contributions/schemas/contribution.schema';
 import { AuditService } from '../audit/audit.service';
 import { StaffService } from '../staff/staff.service';
+import { MEILISEARCH_CLIENT } from '../search/meilisearch.module';
 import { ClaimQueryDto } from './dto/claim-query.dto';
 
 @Injectable()
-export class ClaimsService {
+export class ClaimsService implements OnModuleInit {
   constructor(
     @InjectModel(Claim.name) private readonly claimModel: Model<ClaimDocument>,
     @InjectModel(Contribution.name) private readonly contributionModel: Model<ContributionDocument>,
     private readonly auditService: AuditService,
     private readonly staffService: StaffService,
+    @Inject(MEILISEARCH_CLIENT) private readonly meiliClient: MeiliSearch,
   ) {}
+
+  async onModuleInit() {
+    await this.meiliClient
+      .index('claims')
+      .updateSettings({
+        searchableAttributes: ['staffName', 'staffId', 'claimType'],
+        filterableAttributes: ['status', 'claimType'],
+        sortableAttributes: ['year', 'month'],
+      })
+      .catch(() => { /* non-fatal */ });
+  }
+
+  private syncClaimToMeilisearch(claim: ClaimDocument, staffName: string, staffBusinessId: string): void {
+    const doc = {
+      id: claim._id.toString(),
+      staffId: staffBusinessId,
+      staffName,
+      claimType: claim.claimType,
+      amount: claim.amount,
+      status: claim.status,
+      month: claim.month,
+      year: claim.year,
+    };
+    this.meiliClient
+      .index('claims')
+      .addDocuments([doc], { primaryKey: 'id' })
+      .catch(() => { /* fire-and-forget */ });
+  }
+
+  async reindexAll(): Promise<{ indexed: number }> {
+    const allClaims = await this.claimModel.find().lean().exec();
+    const staffMongoIds = [...new Set(allClaims.map((c) => c.staffId))];
+    const staffMap = new Map<string, { fullName: string; staffId: string }>();
+    await Promise.all(
+      staffMongoIds.map(async (id) => {
+        const s = await this.staffService.findById(id).catch(() => null);
+        if (s) staffMap.set(id, { fullName: s.fullName, staffId: s.staffId });
+      }),
+    );
+    const docs = allClaims.map((c) => {
+      const staff = staffMap.get(c.staffId);
+      return {
+        id: (c._id as any).toString(),
+        staffId: staff?.staffId ?? c.staffId,
+        staffName: staff?.fullName ?? c.staffId,
+        claimType: c.claimType,
+        amount: c.amount,
+        status: c.status,
+        month: c.month,
+        year: c.year,
+      };
+    });
+    if (docs.length > 0) {
+      await this.meiliClient.index('claims').addDocuments(docs, { primaryKey: 'id' });
+    }
+    return { indexed: docs.length };
+  }
 
   async getStaffBalance(staffId: string): Promise<number> {
     const [contribResult, claimResult] = await Promise.all([
@@ -52,6 +112,8 @@ export class ClaimsService {
       actorId, actorName, AuditAction.Create, AuditEntity.Claim,
       claim._id.toString(), undefined, claim.toObject() as unknown as Record<string, unknown>,
     );
+    const staff = await this.staffService.findById(claim.staffId);
+    this.syncClaimToMeilisearch(claim, staff.fullName, staff.staffId);
     return claim;
   }
 
@@ -70,6 +132,8 @@ export class ClaimsService {
       actorId, actorName, AuditAction.Approve, AuditEntity.Claim,
       id, before, claim.toObject() as unknown as Record<string, unknown>,
     );
+    const staff = await this.staffService.findById(claim.staffId);
+    this.syncClaimToMeilisearch(claim, staff.fullName, staff.staffId);
     return claim;
   }
 
@@ -83,6 +147,8 @@ export class ClaimsService {
       actorId, actorName, AuditAction.Reject, AuditEntity.Claim,
       id, before, claim.toObject() as unknown as Record<string, unknown>,
     );
+    const staff = await this.staffService.findById(claim.staffId);
+    this.syncClaimToMeilisearch(claim, staff.fullName, staff.staffId);
     return claim;
   }
 
@@ -90,6 +156,26 @@ export class ClaimsService {
     const claim = await this.claimModel.findById(id).exec();
     if (!claim) throw new NotFoundException(`Claim ${id} not found`);
     return claim;
+  }
+
+  async findByIdWithStaff(id: string): Promise<any> {
+    const result = await this.claimModel.aggregate([
+      { $match: { _id: new Types.ObjectId(id) } },
+      { $addFields: { _staffObjId: { $toObjectId: '$staffId' } } },
+      {
+        $lookup: {
+          from: 'staff',
+          localField: '_staffObjId',
+          foreignField: '_id',
+          as: '_staffArr',
+          pipeline: [{ $project: { staffId: 1, fullName: 1 } }],
+        },
+      },
+      { $addFields: { staffInfo: { $arrayElemAt: ['$_staffArr', 0] } } },
+      { $project: { _staffArr: 0, _staffObjId: 0 } },
+    ]).exec();
+    if (!result.length) throw new NotFoundException(`Claim ${id} not found`);
+    return result[0];
   }
 
   async findByStaff(staffId: string): Promise<ClaimDocument[]> {
