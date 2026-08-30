@@ -223,6 +223,11 @@ export interface ILoanStatement {
     outstanding: number;
     penaltyPaid: number;
     completionRate: number;
+    guarantorOffsetAmount?: number;
+    borrowerContributionOffset?: number;
+    badDebtAmount?: number;
+    badDebtRecovered?: number;
+    outstandingBadDebt?: number;
   };
   instalments: ILoanStatementInstalment[];
 }

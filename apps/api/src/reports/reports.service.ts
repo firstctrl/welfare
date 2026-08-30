@@ -574,6 +574,20 @@ export class ReportsService {
     const completionRate = loan.totalRepayable > 0
       ? Math.round((totalPaid / loan.totalRepayable) * 100)
       : 0;
+    // Same combine logic as the admin repaid-loans export at getRepaidLoans():
+    // guarantorOffsetAmount is set by the exit-settlement flow, guarantorRestitutionOwed
+    // by the end-of-tenure recovery job — a loan realistically only has one populated.
+    const guarantorOffsetAmount = Math.round(((loan.guarantorOffsetAmount ?? 0) + (loan.guarantorRestitutionOwed ?? 0)) * 100) / 100;
+    const badDebtAmount = Math.round((loan.badDebtAmount ?? 0) * 100) / 100;
+    const badDebtRecovered = Math.round((loan.badDebtRecovered ?? 0) * 100) / 100;
+    const outstandingBadDebt = Math.round((badDebtAmount - badDebtRecovered) * 100) / 100;
+
+    // Borrower's own contributions deducted to cover their missed instalments on THIS loan
+    // (distinct from guarantorOffsetAmount, which is the guarantor's contribution used instead).
+    const ownDeductions = await this.contribModel
+      .find({ staffId, loanId, isDebit: true, source: 'DefaulterDeduction' })
+      .exec();
+    const borrowerContributionOffset = Math.round(ownDeductions.reduce((s, d) => s + d.paidAmount, 0) * 100) / 100;
 
     return {
       staff: {
@@ -601,6 +615,11 @@ export class ReportsService {
         outstanding,
         penaltyPaid: Math.round(penaltyPaid * 100) / 100,
         completionRate,
+        guarantorOffsetAmount,
+        borrowerContributionOffset,
+        badDebtAmount,
+        badDebtRecovered,
+        outstandingBadDebt,
       },
       instalments: repayments.map(r => ({
         instalmentNumber: r.instalmentNumber,
@@ -703,6 +722,15 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   <div class="kpi"><div class="kpi-label">Penalty Paid</div><div class="kpi-value">${fmt(stmt.kpis.penaltyPaid)}</div></div>
   <div class="kpi"><div class="kpi-label">Completion</div><div class="kpi-value">${stmt.kpis.completionRate}%</div></div>
 </div>
+${(stmt.kpis.guarantorOffsetAmount ?? 0) > 0 || (stmt.kpis.borrowerContributionOffset ?? 0) > 0 || (stmt.kpis.badDebtAmount ?? 0) > 0 ? `
+<div class="kpis">
+  ${(stmt.kpis.borrowerContributionOffset ?? 0) > 0 ? `<div class="kpi"><div class="kpi-label">Own Contribution Offset</div><div class="kpi-value" style="color:#dc2626">${fmt(stmt.kpis.borrowerContributionOffset ?? 0)}</div></div>` : ''}
+  ${(stmt.kpis.guarantorOffsetAmount ?? 0) > 0 ? `<div class="kpi"><div class="kpi-label">Guarantor Offset</div><div class="kpi-value" style="color:#dc2626">${fmt(stmt.kpis.guarantorOffsetAmount ?? 0)}</div></div>` : ''}
+  ${(stmt.kpis.badDebtAmount ?? 0) > 0 ? `<div class="kpi"><div class="kpi-label">Bad Debt</div><div class="kpi-value" style="color:#dc2626">${fmt(stmt.kpis.badDebtAmount ?? 0)}</div></div>` : ''}
+  ${(stmt.kpis.badDebtAmount ?? 0) > 0 ? `<div class="kpi"><div class="kpi-label">Bad Debt Recovered</div><div class="kpi-value" style="color:${(stmt.kpis.outstandingBadDebt ?? 0) === 0 ? '#16a34a' : '#d97706'}">${fmt(stmt.kpis.badDebtRecovered ?? 0)}</div>${(stmt.kpis.outstandingBadDebt ?? 0) > 0 ? `<div style="font-size:9px;color:#dc2626;margin-top:2px">Outstanding: ${fmt(stmt.kpis.outstandingBadDebt ?? 0)}</div>` : ''}</div>` : ''}
+</div>
+<div style="margin-bottom:14px;font-size:9px;color:#6b7280;font-style:italic">Red figures indicate guarantor offset deductions, the borrower's own contribution used to cover missed instalments, and/or bad-debt recovery amounts applied to this defaulted or recovered loan.</div>
+` : ''}
 <table>
   <thead>
     <tr>

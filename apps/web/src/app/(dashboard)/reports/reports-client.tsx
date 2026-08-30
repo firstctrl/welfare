@@ -321,12 +321,16 @@ function LoanStatementPanel({ canSend }: { canSend: boolean }) {
                 className="w-full px-3 pr-8 h-[var(--row-default)] rounded-sm border border-neutral-200 bg-white text-base outline-none focus:border-primary-500 focus:shadow-focus placeholder:text-neutral-400 disabled:opacity-50"
                 style={{ minWidth: 240 }}
               />
-              <Search size={14} strokeWidth={1.75} className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+              <Search
+                size={14}
+                strokeWidth={1.75}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none"
+              />
             </div>
           </Field>
           {showBorrowerDropdown && borrowerInput.length > 0 && filteredBorrowers.length > 0 && (
             <div className="absolute z-20 w-full mt-1 bg-white border border-neutral-200 rounded-sm shadow-lg overflow-hidden max-h-60 overflow-y-auto">
-              {filteredBorrowers.map(b => (
+              {filteredBorrowers.map((b) => (
                 <button
                   key={b.staffId}
                   onMouseDown={() => selectBorrower(b)}
@@ -347,7 +351,7 @@ function LoanStatementPanel({ canSend }: { canSend: boolean }) {
               onChange={handleLoanChange}
               options={[
                 { value: '', label: loans.length === 0 ? 'No loans found' : 'Select loan…' },
-                ...loans.map(l => ({
+                ...loans.map((l) => ({
                   value: l._id,
                   label: `GHS ${l.principalAmount.toLocaleString()} · ${new Date(l.disbursedDate).toLocaleDateString('en-GB')} · ${l.status}`,
                 })),
@@ -401,42 +405,146 @@ function LoanStatementPanel({ canSend }: { canSend: boolean }) {
       )}
 
       {selectedBorrower && selectedLoan && loadingStmt && (
-        <div className="flex items-center justify-center py-16 text-neutral-400 text-sm">Loading…</div>
+        <div className="flex items-center justify-center py-16 text-neutral-400 text-sm">
+          Loading…
+        </div>
       )}
 
       {stmt && kpis && loan && (
         <>
           {/* Loan info block */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 text-xs bg-neutral-50 border border-neutral-200 rounded-md px-4 py-3">
-            <div><span className="text-neutral-400">Disbursed</span><br /><span className="font-medium">{fmtDate(new Date(loan.disbursedDate))}</span></div>
-            <div><span className="text-neutral-400">Tenure</span><br /><span className="font-medium">{loan.tenureMonths} months</span></div>
-            <div><span className="text-neutral-400">Interest Rate</span><br /><span className="font-medium">{loan.interestRate}%</span></div>
-            <div><span className="text-neutral-400">Guarantor</span><br /><span className="font-medium">{loan.guarantor.displayName} ({loan.guarantor.staffNo})</span></div>
-            <div><span className="text-neutral-400">Cheque No</span><br /><span className="font-medium">{loan.chequeNo ?? '—'}</span></div>
-            <div><span className="text-neutral-400">PV No</span><br /><span className="font-medium">{loan.pvNo ?? '—'}</span></div>
-            <div className="col-span-2"><span className="text-neutral-400">Status</span><br />
-              <span className={cn('inline-block px-2 py-0.5 rounded text-xs font-medium mt-0.5', LOAN_STATUS_BADGE[loan.status] ?? 'bg-neutral-100 text-neutral-600')}>{loan.status}</span>
+            <div>
+              <span className="text-neutral-400">Disbursed</span>
+              <br />
+              <span className="font-medium">{fmtDate(new Date(loan.disbursedDate))}</span>
+            </div>
+            <div>
+              <span className="text-neutral-400">Tenure</span>
+              <br />
+              <span className="font-medium">{loan.tenureMonths} months</span>
+            </div>
+            <div>
+              <span className="text-neutral-400">Interest Rate</span>
+              <br />
+              <span className="font-medium">{loan.interestRate}%</span>
+            </div>
+            <div>
+              <span className="text-neutral-400">Guarantor</span>
+              <br />
+              <span className="font-medium">
+                {loan.guarantor.displayName} ({loan.guarantor.staffNo})
+              </span>
+            </div>
+            <div>
+              <span className="text-neutral-400">Cheque No</span>
+              <br />
+              <span className="font-medium">{loan.chequeNo ?? '—'}</span>
+            </div>
+            <div>
+              <span className="text-neutral-400">PV No</span>
+              <br />
+              <span className="font-medium">{loan.pvNo ?? '—'}</span>
+            </div>
+            <div className="col-span-2">
+              <span className="text-neutral-400">Status</span>
+              <br />
+              <span
+                className={cn(
+                  'inline-block px-2 py-0.5 rounded text-xs font-medium mt-0.5',
+                  LOAN_STATUS_BADGE[loan.status] ?? 'bg-neutral-100 text-neutral-600',
+                )}
+              >
+                {loan.status}
+              </span>
             </div>
           </div>
 
           {/* KPI cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <KpiCard label="Principal" value={fmtGHS(loan.principalAmount)} icon={Banknote} iconKind="primary" />
-            <KpiCard label="Amount Paid" value={fmtGHS(kpis.totalPaid)} icon={TrendingUp} iconKind="success" />
+            <KpiCard
+              label="Principal"
+              value={fmtGHS(loan.principalAmount)}
+              icon={Banknote}
+              iconKind="primary"
+            />
+            <KpiCard
+              label="Amount Paid"
+              value={fmtGHS(kpis.totalPaid)}
+              icon={TrendingUp}
+              iconKind="success"
+            />
             <KpiCard
               label="Outstanding"
               value={fmtGHS(kpis.outstanding)}
               icon={AlertCircle}
-              iconKind={kpis.outstanding === 0 ? 'success' : kpis.outstanding > loan.principalAmount / 2 ? 'danger' : 'warning'}
+              iconKind={
+                kpis.outstanding === 0
+                  ? 'success'
+                  : kpis.outstanding > loan.principalAmount / 2
+                    ? 'danger'
+                    : 'warning'
+              }
             />
             <KpiCard
               label="Completion"
               value={`${kpis.completionRate}%`}
               icon={BarChart3}
-              iconKind={kpis.completionRate === 100 ? 'success' : kpis.completionRate >= 50 ? 'warning' : 'danger'}
+              iconKind={
+                kpis.completionRate === 100
+                  ? 'success'
+                  : kpis.completionRate >= 50
+                    ? 'warning'
+                    : 'danger'
+              }
               subtext={kpis.penaltyPaid > 0 ? `Penalty: ${fmtGHS(kpis.penaltyPaid)}` : undefined}
             />
           </div>
+
+          {/* Default / recovery KPI cards — only shown when this loan has guarantor offset, own-contribution offset, or bad-debt activity */}
+          {((kpis.guarantorOffsetAmount ?? 0) > 0 ||
+            (kpis.borrowerContributionOffset ?? 0) > 0 ||
+            (kpis.badDebtAmount ?? 0) > 0) && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {(kpis.borrowerContributionOffset ?? 0) > 0 && (
+                <KpiCard
+                  label="Own Contribution Offset"
+                  value={fmtGHS(kpis.borrowerContributionOffset ?? 0)}
+                  icon={AlertCircle}
+                  iconKind="danger"
+                />
+              )}
+              {(kpis.guarantorOffsetAmount ?? 0) > 0 && (
+                <KpiCard
+                  label="Guarantor Offset"
+                  value={fmtGHS(kpis.guarantorOffsetAmount ?? 0)}
+                  icon={AlertCircle}
+                  iconKind="danger"
+                />
+              )}
+              {(kpis.badDebtAmount ?? 0) > 0 && (
+                <>
+                  <KpiCard
+                    label="Bad Debt"
+                    value={fmtGHS(kpis.badDebtAmount ?? 0)}
+                    icon={AlertCircle}
+                    iconKind="danger"
+                  />
+                  <KpiCard
+                    label="Bad Debt Recovered"
+                    value={fmtGHS(kpis.badDebtRecovered ?? 0)}
+                    icon={TrendingUp}
+                    iconKind={(kpis.outstandingBadDebt ?? 0) === 0 ? 'success' : 'warning'}
+                    subtext={
+                      (kpis.outstandingBadDebt ?? 0) > 0
+                        ? `Outstanding: ${fmtGHS(kpis.outstandingBadDebt ?? 0)}`
+                        : undefined
+                    }
+                  />
+                </>
+              )}
+            </div>
+          )}
 
           {/* Instalment table */}
           {instalments && instalments.length > 0 ? (
@@ -445,33 +553,62 @@ function LoanStatementPanel({ canSend }: { canSend: boolean }) {
                 <thead>
                   <tr className="bg-primary-600 text-white">
                     <th className="px-3 py-2.5 text-left font-semibold">#</th>
-                    <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">Due Date</th>
-                    <th className="px-3 py-2.5 text-right font-semibold whitespace-nowrap">Due (GHS)</th>
+                    <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">
+                      Due Date
+                    </th>
+                    <th className="px-3 py-2.5 text-right font-semibold whitespace-nowrap">
+                      Due (GHS)
+                    </th>
                     <th className="px-3 py-2.5 text-right font-semibold">Principal</th>
                     <th className="px-3 py-2.5 text-right font-semibold">Interest</th>
                     <th className="px-3 py-2.5 text-right font-semibold">Paid (GHS)</th>
                     <th className="px-3 py-2.5 text-right font-semibold">Penalty</th>
-                    <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">Paid Date</th>
+                    <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">
+                      Paid Date
+                    </th>
                     <th className="px-3 py-2.5 text-left font-semibold">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
-                  {instalments.map(r => (
+                  {instalments.map((r) => (
                     <tr key={r.instalmentNumber} className="hover:bg-neutral-50">
                       <td className="px-3 py-2 text-neutral-500">{r.instalmentNumber}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{fmtDate(new Date(r.dueDate))}</td>
-                      <td className="px-3 py-2 text-right font-mono tabular">{fmtGHS(r.dueAmount)}</td>
-                      <td className="px-3 py-2 text-right font-mono tabular text-neutral-500">{fmtGHS(r.principalAmount)}</td>
-                      <td className="px-3 py-2 text-right font-mono tabular text-neutral-500">{fmtGHS(r.interestAmount)}</td>
-                      <td className="px-3 py-2 text-right font-mono tabular font-medium">{fmtGHS(r.paidAmount)}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {fmtDate(new Date(r.dueDate))}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono tabular">
+                        {fmtGHS(r.dueAmount)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono tabular text-neutral-500">
+                        {fmtGHS(r.principalAmount)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono tabular text-neutral-500">
+                        {fmtGHS(r.interestAmount)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono tabular font-medium">
+                        {fmtGHS(r.paidAmount)}
+                      </td>
                       <td className="px-3 py-2 text-right font-mono tabular text-danger-600">
-                        {r.penaltyAmount > 0 ? fmtGHS(r.penaltyAmount) : <span className="text-neutral-300">—</span>}
+                        {r.penaltyAmount > 0 ? (
+                          fmtGHS(r.penaltyAmount)
+                        ) : (
+                          <span className="text-neutral-300">—</span>
+                        )}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
-                        {r.paidDate ? fmtDate(new Date(r.paidDate)) : <span className="text-neutral-300">—</span>}
+                        {r.paidDate ? (
+                          fmtDate(new Date(r.paidDate))
+                        ) : (
+                          <span className="text-neutral-300">—</span>
+                        )}
                       </td>
                       <td className="px-3 py-2">
-                        <span className={cn('inline-block px-2 py-0.5 rounded text-xs font-medium', INSTALMENT_STATUS_BG[r.status] ?? 'bg-neutral-100 text-neutral-600')}>
+                        <span
+                          className={cn(
+                            'inline-block px-2 py-0.5 rounded text-xs font-medium',
+                            INSTALMENT_STATUS_BG[r.status] ?? 'bg-neutral-100 text-neutral-600',
+                          )}
+                        >
                           {r.status}
                         </span>
                       </td>
