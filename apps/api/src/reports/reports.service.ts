@@ -110,7 +110,10 @@ export class ReportsService {
     for (let m = fromMonth; m <= toMonth; m++) {
       const monthStart = new Date(year, m - 1, 1);
       const monthEnd = new Date(year, m, 0, 23, 59, 59);
-      if (monthEnd > now) {
+      // Grace period: contributions for month m are typically received in the first
+      // week of month m+1, so don't flag as missed until 7 days into the next month.
+      const graceDeadline = new Date(year, m, 7, 23, 59, 59);
+      if (graceDeadline > now) {
         result.set(`${year}-${m}`, 0);
         continue;
       }
@@ -179,8 +182,10 @@ export class ReportsService {
     for (const m of months) {
       const status = byKey.get(`${m.year}-${m.month}`);
       if (!status) {
-        const monthEnd = new Date(m.year, m.month, 0, 23, 59, 59);
-        if (monthEnd > now) continue;
+        // Grace period: contributions for month m are typically received in the first
+        // week of month m+1, so don't flag as missed until 7 days into the next month.
+        const graceDeadline = new Date(m.year, m.month, 7, 23, 59, 59);
+        if (graceDeadline > now) continue;
         missedCount++;
       } else if (status === ContributionStatus.Partial) {
         partialCount++;
