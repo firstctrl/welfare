@@ -10,7 +10,8 @@ import { ReportQueryDto, FundSummaryQueryDto } from './dto/report-query.dto';
 import { EmailService } from '../email/email.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
-import { AppModule } from '@welfare/shared';
+import { AuditService } from '../audit/audit.service';
+import { AppModule, AuditAction, AuditEntity } from '@welfare/shared';
 import { Staff, StaffDocument } from '../staff/schemas/staff.schema';
 import { sendCsv, sendExcel, ExportColumn } from '../common/utils/export.util';
 
@@ -111,6 +112,7 @@ export class ReportsController {
     private readonly emailService: EmailService,
     @InjectQueue('bulk-statements') private readonly bulkQueue: Queue,
     @InjectModel(Staff.name) private readonly staffModel: Model<StaffDocument>,
+    private readonly auditService: AuditService,
   ) {}
 
   @Get('dashboard')
@@ -404,6 +406,7 @@ export class ReportsController {
     @Body('year') year: number,
     @Body('sendTo') sendTo: 'all' | 'selected',
     @Body('staffIds') staffIds?: string[],
+    @CurrentUser() user?: { sub: string; displayName: string },
   ) {
     if (!year) throw new BadRequestException('year is required');
 
@@ -423,6 +426,15 @@ export class ReportsController {
     if (ids.length === 0) throw new BadRequestException('No eligible staff found (active staff with email addresses)');
 
     const job = await this.bulkQueue.add('bulk-send', { staffIds: ids, year, triggeredBy: 'manual' });
+    await this.auditService.log(
+      user?.sub ?? 'unknown',
+      user?.displayName ?? 'unknown',
+      AuditAction.GenerateStatement,
+      AuditEntity.EmailLog,
+      job.id!,
+      undefined,
+      { year, sendTo, staffCount: ids.length, triggeredBy: 'manual' },
+    );
     return { jobId: job.id, queued: ids.length };
   }
 

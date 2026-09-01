@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { BullModule } from '@nestjs/bullmq';
 import { SystemConfigModule } from '../system-config/system-config.module';
+import { AuditModule } from '../audit/audit.module';
 import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
 import { BulkStatementsProcessor } from './bulk-statements.processor';
@@ -27,6 +28,7 @@ import { Claim, ClaimSchema } from '../claims/schemas/claim.schema';
     ]),
     BullModule.registerQueue({ name: 'bulk-statements' }),
     SystemConfigModule,
+    AuditModule,
   ],
   controllers: [ReportsController],
   providers: [ReportsService, BulkStatementsProcessor, BulkStatementsCronService],
