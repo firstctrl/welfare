@@ -120,6 +120,7 @@ export interface StaffStatementClaimYear {
 export interface StaffStatement {
   staff: { _id: string; fullName: string; staffId: string; email?: string };
   kpis: { totalPaid: number; totalExpected: number; missedMonths: number; totalSurplus: number; collectionRate: number; totalOffsets?: number; totalClaims?: number };
+  payrollGapNotice?: string;
   years: number[];
   rows: StaffStatementRow[];
   claimYears?: StaffStatementClaimYear[];

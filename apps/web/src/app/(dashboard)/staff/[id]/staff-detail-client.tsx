@@ -17,7 +17,7 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { UserCog, Send, Pencil, Plus, Download } from 'lucide-react';
 import Link from 'next/link';
-import { StaffStatus, ContributionStatus, LoanStatus } from '@welfare/shared';
+import { StaffStatus, ContributionStatus, LoanStatus, hasPayrollGapDuringHistory, PAYROLL_GAP_NOTICE } from '@welfare/shared';
 import type { IStaff, IContribution, ILoan } from '@welfare/shared';
 import { Pagination, SortableTh } from '@/components/ui/data-table';
 import { getStaff, updateStaff, changeStaffStatus, uploadStaffPhoto } from '@/lib/staff';
@@ -93,6 +93,11 @@ export default function StaffDetailClient({ id }: { id: string }) {
     const missedCount = rows.filter((c) => c.status === ContributionStatus.Missed).length;
     return { totalExpected, totalPaid, outstanding: Math.max(0, totalExpected - totalPaid), missedCount };
   }, [contributions]);
+
+  const payrollGapNotice = useMemo(
+    () => (hasPayrollGapDuringHistory(contributions ?? []) ? PAYROLL_GAP_NOTICE : null),
+    [contributions],
+  );
 
   const contribCol = createColumnHelper<IContribution>();
   const contribColumns = useMemo(() => [
@@ -518,6 +523,12 @@ export default function StaffDetailClient({ id }: { id: string }) {
                 )}
               </CardBody>
             </Card>
+          )}
+
+          {payrollGapNotice && (
+            <div className="px-3 py-2 rounded-sm border border-info-200 bg-info-50 text-info-700 text-xs">
+              {payrollGapNotice}
+            </div>
           )}
 
           <Card>

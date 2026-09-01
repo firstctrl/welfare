@@ -88,3 +88,5 @@ export type { UpdateConfigDto, ConfigResponseDto } from './dto/config.dto';
 // Constants
 export { CONFIG_KEYS } from './constants/config-keys.constants';
 export type { ConfigKeyString } from './constants/config-keys.constants';
+export { PAYROLL_GAP_PERIODS, PAYROLL_GAP_NOTICE, hasPayrollGapDuringHistory } from './constants/payroll-gaps.constants';
+export type { IPayrollGapPeriod } from './constants/payroll-gaps.constants';

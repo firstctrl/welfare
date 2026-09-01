@@ -30,6 +30,8 @@ import {
   IFundSummaryDefaultRow,
   IFundSummaryClaimsBreakdownRow,
   ClaimStatus,
+  hasPayrollGapDuringHistory,
+  PAYROLL_GAP_NOTICE,
 } from '@welfare/shared';
 import { Contribution, ContributionDocument } from '../contributions/schemas/contribution.schema';
 import { Loan, LoanDocument } from '../loans/schemas/loan.schema';
@@ -960,6 +962,7 @@ ${(stmt.kpis.guarantorOffsetAmount ?? 0) > 0 || (stmt.kpis.borrowerContributionO
   async getStaffContributionStatement(staffMongoId: string): Promise<{
     staff: { _id: string; fullName: string; staffId: string; email?: string };
     kpis: { totalPaid: number; totalExpected: number; missedMonths: number; totalSurplus: number; collectionRate: number; totalOffsets: number; totalClaims: number };
+    payrollGapNotice?: string;
     years: number[];
     rows: Array<{
       year: number;
@@ -1072,9 +1075,12 @@ ${(stmt.kpis.guarantorOffsetAmount ?? 0) > 0 || (stmt.kpis.borrowerContributionO
       claims: claimsByYear.get(year)!,
     }));
 
+    const payrollGapNotice = hasPayrollGapDuringHistory(contribs) ? PAYROLL_GAP_NOTICE : undefined;
+
     return {
       staff: { _id: staff._id.toString(), fullName: staff.fullName, staffId: staff.staffId, email: staff.email },
       kpis: { totalPaid, totalExpected, missedMonths, totalSurplus, collectionRate, totalOffsets, totalClaims },
+      payrollGapNotice,
       years,
       rows,
       claimYears,
@@ -1082,7 +1088,7 @@ ${(stmt.kpis.guarantorOffsetAmount ?? 0) > 0 || (stmt.kpis.borrowerContributionO
   }
 
   async generateStatementPdf(staffMongoId: string): Promise<Buffer> {
-    const { staff, kpis, rows, claimYears } = await this.getStaffContributionStatement(staffMongoId);
+    const { staff, kpis, rows, claimYears, payrollGapNotice } = await this.getStaffContributionStatement(staffMongoId);
     const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const fmt = (n: number) => `GHS ${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -1208,6 +1214,7 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
   ${kpis.totalOffsets > 0 ? `<div class="kpi"><div class="kpi-label">Loan Deductions</div><div class="kpi-value" style="color:#dc2626">${fmt(kpis.totalOffsets)}</div></div>` : ''}
   ${kpis.totalClaims > 0 ? `<div class="kpi"><div class="kpi-label">Welfare Claims</div><div class="kpi-value" style="color:#dc2626">${fmt(kpis.totalClaims)}</div></div>` : ''}
 </div>
+${payrollGapNotice ? `<div style="margin-bottom:10px;padding:8px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;font-size:9px;color:#1e40af">${escapeAttr(payrollGapNotice)}</div>` : ''}
 <table>
   <thead><tr><th>Year</th>${headerCells}</tr></thead>
   <tbody>${bodyRows.length ? bodyRows : '<tr><td colspan="14" style="text-align:center;padding:20px;color:#999">No contribution records found</td></tr>'}</tbody>

@@ -798,6 +798,12 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
             )}
           </div>
 
+          {data.payrollGapNotice && (
+            <div className="px-3 py-2 rounded-sm border border-info-200 bg-info-50 text-info-700 text-xs">
+              {data.payrollGapNotice}
+            </div>
+          )}
+
           {/* Crosstab */}
           {rows && rows.length > 0 ? (
             <div className="overflow-x-auto rounded-md border border-neutral-200">
