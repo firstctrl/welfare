@@ -62,6 +62,12 @@ export class ContributionsService {
   ): Promise<ContributionDocument> {
     const expectedAmount = await this.getExpectedAmount(month, year);
     const existing = await this.contributionModel.findOne({ staffId, month, year }).exec();
+
+    // Re-importing the same payroll period must not stack on top of an already-recorded payroll payment.
+    if (source === ContributionSource.PayrollImport && existing?.source === ContributionSource.PayrollImport && existing.paidAmount > 0) {
+      return existing;
+    }
+
     const existingPaid = existing?.paidAmount ?? 0;
     const prevSurplus = await this.getPrevSurplus(staffId, month, year);
     const { totalPaid, surplusCarriedForward, status } = this.calculatePaymentResult(
