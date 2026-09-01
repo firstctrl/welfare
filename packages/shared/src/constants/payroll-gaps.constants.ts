@@ -11,7 +11,7 @@ export const PAYROLL_GAP_PERIODS: IPayrollGapPeriod[] = [
 ];
 
 export const PAYROLL_GAP_NOTICE =
-  'No contribution was deducted for Jun 2015 and Jul 2015 due to payroll system maintenance during that period — these months are intentionally blank, not missed payments.';
+  'No contribution was deducted for Jun 2015 and Jul 2015 due to payroll system migration by CAG during that period. These months are intentionally blank, not missed payments.';
 
 /**
  * True when a staff member's contribution history spans a known payroll gap
