@@ -10,6 +10,8 @@ class FlaggedEntry {
   @Prop({ required: true }) employeeName!: string;
   @Prop({ required: true }) amount!: number;
   @Prop({ required: true }) reason!: string;
+  @Prop({ min: 1, max: 12 }) month?: number;
+  @Prop({ min: 2000 }) year?: number;
 }
 
 @Schema({ timestamps: true, collection: 'import_batches' })

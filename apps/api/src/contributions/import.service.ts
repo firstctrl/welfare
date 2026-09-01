@@ -71,7 +71,7 @@ export class ImportService {
     const batchId = batch._id.toString();
 
     let matched = 0;
-    const flaggedEntries: { staffId: string; employeeName: string; amount: number; reason: string }[] = [];
+    const flaggedEntries: { staffId: string; employeeName: string; amount: number; reason: string; month?: number; year?: number }[] = [];
 
     this.progressService.start(batchId, rows.length);
     try {
@@ -85,22 +85,25 @@ export class ImportService {
         const rowMonth = monthOverride ?? Number(row.Month);
         const rowYear  = yearOverride  ?? Number(row.Year);
 
+        const validMonth = rowMonth && rowMonth >= 1 && rowMonth <= 12 ? rowMonth : undefined;
+        const validYear  = rowYear && rowYear >= 2000 ? rowYear : undefined;
+
         if (!rawStaffId) {
-          flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Missing Staff ID' });
+          flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Missing Staff ID', month: validMonth, year: validYear });
           continue;
         }
-        if (!rowMonth || rowMonth < 1 || rowMonth > 12) {
-          flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Invalid or missing Month' });
+        if (!validMonth) {
+          flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Invalid or missing Month', year: validYear });
           continue;
         }
-        if (!rowYear || rowYear < 2000) {
-          flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Invalid or missing Year' });
+        if (!validYear) {
+          flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Invalid or missing Year', month: validMonth });
           continue;
         }
 
         const staff = await this.staffService.findByStaffId(rawStaffId);
         if (!staff) {
-          flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Staff ID not found' });
+          flaggedEntries.push({ staffId: rawStaffId, employeeName, amount, reason: 'Staff ID not found', month: validMonth, year: validYear });
           continue;
         }
 
@@ -230,8 +233,10 @@ export class ImportService {
     actorName: string,
   ): Promise<void> {
     const entry = batch.flaggedEntries[entryIndex];
+    const month = entry.month ?? batch.month;
+    const year = entry.year ?? batch.year;
     await this.contributionsService.processPayment(
-      resolvedStaffMongoId, batch.month, batch.year, entry.amount,
+      resolvedStaffMongoId, month, year, entry.amount,
       ContributionSource.PayrollImport, actorId, actorName, batch._id.toString(),
     );
 
