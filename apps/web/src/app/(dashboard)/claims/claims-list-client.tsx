@@ -3,18 +3,25 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
+import {
+  createColumnHelper,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type SortingState,
+} from '@tanstack/react-table';
 import { CheckCircle2, XCircle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { IClaim } from '@welfare/shared';
 import { ClaimStatus, ClaimType, AppModule } from '@welfare/shared';
 import { usePermission } from '@/hooks/use-permission';
-import { listClaims, deleteClaim, approveClaim, rejectClaim } from '@/lib/claims';
+import { listClaims, deleteClaim, bulkDeleteClaims, approveClaim, rejectClaim } from '@/lib/claims';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Select, Input } from '@/components/ui/field';
-import { Pagination } from '@/components/ui/data-table';
+import { Pagination, SortableTh } from '@/components/ui/data-table';
 import { Modal } from '@/components/ui/modal';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { Button } from '@/components/ui/button';
@@ -43,6 +50,9 @@ export default function ClaimsListClient() {
   const [deleteTarget, setDeleteTarget] = useState<ClaimRow | null>(null);
   const [rejectTarget, setRejectTarget] = useState<ClaimRow | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [sorting, setSorting] = useState<SortingState>([]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['claims', { page, limit, status, claimType, year, staffId }],
@@ -80,8 +90,43 @@ export default function ClaimsListClient() {
     onError: () => toast.error('Failed to delete claim'),
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) => bulkDeleteClaims(ids),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['claims'] });
+      setRowSelection({});
+      setConfirmBulkDelete(false);
+      toast.success(`${result.deleted} claim${result.deleted === 1 ? '' : 's'} deleted`);
+    },
+    onError: () => toast.error('Failed to delete selected claims'),
+  });
+
+  const selectedIds = Object.keys(rowSelection).filter((id) => rowSelection[id]);
+
   const col = createColumnHelper<ClaimRow>();
   const columns = [
+    ...(permission === 'full' ? [col.display({
+      id: 'select',
+      enableSorting: false,
+      header: ({ table }) => (
+        <input
+          type="checkbox"
+          className="accent-primary-600"
+          checked={table.getIsAllPageRowsSelected()}
+          ref={(el) => { if (el) el.indeterminate = table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected(); }}
+          onChange={table.getToggleAllPageRowsSelectedHandler()}
+        />
+      ),
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          className="accent-primary-600"
+          checked={row.getIsSelected()}
+          onChange={row.getToggleSelectedHandler()}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ),
+    })] : []),
     col.display({
       id: 'staff',
       header: 'Staff',
@@ -104,6 +149,7 @@ export default function ClaimsListClient() {
     ...(permission === 'full' ? [col.display({
       id: 'actions',
       header: '',
+      enableSorting: false,
       cell: (i) => (
         <div className="flex items-center gap-2">
           {i.row.original.status === ClaimStatus.Pending && (
@@ -128,9 +174,14 @@ export default function ClaimsListClient() {
     data: (data?.data ?? []) as ClaimRow[],
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     manualPagination: true,
     pageCount: data ? Math.ceil(data.total / limit) : 0,
     getRowId: (row) => row._id,
+    enableRowSelection: permission === 'full',
+    onRowSelectionChange: setRowSelection,
+    onSortingChange: setSorting,
+    state: { rowSelection, sorting },
   });
 
   return (
@@ -150,7 +201,16 @@ export default function ClaimsListClient() {
           options={[{ value: '', label: 'All Statuses' }, ...Object.values(ClaimStatus).map((s) => ({ value: s, label: s }))]}
           style={{ width: 150 }}
         />
-        {data && <span className="ml-auto text-xs text-neutral-400">{data.total.toLocaleString()} records</span>}
+        {selectedIds.length > 0 ? (
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-sm text-neutral-600">{selectedIds.length} selected</span>
+            <Button variant="danger" Icon={Trash2} onClick={() => setConfirmBulkDelete(true)}>
+              Delete Selected
+            </Button>
+          </div>
+        ) : (
+          data && <span className="ml-auto text-xs text-neutral-400">{data.total.toLocaleString()} records</span>
+        )}
       </div>
 
       <div className="bg-white border border-neutral-200 rounded-md overflow-hidden">
@@ -160,9 +220,7 @@ export default function ClaimsListClient() {
               {table.getHeaderGroups().map((hg) => (
                 <tr key={hg.id} className="border-b border-neutral-200 bg-neutral-50">
                   {hg.headers.map((h) => (
-                    <th key={h.id} className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">
-                      {flexRender(h.column.columnDef.header, h.getContext())}
-                    </th>
+                    <SortableTh key={h.id} header={h} />
                   ))}
                 </tr>
               ))}
@@ -226,6 +284,16 @@ export default function ClaimsListClient() {
         isPending={deleteMutation.isPending}
         onConfirm={() => deleteMutation.mutate(deleteTarget!._id)}
         onClose={() => setDeleteTarget(null)}
+      />
+
+      <ConfirmModal
+        open={confirmBulkDelete}
+        title="Delete Claims"
+        body={`Delete ${selectedIds.length} selected claim${selectedIds.length === 1 ? '' : 's'}? This cannot be undone.`}
+        confirmLabel="Delete"
+        isPending={bulkDeleteMutation.isPending}
+        onConfirm={() => bulkDeleteMutation.mutate(selectedIds)}
+        onClose={() => setConfirmBulkDelete(false)}
       />
     </div>
   );

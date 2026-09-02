@@ -12,6 +12,7 @@ import { ClaimQueryDto } from './dto/claim-query.dto';
 import { ResolveFlaggedDto } from './dto/resolve-flagged.dto';
 import { ResolveByStaffIdDto } from './dto/resolve-by-staff-id.dto';
 import { DismissFlaggedEntryDto } from './dto/dismiss-flagged-entry.dto';
+import { BulkDeleteClaimsDto } from './dto/bulk-delete-claims.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 
@@ -136,6 +137,16 @@ export class ClaimsController {
   @RequirePermission(AppModule.Claims, 'readonly')
   findOne(@Param('id') id: string) {
     return this.claimsService.findByIdWithStaff(id);
+  }
+
+  @Delete('bulk')
+  @RequirePermission(AppModule.Claims, 'full')
+  @HttpCode(HttpStatus.OK)
+  bulkDelete(
+    @Body() dto: BulkDeleteClaimsDto,
+    @CurrentUser() user: { sub: string; displayName: string },
+  ) {
+    return this.claimsService.bulkDeleteClaims(dto.ids, user.sub, user.displayName);
   }
 
   @Delete(':id')

@@ -232,4 +232,11 @@ export class ClaimsService implements OnModuleInit {
       id, claim.toObject() as unknown as Record<string, unknown>, undefined,
     );
   }
+
+  async bulkDeleteClaims(ids: string[], actorId: string, actorName: string): Promise<{ deleted: number }> {
+    for (const id of ids) {
+      await this.deleteClaim(id, actorId, actorName);
+    }
+    return { deleted: ids.length };
+  }
 }

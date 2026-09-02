@@ -19,10 +19,11 @@ import { Response } from 'express';
 import * as path from 'path';
 import * as fs from 'fs';
 import puppeteer from 'puppeteer';
-import { AppModule } from '@welfare/shared';
+import { AppModule, AuditAction, AuditEntity } from '@welfare/shared';
 import { sendCsv, sendExcel } from '../common/utils/export.util';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
+import { AuditService } from '../audit/audit.service';
 import { RemittancesService } from './remittances.service';
 import { RemittancesImportService } from './remittances.import.service';
 import { CreateRemittanceDto } from './dto/create-remittance.dto';
@@ -43,6 +44,7 @@ export class RemittancesController {
   constructor(
     private readonly service: RemittancesService,
     private readonly importService: RemittancesImportService,
+    private readonly auditService: AuditService,
   ) {}
 
   @Get('gross')
@@ -138,6 +140,7 @@ export class RemittancesController {
   async getReport(
     @Query() q: RemittanceQueryDto,
     @Res({ passthrough: true }) res: Response,
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     const fm = q.fromMonth ?? 1;
     const fy = q.fromYear ?? new Date().getFullYear();
@@ -150,6 +153,12 @@ export class RemittancesController {
 
     const report = await this.service.getReport(fm, fy, tm, ty);
 
+    if (q.format === 'csv' || q.format === 'xlsx' || q.format === 'pdf') {
+      await this.auditService.log(
+        user._id.toString(), user.displayName, q.format === 'pdf' ? AuditAction.Download : AuditAction.Export,
+        AuditEntity.Report, 'remittances-report', undefined, { fromMonth: fm, fromYear: fy, toMonth: tm, toYear: ty, format: q.format },
+      );
+    }
     if (q.format === 'csv') {
       sendCsv(
         res,

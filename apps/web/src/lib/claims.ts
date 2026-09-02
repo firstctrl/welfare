@@ -63,6 +63,11 @@ export async function deleteClaim(id: string): Promise<void> {
   await apiClient.delete(`/claims/${id}`);
 }
 
+export async function bulkDeleteClaims(ids: string[]): Promise<{ deleted: number }> {
+  const { data } = await apiClient.delete('/claims/bulk', { data: { ids } });
+  return data;
+}
+
 export async function importClaims(file: File, jobId?: string): Promise<ImportResult> {
   const form = new FormData();
   form.append('file', file);
