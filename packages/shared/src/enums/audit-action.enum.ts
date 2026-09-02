@@ -10,6 +10,8 @@ export enum AuditAction {
   WriteOff = 'WriteOff',
   RecordPayment = 'RecordPayment',
   GenerateStatement = 'GenerateStatement',
+  Download = 'Download',
+  Export = 'Export',
   Login = 'Login',
   Logout = 'Logout',
   ConfigChange = 'ConfigChange',

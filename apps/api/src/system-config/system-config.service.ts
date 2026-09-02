@@ -41,7 +41,7 @@ const SEED_DEFAULTS: Array<{ key: ConfigKey; value: string; description?: string
   { key: ConfigKey.OutlookPort, value: '587' },
   { key: ConfigKey.OutlookUsername, value: '' },
   { key: ConfigKey.OutlookPassword, value: '' },
-  { key: ConfigKey.EmailContributionStatementCron, value: '0 9 1 * *' },
+  { key: ConfigKey.EmailContributionStatementCron, value: '0 8 1 1,4,7,10 *' },
   { key: ConfigKey.EmailLoanScheduleEnabled, value: 'false' },
   { key: ConfigKey.SessionIdleTimeoutMinutes, value: '30' },
   { key: ConfigKey.AdLoginEnabled, value: 'true' },

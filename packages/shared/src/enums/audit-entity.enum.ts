@@ -9,4 +9,5 @@ export enum AuditEntity {
   Config = 'Config',
   EmailLog = 'EmailLog',
   User = 'User',
+  Report = 'Report',
 }
