@@ -49,6 +49,18 @@ export async function createClaim(payload: {
   return data;
 }
 
+export async function updateClaim(id: string, payload: {
+  claimType: ClaimType;
+  subReason?: CessationReason;
+  month: number;
+  year: number;
+  amount: number;
+  reason?: string;
+}): Promise<IClaim> {
+  const { data } = await apiClient.patch(`/claims/${id}`, payload);
+  return data;
+}
+
 export async function approveClaim(id: string): Promise<IClaim> {
   const { data } = await apiClient.patch(`/claims/${id}/approve`);
   return data;

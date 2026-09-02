@@ -1,14 +1,15 @@
-import { BadRequestException, Inject, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { MeiliSearch } from 'meilisearch';
-import { AuditAction, AuditEntity, ClaimSource, ClaimStatus, CreateClaimDto, PaginatedResult } from '@welfare/shared';
+import { AuditAction, AuditEntity, ClaimSource, ClaimStatus, CreateClaimDto, PaginatedResult, UserRole } from '@welfare/shared';
 import { Claim, ClaimDocument } from './schemas/claim.schema';
 import { Contribution, ContributionDocument } from '../contributions/schemas/contribution.schema';
 import { AuditService } from '../audit/audit.service';
 import { StaffService } from '../staff/staff.service';
 import { MEILISEARCH_CLIENT } from '../search/meilisearch.module';
 import { ClaimQueryDto } from './dto/claim-query.dto';
+import { UpdateClaimDto } from './dto/update-claim.dto';
 
 @Injectable()
 export class ClaimsService implements OnModuleInit {
@@ -111,6 +112,52 @@ export class ClaimsService implements OnModuleInit {
     this.auditService.log(
       actorId, actorName, AuditAction.Create, AuditEntity.Claim,
       claim._id.toString(), undefined, claim.toObject() as unknown as Record<string, unknown>,
+    );
+    const staff = await this.staffService.findById(claim.staffId);
+    this.syncClaimToMeilisearch(claim, staff.fullName, staff.staffId);
+    return claim;
+  }
+
+  async updateClaim(
+    id: string, dto: UpdateClaimDto, actorId: string, actorName: string, actorRole: UserRole,
+  ): Promise<ClaimDocument> {
+    const claim = await this.findById(id);
+
+    if (claim.status === ClaimStatus.Rejected) {
+      throw new BadRequestException('Rejected claims cannot be edited');
+    }
+
+    const isApprovedEdit = claim.status === ClaimStatus.Approved;
+    if (isApprovedEdit) {
+      if (actorRole !== UserRole.WelfareManager && actorRole !== UserRole.Admin) {
+        throw new ForbiddenException('Only a Welfare Manager or Admin can edit an approved claim');
+      }
+      if (!dto.reason?.trim()) {
+        throw new BadRequestException('A reason is required to edit an approved claim');
+      }
+    }
+
+    // Approved amount is already counted in the balance sum — add it back before
+    // checking the new amount so editing an approved claim doesn't double-count itself.
+    const balance = await this.getStaffBalance(claim.staffId);
+    const available = isApprovedEdit ? balance + claim.amount : balance;
+    if (dto.amount > available) {
+      throw new BadRequestException(`Claim amount exceeds available balance of GHS ${available.toFixed(2)}`);
+    }
+
+    const before = claim.toObject() as unknown as Record<string, unknown>;
+    claim.claimType = dto.claimType;
+    claim.subReason = dto.subReason;
+    claim.month = dto.month;
+    claim.year = dto.year;
+    claim.amount = dto.amount;
+    await claim.save();
+    this.auditService.log(
+      actorId, actorName, AuditAction.Update, AuditEntity.Claim,
+      id, before, {
+        ...(claim.toObject() as unknown as Record<string, unknown>),
+        ...(isApprovedEdit ? { editReason: dto.reason!.trim() } : {}),
+      },
     );
     const staff = await this.staffService.findById(claim.staffId);
     this.syncClaimToMeilisearch(claim, staff.fullName, staff.staffId);

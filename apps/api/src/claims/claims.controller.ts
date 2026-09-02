@@ -3,7 +3,7 @@ import {
   UploadedFile, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { AppModule } from '@welfare/shared';
+import { AppModule, UserRole } from '@welfare/shared';
 import { ClaimsService } from './claims.service';
 import { ImportService } from './import.service';
 import { CreateClaimDto } from './dto/create-claim.dto';
@@ -13,6 +13,7 @@ import { ResolveFlaggedDto } from './dto/resolve-flagged.dto';
 import { ResolveByStaffIdDto } from './dto/resolve-by-staff-id.dto';
 import { DismissFlaggedEntryDto } from './dto/dismiss-flagged-entry.dto';
 import { BulkDeleteClaimsDto } from './dto/bulk-delete-claims.dto';
+import { UpdateClaimDto } from './dto/update-claim.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
 
@@ -94,6 +95,16 @@ export class ClaimsController {
     @CurrentUser() user: { sub: string; displayName: string },
   ) {
     return this.claimsService.createClaim(dto, user.sub, user.displayName);
+  }
+
+  @Patch(':id')
+  @RequirePermission(AppModule.Claims, 'full')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateClaimDto,
+    @CurrentUser() user: { sub: string; displayName: string; role: UserRole },
+  ) {
+    return this.claimsService.updateClaim(id, dto, user.sub, user.displayName, user.role);
   }
 
   @Patch(':id/approve')

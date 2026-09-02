@@ -2,16 +2,20 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, XCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
-import { ClaimStatus, AppModule } from '@welfare/shared';
+import { ClaimStatus, ClaimType, CessationReason, AppModule, UserRole } from '@welfare/shared';
 import { usePermission } from '@/hooks/use-permission';
-import { getClaim, approveClaim, rejectClaim } from '@/lib/claims';
+import { useAuthStore } from '@/store/auth.store';
+import { getClaim, approveClaim, rejectClaim, updateClaim } from '@/lib/claims';
+import { claimSchema, type ClaimFormValues } from '@/lib/form-schemas';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardBody } from '@/components/ui/card';
-import { Input } from '@/components/ui/field';
+import { Field, Input, Select } from '@/components/ui/field';
 import { Modal } from '@/components/ui/modal';
 import { fmtGHS, fmtDate } from '@/lib/format';
 
@@ -26,10 +30,18 @@ const statusKind: Record<ClaimStatus, 'success' | 'warning' | 'danger'> = {
 export function ClaimDetailClient({ id }: { id: string }) {
   const qc = useQueryClient();
   const permission = usePermission(AppModule.Claims);
+  const userRole = useAuthStore((s) => s.user?.role);
+  const canEditApproved = userRole === UserRole.WelfareManager || userRole === UserRole.Admin;
   const [rejecting, setRejecting] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [editReason, setEditReason] = useState('');
 
   const { data: claim, isLoading } = useQuery({ queryKey: ['claims', id], queryFn: () => getClaim(id) });
+
+  const editForm = useForm<ClaimFormValues>({ resolver: zodResolver(claimSchema) });
+  const watchClaimType = editForm.watch('claimType');
+  const isApprovedEdit = claim?.status === ClaimStatus.Approved;
 
   const approveMutation = useMutation({
     mutationFn: () => approveClaim(id),
@@ -48,10 +60,41 @@ export function ClaimDetailClient({ id }: { id: string }) {
     onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Rejection failed'),
   });
 
+  const updateMutation = useMutation({
+    mutationFn: (values: ClaimFormValues) => updateClaim(id, {
+      claimType: values.claimType as ClaimType,
+      subReason: values.claimType === ClaimType.Cessation ? (values.subReason as CessationReason) : undefined,
+      month: values.month,
+      year: values.year,
+      amount: values.amount,
+      reason: isApprovedEdit ? editReason.trim() : undefined,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['claims', id] });
+      setEditing(false);
+      setEditReason('');
+      toast.success('Claim updated');
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message ?? 'Update failed'),
+  });
+
   if (isLoading) return <p className="text-sm text-neutral-400">Loading…</p>;
   if (!claim) return <p className="text-sm text-danger-600">Claim not found.</p>;
 
   const staffInfo = claim.staffInfo;
+
+  function startEdit() {
+    editForm.reset({
+      staffId: claim!.staffId,
+      claimType: claim!.claimType,
+      subReason: claim!.subReason ?? undefined,
+      month: claim!.month,
+      year: claim!.year,
+      amount: claim!.amount,
+    });
+    setEditReason('');
+    setEditing(true);
+  }
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -72,19 +115,89 @@ export function ClaimDetailClient({ id }: { id: string }) {
               )}
             </p>
           </div>
-          {permission === 'full' && claim.status === ClaimStatus.Pending && (
+          {permission === 'full' && !editing && (
             <div className="flex gap-2">
-              <Button variant="secondary" Icon={CheckCircle2} loading={approveMutation.isPending} onClick={() => approveMutation.mutate()}>
-                Approve
-              </Button>
-              <Button variant="danger" Icon={XCircle} onClick={() => setRejecting(true)}>
-                Reject
-              </Button>
+              {(claim.status === ClaimStatus.Pending || (claim.status === ClaimStatus.Approved && canEditApproved)) && (
+                <Button variant="secondary" Icon={Pencil} onClick={startEdit}>
+                  Edit
+                </Button>
+              )}
+              {claim.status === ClaimStatus.Pending && (
+                <>
+                  <Button variant="secondary" Icon={CheckCircle2} loading={approveMutation.isPending} onClick={() => approveMutation.mutate()}>
+                    Approve
+                  </Button>
+                  <Button variant="danger" Icon={XCircle} onClick={() => setRejecting(true)}>
+                    Reject
+                  </Button>
+                </>
+              )}
             </div>
           )}
         </CardBody>
       </Card>
 
+      {editing ? (
+        <Card>
+          <CardHeader title="Edit Claim" />
+          <CardBody>
+            <form onSubmit={editForm.handleSubmit((v) => updateMutation.mutate(v))} className="space-y-4">
+              <Field label="Claim Type" required error={editForm.formState.errors.claimType?.message}>
+                <Select
+                  {...editForm.register('claimType')}
+                  options={Object.values(ClaimType).map((t) => ({ value: t, label: t }))}
+                />
+              </Field>
+
+              {watchClaimType === ClaimType.Cessation && (
+                <Field label="Sub Reason" required error={editForm.formState.errors.subReason?.message}>
+                  <Select
+                    {...editForm.register('subReason')}
+                    options={[{ value: '', label: 'Select reason…' }, ...Object.values(CessationReason).map((r) => ({ value: r, label: r }))]}
+                  />
+                </Field>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Month" required>
+                  <Select {...editForm.register('month')} options={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))} />
+                </Field>
+                <Field label="Year" required>
+                  <Input {...editForm.register('year')} type="number" />
+                </Field>
+              </div>
+
+              <Field label="Amount" required error={editForm.formState.errors.amount?.message}>
+                <Input {...editForm.register('amount')} type="number" min="1" prefix="₵" error={!!editForm.formState.errors.amount} />
+              </Field>
+
+              {isApprovedEdit && (
+                <Field label="Reason for editing this approved claim" required>
+                  <Input
+                    placeholder="Required — explain why this approved claim is being changed"
+                    value={editReason}
+                    onChange={(e) => setEditReason(e.target.value)}
+                  />
+                </Field>
+              )}
+
+              <div className="flex gap-3">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  loading={updateMutation.isPending}
+                  disabled={isApprovedEdit && !editReason.trim()}
+                >
+                  Save Changes
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => setEditing(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardBody>
+        </Card>
+      ) : (
       <Card>
         <CardHeader title="Claim Details" />
         <CardBody>
@@ -110,6 +223,7 @@ export function ClaimDetailClient({ id }: { id: string }) {
           </div>
         </CardBody>
       </Card>
+      )}
 
       {rejecting && (
         <Modal open onClose={() => { setRejecting(false); setRejectReason(''); }} title="Reject Claim" size="sm" iconKind="danger">
