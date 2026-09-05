@@ -343,6 +343,9 @@ export default function StaffDetailClient({ id }: { id: string }) {
             </div>
             <p className="text-sm text-neutral-500 mt-1">
               Staff ID: {staff.staffId} &middot; PF: {staff.pfNo} &middot; Level: {staff.level}
+              {isTerminal && staff.statusEffectiveDate && (
+                <> &middot; {staff.status} effective {fmtDate(staff.statusEffectiveDate)}</>
+              )}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {!isTerminal && (
