@@ -19,6 +19,7 @@ export class Staff {
   @Prop({ min: 0, default: 0 }) point?: number;
   @Prop({ required: true, enum: StaffStatus, default: StaffStatus.Active })
   status!: StaffStatus;
+  @Prop() statusEffectiveDate?: Date;
 }
 
 export const StaffSchema = SchemaFactory.createForClass(Staff);

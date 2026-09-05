@@ -237,6 +237,7 @@ describe('StaffService', () => {
         { status: StaffStatus.Resigned, effectiveDate: '2025-01-01' },
         'actor-id', 'Actor');
       expect(result.requiresSettlement).toBe(true);
+      expect((staff as { statusEffectiveDate?: Date }).statusEffectiveDate).toEqual(new Date('2025-01-01'));
     });
   });
 
@@ -248,6 +249,7 @@ describe('StaffService', () => {
         { status: StaffStatus.Resigned, effectiveDate: '2025-01-01', reason: 'Wrongly marked Retired instead of Resigned' },
         'actor-id', 'Actor');
       expect(staff.status).toBe(StaffStatus.Resigned);
+      expect((staff as { statusEffectiveDate?: Date }).statusEffectiveDate).toEqual(new Date('2025-01-01'));
       expect(result.requiresSettlement).toBe(true);
       expect(mockAuditService.log).toHaveBeenCalledWith(
         'actor-id', 'Actor', 'Update', 'Staff', 'staff-id-1',

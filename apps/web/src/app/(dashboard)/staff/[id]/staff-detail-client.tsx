@@ -361,7 +361,7 @@ export default function StaffDetailClient({ id }: { id: string }) {
                   size="sm"
                   Icon={UserCog}
                   onClick={() => {
-                    correctStatusForm.reset({ status: staff.status, effectiveDate: toDateInput(staff.updatedAt) });
+                    correctStatusForm.reset({ status: staff.status, effectiveDate: toDateInput(staff.statusEffectiveDate) });
                     setShowCorrectStatusModal(true);
                   }}
                 >

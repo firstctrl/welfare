@@ -14,6 +14,7 @@ export interface IStaff {
   level: string;
   point: number;
   status: StaffStatus;
+  statusEffectiveDate?: string;
   createdAt: string;
   updatedAt: string;
 }

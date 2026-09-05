@@ -169,6 +169,7 @@ export class StaffService implements OnModuleInit {
     }
     const before = staff.toObject() as unknown as Record<string, unknown>;
     staff.status = dto.status;
+    staff.statusEffectiveDate = new Date(dto.effectiveDate);
     await staff.save();
     this.auditService.log(
       actorId, actorName, AuditAction.Update, AuditEntity.Staff,
@@ -190,6 +191,7 @@ export class StaffService implements OnModuleInit {
     const staff = await this.findById(id);
     const before = staff.toObject() as unknown as Record<string, unknown>;
     staff.status = dto.status;
+    staff.statusEffectiveDate = new Date(dto.effectiveDate);
     await staff.save();
     this.auditService.log(
       actorId, actorName, AuditAction.Update, AuditEntity.Staff,
