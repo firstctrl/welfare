@@ -17,10 +17,11 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { UserCog, Send, Pencil, Plus, Download } from 'lucide-react';
 import Link from 'next/link';
-import { StaffStatus, ContributionStatus, LoanStatus, hasPayrollGapDuringHistory, PAYROLL_GAP_NOTICE } from '@welfare/shared';
+import { StaffStatus, ContributionStatus, LoanStatus, UserRole, hasPayrollGapDuringHistory, PAYROLL_GAP_NOTICE } from '@welfare/shared';
 import type { IStaff, IContribution, ILoan } from '@welfare/shared';
 import { Pagination, SortableTh } from '@/components/ui/data-table';
-import { getStaff, updateStaff, changeStaffStatus, uploadStaffPhoto } from '@/lib/staff';
+import { getStaff, updateStaff, changeStaffStatus, correctStaffStatus, uploadStaffPhoto } from '@/lib/staff';
+import { useAuthStore } from '@/store/auth.store';
 import { getContributionsByStaff } from '@/lib/contributions';
 import { getLoansByStaff, getLoansByGuarantor, getLoanSchedule } from '@/lib/loans';
 import { getConfig } from '@/lib/config';
@@ -64,6 +65,13 @@ const statusSchema = z.object({
 });
 type StatusForm = z.infer<typeof statusSchema>;
 
+const correctStatusSchema = z.object({
+  status:        z.nativeEnum(StaffStatus),
+  effectiveDate: z.string().min(1, 'Required'),
+  reason:        z.string().min(1, 'Required'),
+});
+type CorrectStatusForm = z.infer<typeof correctStatusSchema>;
+
 function toDateInput(d?: string) { return d ? d.substring(0, 10) : ''; }
 
 export default function StaffDetailClient({ id }: { id: string }) {
@@ -71,6 +79,9 @@ export default function StaffDetailClient({ id }: { id: string }) {
   const [activeTab, setActiveTab] = useState<Tab>('Profile');
   const [editing, setEditing] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showCorrectStatusModal, setShowCorrectStatusModal] = useState(false);
+  const role = useAuthStore((s) => s.user?.role);
+  const canCorrectStatus = role === UserRole.WelfareManager || role === UserRole.Admin;
   const [sendingStatement, setSendingStatement] = useState(false);
   const [downloadingRecord, setDownloadingRecord] = useState(false);
   const [statementYear, setStatementYear] = useState(new Date().getFullYear());
@@ -225,6 +236,7 @@ export default function StaffDetailClient({ id }: { id: string }) {
 
   const profileForm = useForm<ProfileForm>({ resolver: zodResolver(profileSchema) });
   const statusForm = useForm<StatusForm>({ resolver: zodResolver(statusSchema) });
+  const correctStatusForm = useForm<CorrectStatusForm>({ resolver: zodResolver(correctStatusSchema) });
 
   const updateMutation = useMutation({
     mutationFn: (values: ProfileForm) => updateStaff(id, {
@@ -253,6 +265,20 @@ export default function StaffDetailClient({ id }: { id: string }) {
       setShowStatusModal(false);
       if (requiresSettlement) toast.warning('Status updated. Outstanding loans require exit settlement.');
       else toast.success('Status updated');
+    },
+    onSettled: () => { qc.invalidateQueries({ queryKey: ['staff', id] }); qc.invalidateQueries({ queryKey: ['staff'] }); },
+  });
+
+  const correctStatusMutation = useMutation({
+    mutationFn: (values: CorrectStatusForm) => correctStaffStatus(id, values),
+    onSuccess: ({ requiresSettlement }) => {
+      setShowCorrectStatusModal(false);
+      correctStatusForm.reset();
+      if (requiresSettlement) toast.warning('Status corrected. Outstanding loans require exit settlement.');
+      else toast.success('Status corrected');
+    },
+    onError: (err: unknown) => {
+      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Status correction failed');
     },
     onSettled: () => { qc.invalidateQueries({ queryKey: ['staff', id] }); qc.invalidateQueries({ queryKey: ['staff'] }); },
   });
@@ -327,6 +353,19 @@ export default function StaffDetailClient({ id }: { id: string }) {
                   onClick={() => setShowStatusModal(true)}
                 >
                   Change Status
+                </Button>
+              )}
+              {isTerminal && canCorrectStatus && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  Icon={UserCog}
+                  onClick={() => {
+                    correctStatusForm.reset({ status: staff.status, effectiveDate: toDateInput(staff.updatedAt) });
+                    setShowCorrectStatusModal(true);
+                  }}
+                >
+                  Correct Status
                 </Button>
               )}
               <Button
@@ -907,6 +946,68 @@ export default function StaffDetailClient({ id }: { id: string }) {
               <textarea
                 {...statusForm.register('notes')}
                 rows={3}
+                className="w-full border border-neutral-200 rounded-sm px-3 py-2 text-base focus:outline-none focus:border-primary-500 focus:shadow-focus resize-none"
+              />
+            </Field>
+          </form>
+        </Modal>
+      )}
+
+      {/* Correct Status Modal */}
+      {showCorrectStatusModal && (
+        <Modal
+          open
+          onClose={() => setShowCorrectStatusModal(false)}
+          title="Correct Staff Status"
+          size="sm"
+          icon={<UserCog size={20} strokeWidth={1.75} />}
+          iconKind="warning"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setShowCorrectStatusModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                loading={correctStatusMutation.isPending}
+                onClick={correctStatusForm.handleSubmit((v) => correctStatusMutation.mutate(v))}
+              >
+                Confirm Correction
+              </Button>
+            </>
+          }
+        >
+          <form
+            onSubmit={correctStatusForm.handleSubmit((v) => correctStatusMutation.mutate(v))}
+            className="space-y-4 mt-2"
+          >
+            <p className="text-sm text-neutral-500">
+              This overrides a previously recorded status ({staff.status}), including terminal states. Use only to fix a mistake.
+            </p>
+            <Field label="Correct Status" required error={correctStatusForm.formState.errors.status?.message}>
+              <Select
+                {...correctStatusForm.register('status')}
+                error={!!correctStatusForm.formState.errors.status}
+                placeholder="Select correct status…"
+                options={Object.values(StaffStatus).map((s) => ({ value: s, label: s }))}
+              />
+            </Field>
+            <Field
+              label="Effective Date"
+              required
+              error={correctStatusForm.formState.errors.effectiveDate?.message}
+            >
+              <Input
+                {...correctStatusForm.register('effectiveDate')}
+                type="date"
+                error={!!correctStatusForm.formState.errors.effectiveDate}
+              />
+            </Field>
+            <Field label="Reason for Correction" required error={correctStatusForm.formState.errors.reason?.message}>
+              <textarea
+                {...correctStatusForm.register('reason')}
+                rows={3}
+                placeholder="e.g. Wrongly set to Retired instead of Resigned"
                 className="w-full border border-neutral-200 rounded-sm px-3 py-2 text-base focus:outline-none focus:border-primary-500 focus:shadow-focus resize-none"
               />
             </Field>

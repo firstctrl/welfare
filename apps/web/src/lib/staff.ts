@@ -32,6 +32,12 @@ export interface ChangeStatusResult {
   requiresSettlement: boolean;
 }
 
+export interface CorrectStatusPayload {
+  status: StaffStatus;
+  effectiveDate: string;
+  reason: string;
+}
+
 export async function listStaff(filters: StaffFilters = {}): Promise<PaginatedResult<IStaff>> {
   const { data } = await apiClient.get('/staff', { params: filters });
   return data;
@@ -68,6 +74,14 @@ export async function changeStaffStatus(
   payload: ChangeStatusPayload,
 ): Promise<ChangeStatusResult> {
   const { data } = await apiClient.patch(`/staff/${id}/status`, payload);
+  return data;
+}
+
+export async function correctStaffStatus(
+  id: string,
+  payload: CorrectStatusPayload,
+): Promise<ChangeStatusResult> {
+  const { data } = await apiClient.patch(`/staff/${id}/status/correct`, payload);
   return data;
 }
 

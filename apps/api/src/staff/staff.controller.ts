@@ -20,12 +20,14 @@ import { StaffImportService } from './staff.import.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
 import { ChangeStatusDto } from './dto/change-status.dto';
+import { CorrectStatusDto } from './dto/correct-status.dto';
 import { StaffQueryDto } from './dto/staff-query.dto';
 import { BulkDeleteDto } from './dto/bulk-delete.dto';
 import { DismissFlaggedEntryDto } from './dto/dismiss-flagged-entry.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
-import { AppModule } from '@welfare/shared';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { AppModule, UserRole } from '@welfare/shared';
 
 @Controller('staff')
 export class StaffController {
@@ -132,6 +134,18 @@ export class StaffController {
     @Req() req: Request,
   ) {
     return this.staffService.changeStatus(id, dto, user.sub, user.displayName, req.ip);
+  }
+
+  @Patch(':id/status/correct')
+  @RequirePermission(AppModule.Staff, 'full')
+  @Roles(UserRole.WelfareManager, UserRole.Admin)
+  correctStatus(
+    @Param('id') id: string,
+    @Body() dto: CorrectStatusDto,
+    @CurrentUser() user: { sub: string; displayName: string },
+    @Req() req: Request,
+  ) {
+    return this.staffService.correctStatus(id, dto, user.sub, user.displayName, req.ip);
   }
 
   @Post(':id/photo')

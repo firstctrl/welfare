@@ -20,6 +20,7 @@ import { MEILISEARCH_CLIENT } from '../search/meilisearch.module';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { UpdateStaffDto } from './dto/update-staff.dto';
 import { ChangeStatusDto } from './dto/change-status.dto';
+import { CorrectStatusDto } from './dto/correct-status.dto';
 import { StaffQueryDto } from './dto/staff-query.dto';
 
 const TERMINAL_STATUSES: StaffStatus[] = [
@@ -172,6 +173,27 @@ export class StaffService implements OnModuleInit {
     this.auditService.log(
       actorId, actorName, AuditAction.Update, AuditEntity.Staff,
       id, before, staff.toObject() as unknown as Record<string, unknown>, ip,
+    );
+    this.syncToMeilisearch(staff);
+    const requiresSettlement = [StaffStatus.Resigned, StaffStatus.Dismissed].includes(dto.status);
+    return { staff, requiresSettlement };
+  }
+
+  /** Manager/Admin-only override to fix a wrongly-recorded status, bypassing the terminal-state lock. */
+  async correctStatus(
+    id: string,
+    dto: CorrectStatusDto,
+    actorId: string,
+    actorName: string,
+    ip?: string,
+  ): Promise<{ staff: StaffDocument; requiresSettlement: boolean }> {
+    const staff = await this.findById(id);
+    const before = staff.toObject() as unknown as Record<string, unknown>;
+    staff.status = dto.status;
+    await staff.save();
+    this.auditService.log(
+      actorId, actorName, AuditAction.Update, AuditEntity.Staff,
+      id, before, { ...(staff.toObject() as unknown as Record<string, unknown>), correctionReason: dto.reason }, ip,
     );
     this.syncToMeilisearch(staff);
     const requiresSettlement = [StaffStatus.Resigned, StaffStatus.Dismissed].includes(dto.status);

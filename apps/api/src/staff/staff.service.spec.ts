@@ -240,6 +240,24 @@ describe('StaffService', () => {
     });
   });
 
+  describe('correctStatus', () => {
+    it('allows overriding a terminal status and logs the reason', async () => {
+      const staff = { ...baseStaff, status: StaffStatus.Retired, save: jest.fn().mockResolvedValue(undefined), toObject: jest.fn(() => ({ status: StaffStatus.Retired })) };
+      mockStaffModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(staff) });
+      const result = await service.correctStatus('staff-id-1',
+        { status: StaffStatus.Resigned, effectiveDate: '2025-01-01', reason: 'Wrongly marked Retired instead of Resigned' },
+        'actor-id', 'Actor');
+      expect(staff.status).toBe(StaffStatus.Resigned);
+      expect(result.requiresSettlement).toBe(true);
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        'actor-id', 'Actor', 'Update', 'Staff', 'staff-id-1',
+        expect.anything(),
+        expect.objectContaining({ correctionReason: 'Wrongly marked Retired instead of Resigned' }),
+        undefined,
+      );
+    });
+  });
+
   describe('findByStaffId', () => {
     it('returns staff document when staffId field matches', async () => {
       mockStaffModel.findOne = jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(baseStaff) });
