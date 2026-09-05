@@ -62,10 +62,15 @@ export class StaffService implements OnModuleInit {
     actorName: string,
     ip?: string,
   ): Promise<StaffDocument> {
+    if (await this.findByStaffId(dto.staffId)) {
+      throw new ConflictException(`Staff ID '${dto.staffId}' already exists`);
+    }
+
     let staff: StaffDocument;
     try {
       staff = await this.staffModel.create({
         ...dto,
+        staffId: dto.staffId.trim(),
         status: dto.status ?? StaffStatus.Active,
         dateOfBirth: new Date(dto.dateOfBirth),
         dateOfEmployment: new Date(dto.dateOfEmployment),
@@ -109,7 +114,8 @@ export class StaffService implements OnModuleInit {
   }
 
   async findByStaffId(staffId: string): Promise<StaffDocument | null> {
-    return this.staffModel.findOne({ staffId }).exec();
+    const normalized = staffId.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return this.staffModel.findOne({ staffId: new RegExp(`^${normalized}$`, 'i') }).exec();
   }
 
   async findManyByStaffIdPattern(pattern: string): Promise<StaffDocument[]> {

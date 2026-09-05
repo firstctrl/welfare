@@ -117,6 +117,7 @@ describe('StaffService', () => {
 
   describe('create', () => {
     it('throws ConflictException on duplicate staffId', async () => {
+      mockStaffModel.findOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
       const dupError = Object.assign(new Error('dup key'), { code: 11000 });
       mockStaffModel.create.mockRejectedValue(dupError);
       await expect(
@@ -129,7 +130,21 @@ describe('StaffService', () => {
       ).rejects.toThrow(ConflictException);
     });
 
+    it('throws ConflictException when a staffId already exists (case-insensitive)', async () => {
+      mockStaffModel.findOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(baseStaff) });
+      await expect(
+        service.create(
+          { fullName: 'Test', staffId: 'stf001', pfNo: 'PF001', dateOfBirth: '1990-01-01',
+            phoneNumber: '08012345678', email: 'test@example.com', dateOfEmployment: '2020-01-01',
+            dateOfFirstContribution: '2020-02-01', level: 'GL 10', point: 0 },
+          'actor-id', 'Actor Name',
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(mockStaffModel.create).not.toHaveBeenCalled();
+    });
+
     it('creates staff, logs audit, and syncs Meilisearch', async () => {
+      mockStaffModel.findOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
       mockStaffModel.create.mockResolvedValue({ ...baseStaff });
       const result = await service.create(
         { fullName: 'Aminu Tijani', staffId: 'STF001', pfNo: 'PF001',
@@ -230,7 +245,14 @@ describe('StaffService', () => {
       mockStaffModel.findOne = jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(baseStaff) });
       const result = await service.findByStaffId('STF001');
       expect(result).toBe(baseStaff);
-      expect(mockStaffModel.findOne).toHaveBeenCalledWith({ staffId: 'STF001' });
+      expect(mockStaffModel.findOne).toHaveBeenCalledWith({ staffId: /^STF001$/i });
+    });
+
+    it('matches case-insensitively and ignores surrounding whitespace', async () => {
+      mockStaffModel.findOne = jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(baseStaff) });
+      const result = await service.findByStaffId(' stf001 ');
+      expect(result).toBe(baseStaff);
+      expect(mockStaffModel.findOne).toHaveBeenCalledWith({ staffId: /^stf001$/i });
     });
 
     it('returns null when staffId field not found', async () => {
