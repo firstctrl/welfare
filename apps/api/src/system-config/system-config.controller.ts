@@ -16,6 +16,11 @@ export class SystemConfigController {
     return this.systemConfigService.getPublic();
   }
 
+  @Get('operational')
+  getOperational() {
+    return this.systemConfigService.getOperational();
+  }
+
   @Get()
   @RequirePermission(AppModule.Settings, 'readonly')
   getAll() {

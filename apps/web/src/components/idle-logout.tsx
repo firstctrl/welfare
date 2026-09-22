@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '../store/auth.store';
-import { getConfig } from '../lib/config';
+import { getOperationalConfig } from '../lib/config';
 
 const FALLBACK_IDLE_MINUTES = 30;
 const WARN_MS = 60 * 1000; // show warning 60 s before logout
@@ -21,7 +21,7 @@ export function IdleLogout() {
   // Load timeout from config once when logged in
   useEffect(() => {
     if (!token) return;
-    getConfig()
+    getOperationalConfig()
       .then((cfg) => {
         const raw = cfg['SESSION_IDLE_TIMEOUT_MINUTES']?.value;
         const mins = raw ? parseInt(raw, 10) : FALLBACK_IDLE_MINUTES;

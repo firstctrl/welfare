@@ -50,6 +50,27 @@ const SEED_DEFAULTS: Array<{ key: ConfigKey; value: string; description?: string
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Non-secret keys every authenticated user needs (loan creation forms, idle-timeout, etc).
+// Deliberately excludes email credentials/hosts which stay behind the Settings permission.
+const OPERATIONAL_KEYS: ConfigKey[] = [
+  ConfigKey.LoanMinAmount,
+  ConfigKey.LoanMaxAmount,
+  ConfigKey.LoanMaxTenure,
+  ConfigKey.InterestRateShort,
+  ConfigKey.InterestRateLong,
+  ConfigKey.EligibilityMonths,
+  ConfigKey.PaymentDeadlineDay,
+  ConfigKey.PenaltyType,
+  ConfigKey.PenaltyValue,
+  ConfigKey.MaxLoansPerGuarantor,
+  ConfigKey.MaxLoansPerStaff,
+  ConfigKey.GracePeriodDays,
+  ConfigKey.EndOfTenureGracePeriodMonths,
+  ConfigKey.RemittanceChargeRate,
+  ConfigKey.LoanPayOffDiscountRate,
+  ConfigKey.SessionIdleTimeoutMinutes,
+];
+
 @Injectable()
 export class SystemConfigService implements OnModuleInit {
   private readonly logger = new Logger(SystemConfigService.name);
@@ -79,6 +100,15 @@ export class SystemConfigService implements OnModuleInit {
   async getPublic(): Promise<{ adLoginEnabled: boolean }> {
     const all = await this.getAll();
     return { adLoginEnabled: (all[ConfigKey.AdLoginEnabled]?.value ?? 'true') === 'true' };
+  }
+
+  async getOperational(): Promise<ConfigMap> {
+    const all = await this.getAll();
+    const map: ConfigMap = {};
+    for (const key of OPERATIONAL_KEYS) {
+      if (all[key]) map[key] = all[key];
+    }
+    return map;
   }
 
   async getAll(): Promise<ConfigMap> {

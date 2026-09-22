@@ -11,7 +11,7 @@ import { LoanStatus } from '@welfare/shared';
 import type { IStaff } from '@welfare/shared';
 import { searchStaff, getLoanEligibility } from '@/lib/staff';
 import { createLoan, uploadLoanDocument, getLoansByGuarantor } from '@/lib/loans';
-import { getConfig } from '@/lib/config';
+import { getOperationalConfig } from '@/lib/config';
 import { loanSchema, type LoanFormValues } from '@/lib/form-schemas';
 import { Card, CardHeader, CardBody } from '@/components/ui/card';
 import { Field, Input, Select } from '@/components/ui/field';
@@ -97,7 +97,7 @@ export function NewLoanClient() {
   const watchTenure      = watch('tenureMonths');
   const watchDate        = watch('disbursedDate');
 
-  const { data: cfg } = useQuery({ queryKey: ['config'], queryFn: getConfig, staleTime: 5 * 60 * 1000 });
+  const { data: cfg } = useQuery({ queryKey: ['config', 'operational'], queryFn: getOperationalConfig, staleTime: 5 * 60 * 1000 });
   const minAmount       = parseFloat(cfg?.['LOAN_MIN_AMOUNT']?.value ?? '500');
   const maxAmount       = parseFloat(cfg?.['LOAN_MAX_AMOUNT']?.value ?? '50000');
   const shortRate       = parseFloat(cfg?.['INTEREST_RATE_SHORT']?.value ?? '5');
