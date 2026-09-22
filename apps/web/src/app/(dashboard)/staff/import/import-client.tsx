@@ -62,6 +62,7 @@ export default function StaffImportClient() {
     onSuccess: (data) => {
       setResult(data);
       qc.invalidateQueries({ queryKey: ['staff-import-batches'] });
+      qc.invalidateQueries({ queryKey: ['staff'] });
       toast.success(`Imported: ${data.created} created, ${data.flagged} flagged`);
     },
     onError: (err: unknown) => {
