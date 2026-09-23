@@ -19,6 +19,7 @@ import { AppModule } from '@welfare/shared';
 import { LoansService } from './loans.service';
 import { LoansImportService } from './loans.import.service';
 import { LoansRecordsImportService } from './loans.records.import.service';
+import { LoansLegacyImportService } from './loans.legacy-import.service';
 import { CreateLoanDto } from './dto/create-loan.dto';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { ExitSettlementDto } from './dto/exit-settlement.dto';
@@ -34,6 +35,7 @@ export class LoansController {
     private readonly loansService: LoansService,
     private readonly importService: LoansImportService,
     private readonly recordsImportService: LoansRecordsImportService,
+    private readonly legacyImportService: LoansLegacyImportService,
   ) {}
 
   @Post()
@@ -193,6 +195,53 @@ export class LoansController {
     @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     return this.recordsImportService.clearFlaggedEntries(batchId, user._id.toString(), user.displayName);
+  }
+
+  // ── legacy loan bulk import routes ──
+
+  @Post('legacy-import')
+  @RequirePermission(AppModule.Loans, 'full')
+  @UseInterceptors(FileInterceptor('file'))
+  importLegacyLoans(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('jobId') jobId: string | undefined,
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
+  ) {
+    return this.legacyImportService.processImport(file.buffer, file.originalname, user._id.toString(), user.displayName, jobId);
+  }
+
+  @Get('legacy-import')
+  @RequirePermission(AppModule.Loans, 'readonly')
+  listLegacyImportBatches(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.legacyImportService.listBatches(Number(page ?? 1), Number(limit ?? 20));
+  }
+
+  @Get('legacy-import/:batchId')
+  @RequirePermission(AppModule.Loans, 'readonly')
+  getLegacyImportBatch(@Param('batchId') batchId: string) {
+    return this.legacyImportService.getBatch(batchId);
+  }
+
+  @Patch('legacy-import/:batchId/dismiss')
+  @RequirePermission(AppModule.Loans, 'full')
+  dismissLegacyFlaggedEntry(
+    @Param('batchId') batchId: string,
+    @Body() dto: DismissFlaggedEntryDto,
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
+  ) {
+    return this.legacyImportService.dismissFlaggedEntry(batchId, dto.index, user._id.toString(), user.displayName);
+  }
+
+  @Patch('legacy-import/:batchId/clear-flagged')
+  @RequirePermission(AppModule.Loans, 'full')
+  clearLegacyFlaggedEntries(
+    @Param('batchId') batchId: string,
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
+  ) {
+    return this.legacyImportService.clearFlaggedEntries(batchId, user._id.toString(), user.displayName);
   }
 
   @Delete('bulk')
