@@ -421,6 +421,98 @@ describe('ContributionsService', () => {
     });
   });
 
+  describe('redirectLoanPaymentToGuarantor', () => {
+    const makeLoan = (owed: number, paid: number, badDebtAmount = 0) => ({
+      _id: { toString: () => 'loan-1' },
+      staffId: 'staff-1',
+      guarantorId: 'guarantor-1',
+      guarantorRestitutionOwed: owed,
+      guarantorRestitutionPaid: paid,
+      badDebtAmount,
+    });
+
+    beforeEach(() => {
+      mockLoanFindByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+    });
+
+    it('credits the guarantor and returns the leftover when the payment exceeds what is owed', async () => {
+      const loan = makeLoan(1000, 0) as any;
+
+      const leftover = await service.redirectLoanPaymentToGuarantor(loan, 3500, 'actor-id', 'Actor');
+
+      expect(leftover).toBe(2500);
+      expect(mockCreate).toHaveBeenCalledTimes(1);
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          staffId: 'guarantor-1',
+          isDebit: false,
+          source: ContributionSource.DefaulterRestitution,
+          paidAmount: 1000,
+          loanId: 'loan-1',
+          borrowerStaffId: 'staff-1',
+        }),
+      );
+      expect(mockLoanFindByIdAndUpdate).toHaveBeenCalledWith(
+        loan._id,
+        { $inc: { guarantorRestitutionPaid: 1000 }, $set: { recoveredAt: expect.any(Date) } },
+      );
+    });
+
+    it('caps the redirect at what remains owed and returns the correct leftover', async () => {
+      const loan = makeLoan(2000, 1500) as any; // remaining owed = 500
+
+      const leftover = await service.redirectLoanPaymentToGuarantor(loan, 3000, 'actor-id', 'Actor');
+
+      expect(leftover).toBe(2500);
+      expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ paidAmount: 500 }));
+      expect(mockLoanFindByIdAndUpdate).toHaveBeenCalledWith(
+        loan._id,
+        { $inc: { guarantorRestitutionPaid: 500 }, $set: { recoveredAt: expect.any(Date) } },
+      );
+    });
+
+    it('returns the full amount unchanged and touches nothing when nothing is owed', async () => {
+      const loan = makeLoan(0, 0) as any;
+
+      const leftover = await service.redirectLoanPaymentToGuarantor(loan, 3500, 'actor-id', 'Actor');
+
+      expect(leftover).toBe(3500);
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(mockLoanFindByIdAndUpdate).not.toHaveBeenCalled();
+    });
+
+    it('returns the full amount unchanged when restitution is already fully paid', async () => {
+      const loan = makeLoan(1000, 1000) as any; // owed - paid = 0
+
+      const leftover = await service.redirectLoanPaymentToGuarantor(loan, 500, 'actor-id', 'Actor');
+
+      expect(leftover).toBe(500);
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('does not mark recoveredAt when the loan still carries bad debt', async () => {
+      const loan = makeLoan(1000, 0, 500) as any; // badDebtAmount = 500
+
+      await service.redirectLoanPaymentToGuarantor(loan, 1000, 'actor-id', 'Actor');
+
+      expect(mockLoanFindByIdAndUpdate).toHaveBeenCalledWith(
+        loan._id,
+        { $inc: { guarantorRestitutionPaid: 1000 } },
+      );
+    });
+
+    it('does not mark recoveredAt when only partially restituted', async () => {
+      const loan = makeLoan(1000, 0) as any;
+
+      await service.redirectLoanPaymentToGuarantor(loan, 300, 'actor-id', 'Actor');
+
+      expect(mockLoanFindByIdAndUpdate).toHaveBeenCalledWith(
+        loan._id,
+        { $inc: { guarantorRestitutionPaid: 300 } },
+      );
+    });
+  });
+
   describe('bulkDeleteContributions', () => {
     it('deletes each contribution by id and reports the count', async () => {
       const c1 = { _id: 'c1', toObject: () => ({ id: 'c1' }) };

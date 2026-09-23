@@ -416,6 +416,9 @@ export class ContributionsService {
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
 
+    // Debit the payer's own contribution ledger for the portion being redirected —
+    // this payment came in as a contribution, so diverting it to the guarantor
+    // must remove it from the payer's contribution balance.
     await this.contributionModel.create({
       staffId,
       month,
@@ -430,36 +433,83 @@ export class ContributionsService {
       recordedBy: actorName,
     });
 
+    await this.creditGuarantorRestitution(restitutionLoan, redirectAmount, actorId, actorName, staffId);
+
+    return newPayment - redirectAmount;
+  }
+
+  /**
+   * Redirect part of a defaulter's DIRECT LOAN payment (not a contribution
+   * payment) to their guarantor's owed restitution, incrementally, instead
+   * of only compensating the guarantor once at loan settlement. Unlike
+   * redirectToGuarantorRestitution, there is no contribution-ledger debit
+   * side here — this money was never credited as the payer's own
+   * contribution, so there is nothing to remove from it.
+   *
+   * Returns whatever portion of amount was not redirected, for the caller
+   * to apply toward the loan's own instalment schedule.
+   */
+  async redirectLoanPaymentToGuarantor(
+    loan: LoanDocument,
+    amount: number,
+    actorId: string,
+    actorName: string,
+  ): Promise<number> {
+    const remainingOwed = (loan.guarantorRestitutionOwed ?? 0) - (loan.guarantorRestitutionPaid ?? 0);
+    if (remainingOwed <= 0) return amount;
+
+    const redirectAmount = Math.min(amount, remainingOwed);
+    if (redirectAmount <= 0) return amount;
+
+    await this.creditGuarantorRestitution(loan, redirectAmount, actorId, actorName, loan.staffId);
+
+    return amount - redirectAmount;
+  }
+
+  /**
+   * Records the guarantor-side credit for a restitution redirect and updates
+   * the loan's guarantorRestitutionPaid — shared by the contribution-payment
+   * redirect path (which pairs it with a debit against the payer's own
+   * contribution) and the direct-loan-payment redirect path (which does not).
+   */
+  private async creditGuarantorRestitution(
+    loan: LoanDocument,
+    redirectAmount: number,
+    actorId: string,
+    actorName: string,
+    borrowerStaffId: string,
+  ): Promise<void> {
+    const now = new Date();
+
     await this.contributionModel.create({
-      staffId: restitutionLoan.guarantorId,
-      month,
-      year,
+      staffId: loan.guarantorId,
+      month: now.getMonth() + 1,
+      year: now.getFullYear(),
       expectedAmount: 0,
       paidAmount: redirectAmount,
       surplusCarriedForward: 0,
       isDebit: false,
       status: ContributionStatus.Paid,
       source: ContributionSource.DefaulterRestitution,
-      loanId: restitutionLoan._id.toString(),
-      borrowerStaffId: staffId,
+      loanId: loan._id.toString(),
+      borrowerStaffId,
       recordedBy: actorName,
     });
 
+    const remainingOwed = (loan.guarantorRestitutionOwed ?? 0) - (loan.guarantorRestitutionPaid ?? 0);
     const guarantorFullyRestituted = redirectAmount >= remainingOwed;
-    const noBadDebtToRecover = (restitutionLoan.badDebtAmount ?? 0) <= 0;
+    const noBadDebtToRecover = (loan.badDebtAmount ?? 0) <= 0;
 
-    await this.loanModel.findByIdAndUpdate(restitutionLoan._id, {
+    await this.loanModel.findByIdAndUpdate(loan._id, {
       $inc: { guarantorRestitutionPaid: redirectAmount },
       ...(guarantorFullyRestituted && noBadDebtToRecover ? { $set: { recoveredAt: now } } : {}),
     }).exec();
 
     this.auditService.log(
       actorId, actorName, AuditAction.Update, AuditEntity.Loan,
-      restitutionLoan._id.toString(), undefined,
-      { redirectAmount, guarantorId: restitutionLoan.guarantorId, staffId },
+      loan._id.toString(), undefined,
+      { redirectAmount, guarantorId: loan.guarantorId, staffId: borrowerStaffId },
     );
-
-    return newPayment - redirectAmount;
   }
 
   /**
