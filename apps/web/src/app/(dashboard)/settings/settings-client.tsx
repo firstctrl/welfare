@@ -240,7 +240,7 @@ function ContributionsSection({ canEdit }: { canEdit: boolean }) {
 const LOAN_KEYS = [
   'LOAN_MIN_AMOUNT', 'LOAN_MAX_AMOUNT', 'INTEREST_RATE_SHORT',
   'INTEREST_RATE_LONG', 'ELIGIBILITY_MONTHS', 'LOAN_MAX_TENURE',
-  'MAX_LOANS_PER_STAFF',
+  'MAX_LOANS_PER_STAFF', 'GRACE_PERIOD_DAYS', 'END_OF_TENURE_GRACE_PERIOD_MONTHS',
 ] as const;
 
 type LoanFields = {
@@ -251,6 +251,8 @@ type LoanFields = {
   ELIGIBILITY_MONTHS: string;
   LOAN_MAX_TENURE: string;
   MAX_LOANS_PER_STAFF: string;
+  GRACE_PERIOD_DAYS: string;
+  END_OF_TENURE_GRACE_PERIOD_MONTHS: string;
 };
 
 function initLoan(cfg: ConfigMap): LoanFields {
@@ -262,6 +264,8 @@ function initLoan(cfg: ConfigMap): LoanFields {
     ELIGIBILITY_MONTHS:  cfg['ELIGIBILITY_MONTHS']?.value ?? '',
     LOAN_MAX_TENURE:     cfg['LOAN_MAX_TENURE']?.value ?? '',
     MAX_LOANS_PER_STAFF: cfg['MAX_LOANS_PER_STAFF']?.value ?? '1',
+    GRACE_PERIOD_DAYS:   cfg['GRACE_PERIOD_DAYS']?.value ?? '14',
+    END_OF_TENURE_GRACE_PERIOD_MONTHS: cfg['END_OF_TENURE_GRACE_PERIOD_MONTHS']?.value ?? '1',
   };
 }
 
@@ -289,6 +293,13 @@ function LoansSection({ cfg, onUpdate, onDirtyChange, canEdit }: { cfg: ConfigMa
     for (const k of numericKeys) {
       if (isNaN(parseFloat(fields[k])) || parseFloat(fields[k]) <= 0) {
         toast.error(`${k.replace(/_/g, ' ').toLowerCase()} must be greater than 0`);
+        return;
+      }
+    }
+    const nonNegativeKeys: (keyof LoanFields)[] = ['GRACE_PERIOD_DAYS', 'END_OF_TENURE_GRACE_PERIOD_MONTHS'];
+    for (const k of nonNegativeKeys) {
+      if (isNaN(parseInt(fields[k], 10)) || parseInt(fields[k], 10) < 0) {
+        toast.error(`${k.replace(/_/g, ' ').toLowerCase()} must be 0 or greater`);
         return;
       }
     }
@@ -338,6 +349,18 @@ function LoansSection({ cfg, onUpdate, onDirtyChange, canEdit }: { cfg: ConfigMa
         <Field label="Max Active Loans per Staff" helper="Staff at this limit are ineligible for new loans. Default: 1." required>
           <Input type="number" min={1} step={1} value={fields.MAX_LOANS_PER_STAFF} onChange={set('MAX_LOANS_PER_STAFF')} disabled={saving} />
         </Field>
+      </div>
+
+      <div className="border-t border-neutral-100 pt-4">
+        <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3">Default Grace Periods</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Instalment Grace Period" helper="Days past a due date before an instalment counts as overdue and default recovery kicks in. Set to 0 to disable.">
+            <Input type="number" min={0} step={1} value={fields.GRACE_PERIOD_DAYS} onChange={set('GRACE_PERIOD_DAYS')} disabled={saving} suffix="days" />
+          </Field>
+          <Field label="End-of-Tenure Grace Period" helper="Months after a loan's final instalment is due before it's marked defaulted.">
+            <Input type="number" min={0} step={1} value={fields.END_OF_TENURE_GRACE_PERIOD_MONTHS} onChange={set('END_OF_TENURE_GRACE_PERIOD_MONTHS')} disabled={saving} suffix="months" />
+          </Field>
+        </div>
       </div>
     </SectionCard>
   );
