@@ -8,7 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { Download, Send, CreditCard, Trash2, Ban, Banknote, History } from 'lucide-react';
-import { LoanStatus, LoanRepaymentStatus, StaffStatus, AppModule } from '@welfare/shared';
+import { LoanStatus, LoanRepaymentStatus, PaymentEntryType, StaffStatus, AppModule } from '@welfare/shared';
 import type { ILoanRepayment } from '@welfare/shared';
 import { getLoan, getLoanSchedule, getLoanDocumentUrl, recordPayment, exitSettle, getLoansByGuarantor, deleteLoan, writeOffLoan, getPayOffPreview, processPayOff } from '@/lib/loans';
 import { usePermission } from '@/hooks/use-permission';
@@ -538,14 +538,14 @@ export function LoanDetailClient({ id }: { id: string }) {
                 key={i}
                 className={cn(
                   'rounded-sm border px-3 py-2 text-sm',
-                  p.type === 'Reversal' ? 'border-danger-200 bg-danger-50' : 'border-neutral-200 bg-neutral-50',
+                  p.type === PaymentEntryType.Reversal ? 'border-danger-200 bg-danger-50' : 'border-neutral-200 bg-neutral-50',
                 )}
               >
                 <div className="flex items-center justify-between">
-                  <span className={cn('font-mono tabular font-semibold', p.type === 'Reversal' && 'text-danger-600')}>
-                    {p.type === 'Reversal' ? '−' : ''}{fmtGHS(Math.abs(p.amount))}
+                  <span className={cn('font-mono tabular font-semibold', p.type === PaymentEntryType.Reversal && 'text-danger-600')}>
+                    {p.type === PaymentEntryType.Reversal ? '−' : ''}{fmtGHS(Math.abs(p.amount))}
                   </span>
-                  <span className="text-xs text-neutral-500">{p.type === 'Reversal' ? 'Reversed' : 'Paid'} {fmtDate(p.paidDate)}</span>
+                  <span className="text-xs text-neutral-500">{p.type === PaymentEntryType.Reversal ? 'Reversed' : 'Paid'} {fmtDate(p.paidDate)}</span>
                 </div>
                 <div className="text-xs text-neutral-500 mt-1">
                   Recorded by <span className="font-medium text-neutral-700">{p.recordedByName}</span> on {fmtDateTime(p.recordedAt)}
