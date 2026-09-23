@@ -189,6 +189,7 @@ export class OverdueDetectionJob {
       status: 'Active',
       forfeitedAt: { $exists: false },
       disbursedDate: { $lte: sixMonthsAgo },
+      legacy: { $ne: true },
     }).exec();
 
     for (const loan of candidates) {

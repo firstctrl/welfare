@@ -171,4 +171,15 @@ describe('OverdueDetectionJob', () => {
     expect(inst.status).toBe(LoanRepaymentStatus.Overdue);
     expect(inst.save).toHaveBeenCalled();
   });
+
+  it('excludes legacy loans from the forfeiture candidate query', async () => {
+    repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+    configService.getAll.mockResolvedValue(mockConfig());
+
+    await job.detectAndProcess();
+
+    expect(loanModel.find).toHaveBeenCalledWith(
+      expect.objectContaining({ legacy: { $ne: true } }),
+    );
+  });
 });

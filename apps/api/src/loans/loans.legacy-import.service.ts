@@ -88,6 +88,13 @@ export class LoansLegacyImportService {
       instalmentsByRef.set(ref, list);
     }
 
+    const loanRefCounts = new Map<string, number>();
+    for (const row of loanRows) {
+      const ref = String(row['Loan Ref'] ?? '').trim();
+      if (!ref) continue;
+      loanRefCounts.set(ref, (loanRefCounts.get(ref) ?? 0) + 1);
+    }
+
     const batch = await this.batchModel.create({
       ...(jobId ? { _id: new Types.ObjectId(jobId) } : {}),
       fileName,
@@ -123,10 +130,12 @@ export class LoansLegacyImportService {
         const flag = (reason: string) =>
           flaggedEntries.push({
             loanRef, staffId: rawStaffId, guarantorId: rawGuarantorId,
-            principalAmount, disbursedDate: disbursedDateRaw, reason,
+            principalAmount: Number.isFinite(principalAmount) ? principalAmount : 0,
+            disbursedDate: disbursedDateRaw, reason,
           });
 
         if (!loanRef) { flag('Missing Loan Ref'); continue; }
+        if ((loanRefCounts.get(loanRef) ?? 0) > 1) { flag('Duplicate Loan Ref'); continue; }
         if (!rawStaffId) { flag('Missing Staff ID'); continue; }
         if (!rawGuarantorId) { flag('Missing Guarantor Staff ID'); continue; }
         if (!(principalAmount > 0)) { flag('Principal Amount must be > 0'); continue; }
@@ -139,6 +148,7 @@ export class LoansLegacyImportService {
         if (rows.length === 0) { flag('No instalment rows found for this Loan Ref'); continue; }
 
         const instalments: LegacyInstalmentInput[] = [];
+        const seenInstalmentNumbers = new Set<number>();
         let instalmentError: string | undefined;
         for (const instRow of rows) {
           const instalmentNumber = Number(instRow['Instalment Number'] ?? 0);
@@ -149,8 +159,11 @@ export class LoansLegacyImportService {
           const instStatus = String(instRow['Status'] ?? '').trim();
 
           if (!(instalmentNumber >= 1)) { instalmentError = `Instalment ${instalmentNumber}: Instalment Number must be >= 1`; break; }
+          if (seenInstalmentNumbers.has(instalmentNumber)) { instalmentError = `Instalment ${instalmentNumber}: duplicate Instalment Number`; break; }
+          seenInstalmentNumbers.add(instalmentNumber);
           if (!dueDateRaw || isNaN(new Date(dueDateRaw).getTime())) { instalmentError = `Instalment ${instalmentNumber}: missing or invalid Due Date`; break; }
           if (!(dueAmount > 0)) { instalmentError = `Instalment ${instalmentNumber}: Due Amount must be > 0`; break; }
+          if (!(Number.isFinite(paidAmount) && paidAmount >= 0)) { instalmentError = `Instalment ${instalmentNumber}: Paid Amount must be a number >= 0`; break; }
           if (!Object.values(LoanRepaymentStatus).includes(instStatus as LoanRepaymentStatus)) {
             instalmentError = `Instalment ${instalmentNumber}: invalid Status "${instStatus}"`; break;
           }
@@ -190,6 +203,17 @@ export class LoansLegacyImportService {
           created++;
         } catch (err: unknown) {
           flag(err instanceof Error ? err.message : 'Processing error');
+        }
+      }
+      const knownLoanRefs = new Set(
+        loanRows.map((r) => String(r['Loan Ref'] ?? '').trim()).filter(Boolean),
+      );
+      for (const ref of instalmentsByRef.keys()) {
+        if (!knownLoanRefs.has(ref)) {
+          flaggedEntries.push({
+            loanRef: ref, staffId: '', guarantorId: '', principalAmount: 0,
+            disbursedDate: '', reason: 'Instalment rows reference unknown Loan Ref',
+          });
         }
       }
     } finally {

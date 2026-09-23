@@ -135,6 +135,22 @@ describe('DefaultRecoveryJob', () => {
         expect.objectContaining({ $set: expect.objectContaining({ status: LoanStatus.Defaulted }) }),
       );
     });
+
+    it('does not flip pre-cutover rows to Overdue when marking a legacy loan Defaulted', async () => {
+      const loan = { ...makeLoan(), legacy: true, legacyCutoverDate: new Date('2026-01-01') };
+      repaymentModel.aggregate.mockReturnValue({ exec: jest.fn().mockResolvedValue([{ _id: 'loan-1', maxDueDate: pastDate, count: 1 }]) });
+      loanModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([loan]) });
+      repaymentModel.exists.mockReturnValue({ exec: jest.fn().mockResolvedValue({ _id: 'inst-2' }) });
+      loanModel.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+      repaymentModel.updateMany.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+
+      await job.detectAndMarkDefaulted();
+
+      expect(repaymentModel.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ dueDate: { $gte: loan.legacyCutoverDate } }),
+        { $set: { status: LoanRepaymentStatus.Overdue } },
+      );
+    });
   });
 
   describe('runGracePeriodRecovery (Cron 2)', () => {

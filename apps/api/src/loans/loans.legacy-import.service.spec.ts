@@ -110,4 +110,67 @@ describe('LoansLegacyImportService', () => {
     expect(mockLoansService.createForLegacyImport).not.toHaveBeenCalled();
     expect(result.flagged).toBe(1);
   });
+
+  it('flags the loan when two instalment rows share the same Instalment Number, and does not create it', async () => {
+    const duplicateInstalments = [
+      { 'Loan Ref': 'L1', 'Instalment Number': 1, 'Due Date': '05/01/2025', 'Due Amount': 3000, 'Paid Amount': 0, 'Status': 'Pending' },
+      { 'Loan Ref': 'L1', 'Instalment Number': 1, 'Due Date': '05/02/2025', 'Due Amount': 3000, 'Paid Amount': 0, 'Status': 'Pending' },
+    ];
+    const buffer = twoSheetBuffer([validLoanRow], duplicateInstalments);
+
+    const result = await service.processImport(buffer, 'legacy.xlsx', 'actor-1', 'Actor');
+
+    expect(mockLoansService.createForLegacyImport).not.toHaveBeenCalled();
+    expect(result.created).toBe(0);
+    expect(result.flagged).toBe(1);
+  });
+
+  it('flags the loan when an instalment row has a negative Paid Amount, and does not create it', async () => {
+    const badInstalments = [
+      { 'Loan Ref': 'L1', 'Instalment Number': 1, 'Due Date': '05/01/2025', 'Due Amount': 3000, 'Paid Amount': -50, 'Status': 'Pending' },
+    ];
+    const buffer = twoSheetBuffer([validLoanRow], badInstalments);
+
+    const result = await service.processImport(buffer, 'legacy.xlsx', 'actor-1', 'Actor');
+
+    expect(mockLoansService.createForLegacyImport).not.toHaveBeenCalled();
+    expect(result.created).toBe(0);
+    expect(result.flagged).toBe(1);
+  });
+
+  it('flags an instalment row whose Loan Ref matches no loan row, without dropping it silently', async () => {
+    const instalmentsWithOrphan = [
+      ...validInstalmentRows,
+      { 'Loan Ref': 'L2', 'Instalment Number': 1, 'Due Date': '05/01/2025', 'Due Amount': 1000, 'Paid Amount': 0, 'Status': 'Pending' },
+    ];
+    const buffer = twoSheetBuffer([validLoanRow], instalmentsWithOrphan);
+
+    const result = await service.processImport(buffer, 'legacy.xlsx', 'actor-1', 'Actor');
+
+    expect(result.created).toBe(1);
+    expect(result.flagged).toBe(1);
+    const flaggedArg = mockFindByIdAndUpdate.mock.calls[0][1].$set.flaggedEntries;
+    expect(flaggedArg[0]).toEqual(expect.objectContaining({ loanRef: 'L2' }));
+  });
+
+  it('flags both rows when two loan rows share the same Loan Ref, without creating either', async () => {
+    const buffer = twoSheetBuffer([validLoanRow, { ...validLoanRow }], validInstalmentRows);
+
+    const result = await service.processImport(buffer, 'legacy.xlsx', 'actor-1', 'Actor');
+
+    expect(mockLoansService.createForLegacyImport).not.toHaveBeenCalled();
+    expect(result.created).toBe(0);
+    expect(result.flagged).toBe(2);
+  });
+
+  it('stores a finite principalAmount in the flagged entry when Principal Amount is non-numeric', async () => {
+    const badLoanRow = { ...validLoanRow, 'Principal Amount': 'abc' };
+    const buffer = twoSheetBuffer([badLoanRow], validInstalmentRows);
+
+    await service.processImport(buffer, 'legacy.xlsx', 'actor-1', 'Actor');
+
+    const flaggedArg = mockFindByIdAndUpdate.mock.calls[0][1].$set.flaggedEntries;
+    expect(flaggedArg[0].principalAmount).toBe(0);
+    expect(Number.isFinite(flaggedArg[0].principalAmount)).toBe(true);
+  });
 });

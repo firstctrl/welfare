@@ -81,8 +81,15 @@ export class DefaultRecoveryJob {
           },
         }).exec();
 
+        const legacyFilter =
+          loan.legacy && loan.legacyCutoverDate ? { dueDate: { $gte: loan.legacyCutoverDate } } : {};
+
         await this.repaymentModel.updateMany(
-          { loanId: loan._id.toString(), status: { $in: [LoanRepaymentStatus.Pending, LoanRepaymentStatus.Partial] } },
+          {
+            loanId: loan._id.toString(),
+            status: { $in: [LoanRepaymentStatus.Pending, LoanRepaymentStatus.Partial] },
+            ...legacyFilter,
+          },
           { $set: { status: LoanRepaymentStatus.Overdue } },
         ).exec();
 

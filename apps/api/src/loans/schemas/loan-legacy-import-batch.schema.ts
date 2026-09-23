@@ -6,7 +6,7 @@ export type LoanLegacyImportBatchDocument = HydratedDocument<LoanLegacyImportBat
 
 @Schema({ _id: false })
 class LoanLegacyFlaggedEntry {
-  @Prop({ required: true }) loanRef!: string;
+  @Prop({ default: '' }) loanRef!: string;
   @Prop({ default: '' }) staffId!: string;
   @Prop({ default: '' }) guarantorId!: string;
   @Prop({ default: 0 }) principalAmount!: number;
