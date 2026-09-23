@@ -143,4 +143,32 @@ describe('OverdueDetectionJob', () => {
 
     global.Date = realNow;
   });
+
+  it('does not touch a legacy loan instalment dated before the cutover date', async () => {
+    const inst = makeInstalment('loan-1', new Date('2025-06-01'));
+    repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
+    loanModel.findById.mockReturnValue({
+      exec: jest.fn().mockResolvedValue({ ...makeLoan(), legacy: true, legacyCutoverDate: new Date('2026-01-01') }),
+    });
+    configService.getAll.mockResolvedValue(mockConfig());
+
+    await job.detectAndProcess();
+
+    expect(inst.status).toBe(LoanRepaymentStatus.Pending);
+    expect(inst.save).not.toHaveBeenCalled();
+  });
+
+  it('processes a legacy loan instalment dated after the cutover date normally', async () => {
+    const inst = makeInstalment('loan-1', new Date('2026-02-01'));
+    repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
+    loanModel.findById.mockReturnValue({
+      exec: jest.fn().mockResolvedValue({ ...makeLoan(), legacy: true, legacyCutoverDate: new Date('2026-01-01') }),
+    });
+    configService.getAll.mockResolvedValue(mockConfig());
+
+    await job.detectAndProcess();
+
+    expect(inst.status).toBe(LoanRepaymentStatus.Overdue);
+    expect(inst.save).toHaveBeenCalled();
+  });
 });

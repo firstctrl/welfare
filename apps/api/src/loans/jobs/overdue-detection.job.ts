@@ -76,6 +76,13 @@ export class OverdueDetectionJob {
     config: ConfigMap,
     today: Date,
   ): Promise<void> {
+    const loan = await this.loanModel.findById(inst.loanId).exec();
+    if (!loan) return;
+
+    if (loan.legacy && loan.legacyCutoverDate && inst.dueDate < loan.legacyCutoverDate) {
+      return;
+    }
+
     inst.status = LoanRepaymentStatus.Overdue;
     if (inst.penaltyAmount === 0) {
       inst.penaltyAmount = this.calculatePenalty(inst.dueAmount, config);
@@ -83,9 +90,6 @@ export class OverdueDetectionJob {
     await inst.save();
 
     if (!this.isGracePeriodExpired(inst.dueDate, today, config)) return;
-
-    const loan = await this.loanModel.findById(inst.loanId).exec();
-    if (!loan) return;
 
     const outstanding = round2(inst.dueAmount + inst.penaltyAmount - inst.paidAmount);
 
