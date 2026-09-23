@@ -51,6 +51,15 @@ const CSV_COLUMNS = {
     { header: 'Penalty (GHS)', field: 'penaltyAmount' },
     { header: 'Days Overdue', field: 'daysOverdue' },
   ],
+  stuckLegacyLoans: [
+    { header: 'Staff Name', field: 'staffName' },
+    { header: 'Staff No', field: 'staffNo' },
+    { header: 'Guarantor', field: 'guarantorName' },
+    { header: 'Principal (GHS)', field: 'principalAmount' },
+    { header: 'Outstanding (GHS)', field: 'outstandingBalance' },
+    { header: 'Cutover Date', field: 'legacyCutoverDate' },
+    { header: 'Disbursed', field: 'disbursedDate' },
+  ],
   badDebt: [
     { header: 'Staff Name', field: 'staffName' },
     { header: 'Status', field: 'status' },
@@ -334,6 +343,31 @@ export class ReportsController {
     }
     if (q.format === 'xlsx') {
       sendExcel(res, 'overdue-loans.xlsx', rows, CSV_COLUMNS.overdueLoans);
+      return;
+    }
+    return rows;
+  }
+
+  @Get('loans/stuck-legacy')
+  @RequirePermission(AppModule.Reports, 'readonly')
+  async getStuckLegacyLoans(
+    @Query() q: ReportQueryDto,
+    @Res({ passthrough: true }) res: Response,
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
+  ) {
+    const rows = await this.reportsService.getStuckLegacyLoans();
+    if (q.format === 'csv' || q.format === 'xlsx') {
+      await this.auditService.log(
+        user._id.toString(), user.displayName, AuditAction.Export, AuditEntity.Report,
+        'loans-stuck-legacy', undefined, { format: q.format },
+      );
+    }
+    if (q.format === 'csv') {
+      sendCsv(res, 'stuck-legacy-loans.csv', rows, CSV_COLUMNS.stuckLegacyLoans.map(c => c.field));
+      return;
+    }
+    if (q.format === 'xlsx') {
+      sendExcel(res, 'stuck-legacy-loans.xlsx', rows, CSV_COLUMNS.stuckLegacyLoans);
       return;
     }
     return rows;

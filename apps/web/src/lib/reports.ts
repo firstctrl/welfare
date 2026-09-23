@@ -5,6 +5,7 @@ import type {
   IGuarantorOffsetRow,
   IActiveLoanRow,
   IOverdueLoanRow,
+  IStuckLegacyLoanRow,
   IRepaidLoanRow,
   IGuarantorExposureRow,
   IBadDebtRow,
@@ -57,6 +58,11 @@ export async function getActiveLoans(): Promise<IActiveLoanRow[]> {
 
 export async function getOverdueLoans(): Promise<IOverdueLoanRow[]> {
   const { data } = await apiClient.get('/reports/loans/overdue');
+  return data;
+}
+
+export async function getStuckLegacyLoans(): Promise<IStuckLegacyLoanRow[]> {
+  const { data } = await apiClient.get('/reports/loans/stuck-legacy');
   return data;
 }
 

@@ -18,6 +18,7 @@ import {
   getGuarantorOffsets,
   getActiveLoans,
   getOverdueLoans,
+  getStuckLegacyLoans,
   getRepaidLoans,
   getGuarantorExposure,
   getBadDebt,
@@ -42,6 +43,7 @@ import type {
   IGuarantorOffsetRow,
   IActiveLoanRow,
   IOverdueLoanRow,
+  IStuckLegacyLoanRow,
   IRepaidLoanRow,
   IGuarantorExposureRow,
   IBadDebtRow,
@@ -106,6 +108,17 @@ const COLS_OVERDUE = [
   colOverdue.accessor('paidAmount', { header: 'Paid', cell: i => fmtGHS(i.getValue()) }),
   colOverdue.accessor('penaltyAmount', { header: 'Penalty', cell: i => fmtGHS(i.getValue()) }),
   colOverdue.accessor('daysOverdue', { header: 'Days Overdue' }),
+];
+
+const colStuckLegacy = createColumnHelper<IStuckLegacyLoanRow>();
+const COLS_STUCK_LEGACY = [
+  colStuckLegacy.accessor('staffName', { header: 'Staff Name' }),
+  colStuckLegacy.accessor('staffNo', { header: 'Staff No' }),
+  colStuckLegacy.accessor('guarantorName', { header: 'Guarantor' }),
+  colStuckLegacy.accessor('principalAmount', { header: 'Principal', cell: i => fmtGHS(i.getValue()) }),
+  colStuckLegacy.accessor('outstandingBalance', { header: 'Outstanding', cell: i => fmtGHS(i.getValue()) }),
+  colStuckLegacy.accessor('legacyCutoverDate', { header: 'Cutover Date', cell: i => fmtDate(new Date(i.getValue())) }),
+  colStuckLegacy.accessor('disbursedDate', { header: 'Disbursed', cell: i => fmtDate(new Date(i.getValue())) }),
 ];
 
 const colRepaid = createColumnHelper<IRepaidLoanRow>();
@@ -1414,6 +1427,7 @@ const SECTIONS = [
   { id: 'guarantor-offsets', label: 'Guarantor Offsets' },
   { id: 'active-loans', label: 'Active Loans' },
   { id: 'overdue-loans', label: 'Overdue Loans' },
+  { id: 'stuck-legacy-loans', label: 'Stuck Legacy Loans' },
   { id: 'repaid-loans', label: 'Repaid Loans' },
   { id: 'guarantor-exposure', label: 'Guarantor Exposure' },
   { id: 'bad-debt', label: 'Bad Debt' },
@@ -1486,6 +1500,14 @@ export function ReportsClient() {
                 queryFn={getOverdueLoans}
                 columns={COLS_OVERDUE}
                 downloadPath="loans/overdue"
+              />
+            )}
+            {active === 'stuck-legacy-loans' && (
+              <SimplePanel
+                queryKey="report-stuck-legacy-loans"
+                queryFn={getStuckLegacyLoans}
+                columns={COLS_STUCK_LEGACY}
+                downloadPath="loans/stuck-legacy"
               />
             )}
             {active === 'repaid-loans' && (
