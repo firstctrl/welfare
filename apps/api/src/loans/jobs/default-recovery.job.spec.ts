@@ -33,6 +33,7 @@ describe('DefaultRecoveryJob', () => {
       aggregate: jest.fn(),
       find: jest.fn(),
       updateMany: jest.fn(),
+      exists: jest.fn(),
     };
     configService = { getAll: jest.fn().mockResolvedValue(mockConfig()) };
     auditService = { log: jest.fn() };
@@ -107,6 +108,33 @@ describe('DefaultRecoveryJob', () => {
       const graceExpiry: Date = call[1].$set.endOfTenureGraceExpiry;
       expect(graceExpiry.getDate()).toBe(1);
     });
+
+    it('does not mark a legacy loan Defaulted when all remaining arrears are pre-cutover', async () => {
+      const loan = { ...makeLoan(), legacy: true, legacyCutoverDate: new Date('2026-01-01') };
+      repaymentModel.aggregate.mockReturnValue({ exec: jest.fn().mockResolvedValue([{ _id: 'loan-1', maxDueDate: pastDate, count: 1 }]) });
+      loanModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([loan]) });
+      repaymentModel.exists.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+
+      await job.detectAndMarkDefaulted();
+
+      expect(loanModel.findByIdAndUpdate).not.toHaveBeenCalled();
+    });
+
+    it('still marks a legacy loan Defaulted when post-cutover arrears also exist', async () => {
+      const loan = { ...makeLoan(), legacy: true, legacyCutoverDate: new Date('2026-01-01') };
+      repaymentModel.aggregate.mockReturnValue({ exec: jest.fn().mockResolvedValue([{ _id: 'loan-1', maxDueDate: pastDate, count: 1 }]) });
+      loanModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([loan]) });
+      repaymentModel.exists.mockReturnValue({ exec: jest.fn().mockResolvedValue({ _id: 'inst-2' }) });
+      loanModel.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+      repaymentModel.updateMany.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+
+      await job.detectAndMarkDefaulted();
+
+      expect(loanModel.findByIdAndUpdate).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ $set: expect.objectContaining({ status: LoanStatus.Defaulted }) }),
+      );
+    });
   });
 
   describe('runGracePeriodRecovery (Cron 2)', () => {
@@ -160,6 +188,23 @@ describe('DefaultRecoveryJob', () => {
           }),
         }),
       );
+    });
+
+    it("excludes pre-cutover instalments from a legacy loan's outstanding calculation", async () => {
+      const loan = { ...makeDefaultedLoan(), legacy: true, legacyCutoverDate: new Date('2026-01-01') };
+      const postCutoverInst = makeInstalment(5000);
+
+      loanModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([loan]) });
+      repaymentModel.find
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([postCutoverInst]) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([postCutoverInst]) });
+      loanModel.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+      contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 5000, remaining: 0 });
+
+      await job.runGracePeriodRecovery();
+
+      const [firstQueryFilter] = repaymentModel.find.mock.calls[0];
+      expect(firstQueryFilter.dueDate).toEqual({ $gte: loan.legacyCutoverDate });
     });
 
     it('records badDebtAmount when guarantor balance also insufficient', async () => {

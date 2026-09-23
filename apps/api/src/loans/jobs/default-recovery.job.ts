@@ -60,6 +60,17 @@ export class DefaultRecoveryJob {
 
     for (const loan of activeLoans) {
       try {
+        if (loan.legacy && loan.legacyCutoverDate) {
+          const hasPostCutoverArrears = await this.repaymentModel
+            .exists({
+              loanId: loan._id.toString(),
+              status: { $nin: [LoanRepaymentStatus.Paid, LoanRepaymentStatus.Waived] },
+              dueDate: { $gte: loan.legacyCutoverDate, $lt: today },
+            })
+            .exec();
+          if (!hasPostCutoverArrears) continue;
+        }
+
         const graceExpiry = new Date(today.getFullYear(), today.getMonth() + graceMonths + 1, 1);
 
         await this.loanModel.findByIdAndUpdate(loan._id, {
@@ -113,10 +124,13 @@ export class DefaultRecoveryJob {
 
   private async recoverDefaultedLoan(loan: LoanDocument, today: Date): Promise<void> {
     const loanId = loan._id.toString();
+    const legacyDateFilter =
+      loan.legacy && loan.legacyCutoverDate ? { dueDate: { $gte: loan.legacyCutoverDate } } : {};
 
     const unpaidInstalments = await this.repaymentModel.find({
       loanId,
       status: { $nin: [LoanRepaymentStatus.Paid, LoanRepaymentStatus.Waived] },
+      ...legacyDateFilter,
     }).exec();
 
     const outstanding = round2(
@@ -172,6 +186,7 @@ export class DefaultRecoveryJob {
       const stillUnpaidInsts = await this.repaymentModel.find({
         loanId,
         status: { $nin: [LoanRepaymentStatus.Paid, LoanRepaymentStatus.Waived] },
+        ...legacyDateFilter,
       }).exec();
       for (const inst of stillUnpaidInsts) {
         if (guarantorBudget <= 0) break;
