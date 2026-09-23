@@ -16,6 +16,7 @@ import {
   IGuarantorOffsetRow,
   IActiveLoanRow,
   IOverdueLoanRow,
+  IStuckLegacyLoanRow,
   IRepaidLoanRow,
   IGuarantorExposureRow,
   IBadDebtRow,
@@ -387,6 +388,53 @@ export class ReportsService {
       daysOverdue: Math.floor((now.getTime() - r.dueDate.getTime()) / (1000 * 60 * 60 * 24)),
       status: r.status,
     }));
+  }
+
+  async getStuckLegacyLoans(): Promise<IStuckLegacyLoanRow[]> {
+    const loans = await this.loanModel
+      .find({ legacy: true, status: LoanStatus.Active })
+      .sort({ disbursedDate: -1 })
+      .exec();
+    if (loans.length === 0) return [];
+
+    const staffIds = [...new Set([...loans.map(l => l.staffId), ...loans.map(l => l.guarantorId)])];
+    const staffDocs = await this.staffModel.find({ _id: { $in: staffIds } }).exec();
+    const staffMap = new Map(staffDocs.map(s => [s._id.toString(), s]));
+
+    const rows: IStuckLegacyLoanRow[] = [];
+    for (const loan of loans) {
+      if (!loan.legacyCutoverDate) continue;
+
+      const hasPostCutoverArrears = await this.repaymentModel
+        .exists({
+          loanId: loan._id.toString(),
+          status: { $nin: [LoanRepaymentStatus.Paid, LoanRepaymentStatus.Waived] },
+          dueDate: { $gte: loan.legacyCutoverDate },
+        })
+        .exec();
+      if (hasPostCutoverArrears) continue;
+
+      const unpaid = await this.repaymentModel
+        .find({ loanId: loan._id.toString(), status: { $nin: [LoanRepaymentStatus.Paid, LoanRepaymentStatus.Waived] } })
+        .exec();
+      const outstandingBalance =
+        Math.round(unpaid.reduce((s, r) => s + r.dueAmount + r.penaltyAmount - r.paidAmount, 0) * 100) / 100;
+      if (outstandingBalance <= 0) continue;
+
+      rows.push({
+        loanId: loan._id.toString(),
+        staffId: loan.staffId,
+        staffName: staffMap.get(loan.staffId)?.fullName ?? 'Unknown',
+        staffNo: staffMap.get(loan.staffId)?.staffId ?? '',
+        guarantorId: loan.guarantorId,
+        guarantorName: staffMap.get(loan.guarantorId)?.fullName ?? 'Unknown',
+        principalAmount: loan.principalAmount,
+        outstandingBalance,
+        legacyCutoverDate: loan.legacyCutoverDate.toISOString(),
+        disbursedDate: loan.disbursedDate.toISOString(),
+      });
+    }
+    return rows;
   }
 
   async getRepaidLoans(): Promise<IRepaidLoanRow[]> {

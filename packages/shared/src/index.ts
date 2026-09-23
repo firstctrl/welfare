@@ -73,6 +73,7 @@ export type {
   IFundSummaryLoanBreakdownRow,
   IFundSummaryClaims,
   IFundSummaryClaimsBreakdownRow,
+  IStuckLegacyLoanRow,
 } from './interfaces/report.interface';
 
 // DTOs

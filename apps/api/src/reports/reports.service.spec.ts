@@ -25,13 +25,14 @@ const mockLoanDistinct = jest.fn();
 const mockLoanFindById = jest.fn();
 const mockRepaymentFind = jest.fn();
 const mockRepaymentAggregate = jest.fn();
+const mockRepaymentExists = jest.fn();
 const mockStaffFind = jest.fn();
 const mockStaffFindById = jest.fn();
 const mockBatchFind = jest.fn();
 
 const mockContribModel = { aggregate: mockContribAggregate, find: mockContribFind };
 const mockLoanModel = { find: mockLoanFind, aggregate: mockLoanAggregate, distinct: mockLoanDistinct, findById: mockLoanFindById };
-const mockRepaymentModel = { find: mockRepaymentFind, aggregate: mockRepaymentAggregate };
+const mockRepaymentModel = { find: mockRepaymentFind, aggregate: mockRepaymentAggregate, exists: mockRepaymentExists };
 const mockStaffModel = { find: mockStaffFind, findById: mockStaffFindById };
 const mockBatchModel = { find: mockBatchFind };
 const mockDiscountAggregate = jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
@@ -234,6 +235,72 @@ describe('ReportsService', () => {
       const result = await service.getOverdueLoans();
       expect(result).toHaveLength(1);
       expect(result[0].daysOverdue).toBeGreaterThanOrEqual(10);
+    });
+  });
+
+  describe('getStuckLegacyLoans', () => {
+    const legacyLoan = (overrides: Record<string, unknown> = {}) => ({
+      _id: { toString: () => 'loan1' },
+      staffId: 'staff1',
+      guarantorId: 'staff2',
+      principalAmount: 5000,
+      legacy: true,
+      legacyCutoverDate: new Date('2026-01-01'),
+      disbursedDate: new Date('2024-01-01'),
+      status: LoanStatus.Active,
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      mockStaffFind.mockReturnValue({
+        exec: jest.fn().mockResolvedValue([
+          { _id: { toString: () => 'staff1' }, fullName: 'Alice', staffId: 'S001' },
+          { _id: { toString: () => 'staff2' }, fullName: 'Bob', staffId: 'S002' },
+        ]),
+      });
+    });
+
+    it('includes a legacy loan whose only unpaid arrears are pre-cutover', async () => {
+      mockLoanFind.mockReturnValue({ sort: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([legacyLoan()]) }) });
+      mockRepaymentExists.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+      mockRepaymentFind.mockReturnValue({
+        exec: jest.fn().mockResolvedValue([
+          { dueAmount: 500, penaltyAmount: 25, paidAmount: 0, dueDate: new Date('2025-06-05'), status: LoanRepaymentStatus.Pending },
+        ]),
+      });
+
+      const result = await service.getStuckLegacyLoans();
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual(expect.objectContaining({ loanId: 'loan1', outstandingBalance: 525 }));
+    });
+
+    it('excludes a legacy loan that also has post-cutover arrears (still handled by the recovery job)', async () => {
+      mockLoanFind.mockReturnValue({ sort: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([legacyLoan()]) }) });
+      mockRepaymentExists.mockReturnValue({ exec: jest.fn().mockResolvedValue({ _id: 'inst-2' }) });
+
+      const result = await service.getStuckLegacyLoans();
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('excludes a legacy loan with zero outstanding balance', async () => {
+      mockLoanFind.mockReturnValue({ sort: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([legacyLoan()]) }) });
+      mockRepaymentExists.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+      mockRepaymentFind.mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+
+      const result = await service.getStuckLegacyLoans();
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('never includes a non-legacy loan', async () => {
+      mockLoanFind.mockReturnValue({ sort: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }) });
+
+      const result = await service.getStuckLegacyLoans();
+
+      expect(mockLoanFind).toHaveBeenCalledWith(expect.objectContaining({ legacy: true }));
+      expect(result).toHaveLength(0);
     });
   });
 

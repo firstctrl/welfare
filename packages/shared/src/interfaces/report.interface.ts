@@ -72,6 +72,19 @@ export interface IOverdueLoanRow {
   status: LoanRepaymentStatus;
 }
 
+export interface IStuckLegacyLoanRow {
+  loanId: string;
+  staffId: string;
+  staffName: string;
+  staffNo: string;
+  guarantorId: string;
+  guarantorName: string;
+  principalAmount: number;
+  outstandingBalance: number;
+  legacyCutoverDate: string;
+  disbursedDate: string;
+}
+
 export interface IRepaidLoanRow {
   loanId: string;
   staffId: string;
