@@ -35,10 +35,10 @@ export class EmailController {
 
   @Post('contribution-statement/bulk')
   @RequirePermission(AppModule.EmailLog, 'full')
-  async bulkStatement(@CurrentUser() user: { sub: string; displayName: string }) {
+  async bulkStatement(@CurrentUser() user: { _id: { toString(): string }; displayName: string }) {
     await this.annualStatementJob.run();
     await this.auditService.log(
-      user.sub, user.displayName, AuditAction.GenerateStatement, AuditEntity.EmailLog,
+      user._id.toString(), user.displayName, AuditAction.GenerateStatement, AuditEntity.EmailLog,
       'contribution-statement-bulk', undefined, { triggeredBy: 'manual' },
     );
     return { message: 'Annual statement batch enqueued' };
@@ -49,7 +49,7 @@ export class EmailController {
   async sendContributionStatement(
     @Param('staffId') staffId: string,
     @Query('year') yearStr: string | undefined,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     const year = yearStr ? parseInt(yearStr, 10) : new Date().getFullYear();
     await this.emailService.sendContributionStatementForStaff(
@@ -58,7 +58,7 @@ export class EmailController {
       EmailTriggerSource.Manual,
     );
     await this.auditService.log(
-      user.sub, user.displayName, AuditAction.GenerateStatement, AuditEntity.Staff, staffId,
+      user._id.toString(), user.displayName, AuditAction.GenerateStatement, AuditEntity.Staff, staffId,
       undefined, { report: 'contribution-statement', year, triggeredBy: 'manual' },
     );
     return { message: 'Contribution statement sent' };
@@ -68,11 +68,11 @@ export class EmailController {
   @RequirePermission(AppModule.EmailLog, 'full')
   async sendLoanSchedule(
     @Param('loanId') loanId: string,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     await this.emailService.sendLoanScheduleById(loanId, EmailTriggerSource.Manual);
     await this.auditService.log(
-      user.sub, user.displayName, AuditAction.GenerateStatement, AuditEntity.Loan, loanId,
+      user._id.toString(), user.displayName, AuditAction.GenerateStatement, AuditEntity.Loan, loanId,
       undefined, { report: 'loan-schedule', triggeredBy: 'manual' },
     );
     return { message: 'Loan schedule sent' };

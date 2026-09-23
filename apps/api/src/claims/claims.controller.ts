@@ -30,11 +30,11 @@ export class ClaimsController {
   async importExcel(
     @UploadedFile() file: Express.Multer.File,
     @Body('jobId') jobId?: string,
-    @CurrentUser() user?: { sub: string; displayName: string },
+    @CurrentUser() user?: { _id: { toString(): string }; displayName: string },
   ) {
     if (!file) throw new Error('No file uploaded');
     return this.importService.processImport(
-      file.buffer, file.originalname, user?.sub ?? 'system', user?.displayName ?? 'system', jobId,
+      file.buffer, file.originalname, user?._id?.toString() ?? 'system', user?.displayName ?? 'system', jobId,
     );
   }
 
@@ -55,18 +55,18 @@ export class ClaimsController {
   resolveFlagged(
     @Param('batchId') batchId: string,
     @Body() dto: ResolveFlaggedDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.importService.resolveFlagged(batchId, dto.originalStaffId, dto.resolvedStaffMongoId, user.sub, user.displayName);
+    return this.importService.resolveFlagged(batchId, dto.originalStaffId, dto.resolvedStaffMongoId, user._id.toString(), user.displayName);
   }
 
   @Patch('import/resolve-by-staff-id')
   @RequirePermission(AppModule.Claims, 'full')
   resolveByStaffId(
     @Body() dto: ResolveByStaffIdDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.importService.resolveByStaffId(dto.originalStaffId, dto.resolvedStaffMongoId, user.sub, user.displayName);
+    return this.importService.resolveByStaffId(dto.originalStaffId, dto.resolvedStaffMongoId, user._id.toString(), user.displayName);
   }
 
   @Patch('import/:batchId/dismiss')
@@ -74,27 +74,27 @@ export class ClaimsController {
   dismissFlaggedEntry(
     @Param('batchId') batchId: string,
     @Body() dto: DismissFlaggedEntryDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.importService.dismissFlaggedEntry(batchId, dto.index, user.sub, user.displayName);
+    return this.importService.dismissFlaggedEntry(batchId, dto.index, user._id.toString(), user.displayName);
   }
 
   @Patch('import/:batchId/clear-flagged')
   @RequirePermission(AppModule.Claims, 'full')
   clearFlaggedEntries(
     @Param('batchId') batchId: string,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.importService.clearFlaggedEntries(batchId, user.sub, user.displayName);
+    return this.importService.clearFlaggedEntries(batchId, user._id.toString(), user.displayName);
   }
 
   @Post()
   @RequirePermission(AppModule.Claims, 'full')
   create(
     @Body() dto: CreateClaimDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.claimsService.createClaim(dto, user.sub, user.displayName);
+    return this.claimsService.createClaim(dto, user._id.toString(), user.displayName);
   }
 
   @Patch(':id')
@@ -102,18 +102,18 @@ export class ClaimsController {
   update(
     @Param('id') id: string,
     @Body() dto: UpdateClaimDto,
-    @CurrentUser() user: { sub: string; displayName: string; role: UserRole },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string; role: UserRole },
   ) {
-    return this.claimsService.updateClaim(id, dto, user.sub, user.displayName, user.role);
+    return this.claimsService.updateClaim(id, dto, user._id.toString(), user.displayName, user.role);
   }
 
   @Patch(':id/approve')
   @RequirePermission(AppModule.Claims, 'full')
   approve(
     @Param('id') id: string,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.claimsService.approveClaim(id, user.sub, user.displayName);
+    return this.claimsService.approveClaim(id, user._id.toString(), user.displayName);
   }
 
   @Patch(':id/reject')
@@ -121,9 +121,9 @@ export class ClaimsController {
   reject(
     @Param('id') id: string,
     @Body() dto: RejectClaimDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.claimsService.rejectClaim(id, dto.reason, user.sub, user.displayName);
+    return this.claimsService.rejectClaim(id, dto.reason, user._id.toString(), user.displayName);
   }
 
   @Get('staff/:staffId')
@@ -155,9 +155,9 @@ export class ClaimsController {
   @HttpCode(HttpStatus.OK)
   bulkDelete(
     @Body() dto: BulkDeleteClaimsDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.claimsService.bulkDeleteClaims(dto.ids, user.sub, user.displayName);
+    return this.claimsService.bulkDeleteClaims(dto.ids, user._id.toString(), user.displayName);
   }
 
   @Delete(':id')
@@ -165,8 +165,8 @@ export class ClaimsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   delete(
     @Param('id') id: string,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.claimsService.deleteClaim(id, user.sub, user.displayName);
+    return this.claimsService.deleteClaim(id, user._id.toString(), user.displayName);
   }
 }

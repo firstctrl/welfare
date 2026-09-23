@@ -43,9 +43,9 @@ export class StaffController {
   importStaff(
     @UploadedFile() file: Express.Multer.File,
     @Body('jobId') jobId: string | undefined,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.importService.processImport(file.buffer, file.originalname, user.sub, user.displayName, jobId);
+    return this.importService.processImport(file.buffer, file.originalname, user._id.toString(), user.displayName, jobId);
   }
 
   @Get('import')
@@ -68,28 +68,28 @@ export class StaffController {
   dismissFlaggedEntry(
     @Param('batchId') batchId: string,
     @Body() dto: DismissFlaggedEntryDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.importService.dismissFlaggedEntry(batchId, dto.index, user.sub, user.displayName);
+    return this.importService.dismissFlaggedEntry(batchId, dto.index, user._id.toString(), user.displayName);
   }
 
   @Patch('import/:batchId/clear-flagged')
   @RequirePermission(AppModule.Staff, 'full')
   clearFlaggedEntries(
     @Param('batchId') batchId: string,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.importService.clearFlaggedEntries(batchId, user.sub, user.displayName);
+    return this.importService.clearFlaggedEntries(batchId, user._id.toString(), user.displayName);
   }
 
   @Post()
   @RequirePermission(AppModule.Staff, 'full')
   create(
     @Body() dto: CreateStaffDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
     @Req() req: Request,
   ) {
-    return this.staffService.create(dto, user.sub, user.displayName, req.ip);
+    return this.staffService.create(dto, user._id.toString(), user.displayName, req.ip);
   }
 
   @Get()
@@ -103,9 +103,9 @@ export class StaffController {
   @HttpCode(HttpStatus.OK)
   bulkDelete(
     @Body() dto: BulkDeleteDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.staffService.bulkDeleteStaff(dto.ids, user.sub, user.displayName);
+    return this.staffService.bulkDeleteStaff(dto.ids, user._id.toString(), user.displayName);
   }
 
   @Get(':id')
@@ -119,10 +119,10 @@ export class StaffController {
   update(
     @Param('id') id: string,
     @Body() dto: UpdateStaffDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
     @Req() req: Request,
   ) {
-    return this.staffService.update(id, dto, user.sub, user.displayName, req.ip);
+    return this.staffService.update(id, dto, user._id.toString(), user.displayName, req.ip);
   }
 
   @Patch(':id/status')
@@ -130,10 +130,10 @@ export class StaffController {
   changeStatus(
     @Param('id') id: string,
     @Body() dto: ChangeStatusDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
     @Req() req: Request,
   ) {
-    return this.staffService.changeStatus(id, dto, user.sub, user.displayName, req.ip);
+    return this.staffService.changeStatus(id, dto, user._id.toString(), user.displayName, req.ip);
   }
 
   @Patch(':id/status/correct')
@@ -142,10 +142,10 @@ export class StaffController {
   correctStatus(
     @Param('id') id: string,
     @Body() dto: CorrectStatusDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
     @Req() req: Request,
   ) {
-    return this.staffService.correctStatus(id, dto, user.sub, user.displayName, req.ip);
+    return this.staffService.correctStatus(id, dto, user._id.toString(), user.displayName, req.ip);
   }
 
   @Post(':id/photo')

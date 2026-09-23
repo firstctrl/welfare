@@ -40,9 +40,9 @@ export class LoansController {
   @RequirePermission(AppModule.Loans, 'full')
   create(
     @Body() dto: CreateLoanDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.loansService.create(dto, user.sub, user.displayName);
+    return this.loansService.create(dto, user._id.toString(), user.displayName);
   }
 
   @Get('bad-debt')
@@ -82,9 +82,9 @@ export class LoansController {
   importRepayments(
     @UploadedFile() file: Express.Multer.File,
     @Body('jobId') jobId: string | undefined,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.importService.processImport(file.buffer, file.originalname, user.sub, user.displayName, jobId);
+    return this.importService.processImport(file.buffer, file.originalname, user._id.toString(), user.displayName, jobId);
   }
 
   @Get('import')
@@ -107,13 +107,13 @@ export class LoansController {
   resolveFlagged(
     @Param('batchId') batchId: string,
     @Body() dto: { rowNumber: number; resolvedLoanId: string },
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     return this.importService.resolveFlagged(
       batchId,
       dto.rowNumber,
       dto.resolvedLoanId,
-      user.sub,
+      user._id.toString(),
       user.displayName,
     );
   }
@@ -122,10 +122,10 @@ export class LoansController {
   @RequirePermission(AppModule.Loans, 'full')
   resolveLoanByStaffId(
     @Body() dto: ResolveLoanByStaffIdDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     return this.importService.resolveByStaffId(
-      dto.originalStaffId, dto.resolvedLoanId, user.sub, user.displayName,
+      dto.originalStaffId, dto.resolvedLoanId, user._id.toString(), user.displayName,
     );
   }
 
@@ -134,18 +134,18 @@ export class LoansController {
   dismissFlaggedEntry(
     @Param('batchId') batchId: string,
     @Body() dto: DismissFlaggedEntryDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.importService.dismissFlaggedEntry(batchId, dto.index, user.sub, user.displayName);
+    return this.importService.dismissFlaggedEntry(batchId, dto.index, user._id.toString(), user.displayName);
   }
 
   @Patch('import/:batchId/clear-flagged')
   @RequirePermission(AppModule.Loans, 'full')
   clearFlaggedEntries(
     @Param('batchId') batchId: string,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.importService.clearFlaggedEntries(batchId, user.sub, user.displayName);
+    return this.importService.clearFlaggedEntries(batchId, user._id.toString(), user.displayName);
   }
 
   // ── loan records import routes ──
@@ -156,9 +156,9 @@ export class LoansController {
   importLoanRecords(
     @UploadedFile() file: Express.Multer.File,
     @Body('jobId') jobId: string | undefined,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.recordsImportService.processImport(file.buffer, file.originalname, user.sub, user.displayName, jobId);
+    return this.recordsImportService.processImport(file.buffer, file.originalname, user._id.toString(), user.displayName, jobId);
   }
 
   @Get('records-import')
@@ -181,18 +181,18 @@ export class LoansController {
   dismissLoanRecordsFlaggedEntry(
     @Param('batchId') batchId: string,
     @Body() dto: DismissFlaggedEntryDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.recordsImportService.dismissFlaggedEntry(batchId, dto.index, user.sub, user.displayName);
+    return this.recordsImportService.dismissFlaggedEntry(batchId, dto.index, user._id.toString(), user.displayName);
   }
 
   @Patch('records-import/:batchId/clear-flagged')
   @RequirePermission(AppModule.Loans, 'full')
   clearLoanRecordsFlaggedEntries(
     @Param('batchId') batchId: string,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.recordsImportService.clearFlaggedEntries(batchId, user.sub, user.displayName);
+    return this.recordsImportService.clearFlaggedEntries(batchId, user._id.toString(), user.displayName);
   }
 
   @Delete('bulk')
@@ -200,9 +200,9 @@ export class LoansController {
   @HttpCode(HttpStatus.OK)
   bulkDelete(
     @Body() dto: BulkDeleteDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.loansService.bulkDeleteLoans(dto.ids, user.sub, user.displayName);
+    return this.loansService.bulkDeleteLoans(dto.ids, user._id.toString(), user.displayName);
   }
 
   // ── param routes ──
@@ -231,9 +231,9 @@ export class LoansController {
   uploadDocument(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.loansService.uploadDocument(id, file, user.sub, user.displayName);
+    return this.loansService.uploadDocument(id, file, user._id.toString(), user.displayName);
   }
 
   @Post(':id/repayments')
@@ -241,9 +241,9 @@ export class LoansController {
   recordPayment(
     @Param('id') id: string,
     @Body() dto: RecordPaymentDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.loansService.recordPayment(id, dto, user.sub, user.displayName);
+    return this.loansService.recordPayment(id, dto, user._id.toString(), user.displayName);
   }
 
   @Get(':id/payoff-preview')
@@ -257,18 +257,18 @@ export class LoansController {
   processPayOff(
     @Param('id') id: string,
     @Body() dto: ProcessPayOffDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.loansService.processPayOff(id, dto, user.sub, user.displayName);
+    return this.loansService.processPayOff(id, dto, user._id.toString(), user.displayName);
   }
 
   @Patch(':id/write-off')
   @RequirePermission(AppModule.Loans, 'full')
   writeOff(
     @Param('id') id: string,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.loansService.writeOff(id, user.sub, user.displayName);
+    return this.loansService.writeOff(id, user._id.toString(), user.displayName);
   }
 
   @Post(':id/settle-exit')
@@ -276,9 +276,9 @@ export class LoansController {
   exitSettle(
     @Param('id') id: string,
     @Body() dto: ExitSettlementDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.loansService.exitSettle(id, dto, user.sub, user.displayName);
+    return this.loansService.exitSettle(id, dto, user._id.toString(), user.displayName);
   }
 
   @Delete(':id/repayments/:repaymentId')
@@ -287,9 +287,9 @@ export class LoansController {
   deleteRepayment(
     @Param('id') id: string,
     @Param('repaymentId') repaymentId: string,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.loansService.deleteRepayment(id, repaymentId, user.sub, user.displayName);
+    return this.loansService.deleteRepayment(id, repaymentId, user._id.toString(), user.displayName);
   }
 
   @Delete(':id')
@@ -297,8 +297,8 @@ export class LoansController {
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteLoan(
     @Param('id') id: string,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.loansService.deleteLoan(id, user.sub, user.displayName);
+    return this.loansService.deleteLoan(id, user._id.toString(), user.displayName);
   }
 }

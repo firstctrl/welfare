@@ -133,13 +133,13 @@ export class ReportsController {
   async getStaffStatementPdf(
     @Query('staffId') staffId: string,
     @Res() res: Response,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     if (!staffId) throw new BadRequestException('staffId is required');
     const { staff } = await this.reportsService.getStaffContributionStatement(staffId);
     const pdf = await this.reportsService.generateStatementPdf(staffId);
     await this.auditService.log(
-      user.sub, user.displayName, AuditAction.Download, AuditEntity.Staff, staffId,
+      user._id.toString(), user.displayName, AuditAction.Download, AuditEntity.Staff, staffId,
       undefined, { report: 'contribution-statement', format: 'pdf' },
     );
     res.setHeader('Content-Type', 'application/pdf');
@@ -151,7 +151,7 @@ export class ReportsController {
   @RequirePermission(AppModule.Reports, 'full')
   async sendStaffStatement(
     @Body('staffId') staffId: string,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     if (!staffId) throw new BadRequestException('staffId is required');
     const { staff } = await this.reportsService.getStaffContributionStatement(staffId);
@@ -165,7 +165,7 @@ export class ReportsController {
       EmailTriggerSource.Manual,
     );
     await this.auditService.log(
-      user.sub, user.displayName, AuditAction.GenerateStatement, AuditEntity.Staff, staffId,
+      user._id.toString(), user.displayName, AuditAction.GenerateStatement, AuditEntity.Staff, staffId,
       undefined, { report: 'contribution-statement', email: staff.email, triggeredBy: 'manual' },
     );
     return { sent: true, email: staff.email };
@@ -176,7 +176,7 @@ export class ReportsController {
   async getMonthlyContributions(
     @Query() q: ReportQueryDto,
     @Res({ passthrough: true }) res: Response,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     const now = new Date();
     const month = q.month ?? now.getMonth() + 1;
@@ -185,7 +185,7 @@ export class ReportsController {
 
     if (q.format === 'csv' || q.format === 'xlsx' || q.format === 'pdf') {
       await this.auditService.log(
-        user.sub, user.displayName, q.format === 'pdf' ? AuditAction.Download : AuditAction.Export,
+        user._id.toString(), user.displayName, q.format === 'pdf' ? AuditAction.Download : AuditAction.Export,
         AuditEntity.Report, 'contributions-monthly', undefined, { month, year, format: q.format },
       );
     }
@@ -216,7 +216,7 @@ export class ReportsController {
   async getArrears(
     @Query() q: ReportQueryDto,
     @Res({ passthrough: true }) res: Response,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     const now = new Date();
     const fromMonth = q.fromMonth ?? 1;
@@ -227,7 +227,7 @@ export class ReportsController {
 
     if (q.format === 'csv' || q.format === 'xlsx' || q.format === 'pdf') {
       await this.auditService.log(
-        user.sub, user.displayName, q.format === 'pdf' ? AuditAction.Download : AuditAction.Export,
+        user._id.toString(), user.displayName, q.format === 'pdf' ? AuditAction.Download : AuditAction.Export,
         AuditEntity.Report, 'contributions-arrears', undefined, { fromMonth, fromYear, toMonth, toYear, format: q.format },
       );
     }
@@ -254,7 +254,7 @@ export class ReportsController {
   async getGuarantorOffsets(
     @Query() q: ReportQueryDto,
     @Res({ passthrough: true }) res: Response,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     const rows = await this.reportsService.getGuarantorOffsets();
     const columns: ExportColumn[] = [
@@ -267,7 +267,7 @@ export class ReportsController {
     ];
     if (q.format === 'csv' || q.format === 'xlsx') {
       await this.auditService.log(
-        user.sub, user.displayName, AuditAction.Export, AuditEntity.Report,
+        user._id.toString(), user.displayName, AuditAction.Export, AuditEntity.Report,
         'loans-guarantor-offsets', undefined, { format: q.format },
       );
     }
@@ -287,12 +287,12 @@ export class ReportsController {
   async getActiveLoans(
     @Query() q: ReportQueryDto,
     @Res({ passthrough: true }) res: Response,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     const rows = await this.reportsService.getActiveLoans();
     if (q.format === 'csv' || q.format === 'xlsx' || q.format === 'pdf') {
       await this.auditService.log(
-        user.sub, user.displayName, q.format === 'pdf' ? AuditAction.Download : AuditAction.Export,
+        user._id.toString(), user.displayName, q.format === 'pdf' ? AuditAction.Download : AuditAction.Export,
         AuditEntity.Report, 'loans-active', undefined, { format: q.format },
       );
     }
@@ -319,12 +319,12 @@ export class ReportsController {
   async getOverdueLoans(
     @Query() q: ReportQueryDto,
     @Res({ passthrough: true }) res: Response,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     const rows = await this.reportsService.getOverdueLoans();
     if (q.format === 'csv' || q.format === 'xlsx') {
       await this.auditService.log(
-        user.sub, user.displayName, AuditAction.Export, AuditEntity.Report,
+        user._id.toString(), user.displayName, AuditAction.Export, AuditEntity.Report,
         'loans-overdue', undefined, { format: q.format },
       );
     }
@@ -344,7 +344,7 @@ export class ReportsController {
   async getRepaidLoans(
     @Query() q: ReportQueryDto,
     @Res({ passthrough: true }) res: Response,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     const rows = await this.reportsService.getRepaidLoans();
     const columns: ExportColumn[] = [
@@ -357,7 +357,7 @@ export class ReportsController {
     ];
     if (q.format === 'csv' || q.format === 'xlsx') {
       await this.auditService.log(
-        user.sub, user.displayName, AuditAction.Export, AuditEntity.Report,
+        user._id.toString(), user.displayName, AuditAction.Export, AuditEntity.Report,
         'loans-repaid', undefined, { format: q.format },
       );
     }
@@ -383,12 +383,12 @@ export class ReportsController {
   async getBadDebt(
     @Query() q: ReportQueryDto,
     @Res({ passthrough: true }) res: Response,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     const rows = await this.reportsService.getBadDebt();
     if (q.format === 'csv' || q.format === 'xlsx') {
       await this.auditService.log(
-        user.sub, user.displayName, AuditAction.Export, AuditEntity.Report,
+        user._id.toString(), user.displayName, AuditAction.Export, AuditEntity.Report,
         'loans-bad-debt', undefined, { format: q.format },
       );
     }
@@ -408,12 +408,12 @@ export class ReportsController {
   async getRecoveryActivity(
     @Query() q: ReportQueryDto,
     @Res({ passthrough: true }) res: Response,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     const rows = await this.reportsService.getRecoveryActivity();
     if (q.format === 'csv' || q.format === 'xlsx') {
       await this.auditService.log(
-        user.sub, user.displayName, AuditAction.Export, AuditEntity.Report,
+        user._id.toString(), user.displayName, AuditAction.Export, AuditEntity.Report,
         'loans-recovery-activity', undefined, { format: q.format },
       );
     }
@@ -451,14 +451,14 @@ export class ReportsController {
     @Query('staffId') staffId: string,
     @Query('loanId') loanId: string,
     @Res() res: Response,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     if (!staffId) throw new BadRequestException('staffId is required');
     if (!loanId) throw new BadRequestException('loanId is required');
     const { staff, loan } = await this.reportsService.getLoanStatement(staffId, loanId);
     const pdf = await this.reportsService.generateLoanStatementPdf(staffId, loanId);
     await this.auditService.log(
-      user.sub, user.displayName, AuditAction.Download, AuditEntity.Staff, staffId,
+      user._id.toString(), user.displayName, AuditAction.Download, AuditEntity.Staff, staffId,
       undefined, { report: 'loan-statement', loanId, format: 'pdf' },
     );
     res.setHeader('Content-Type', 'application/pdf');
@@ -474,7 +474,7 @@ export class ReportsController {
   async sendLoanStatement(
     @Body('staffId') staffId: string,
     @Body('loanId') loanId: string,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     if (!staffId) throw new BadRequestException('staffId is required');
     if (!loanId) throw new BadRequestException('loanId is required');
@@ -490,7 +490,7 @@ export class ReportsController {
       EmailTriggerSource.Manual,
     );
     await this.auditService.log(
-      user.sub, user.displayName, AuditAction.GenerateStatement, AuditEntity.Staff, staffId,
+      user._id.toString(), user.displayName, AuditAction.GenerateStatement, AuditEntity.Staff, staffId,
       undefined, { report: 'loan-statement', loanId, email: staffDoc.email, triggeredBy: 'manual' },
     );
     return { sent: true, email: staffDoc.email };
@@ -502,7 +502,7 @@ export class ReportsController {
     @Body('year') year: number,
     @Body('sendTo') sendTo: 'all' | 'selected',
     @Body('staffIds') staffIds?: string[],
-    @CurrentUser() user?: { sub: string; displayName: string },
+    @CurrentUser() user?: { _id: { toString(): string }; displayName: string },
   ) {
     if (!year) throw new BadRequestException('year is required');
 
@@ -523,7 +523,7 @@ export class ReportsController {
 
     const job = await this.bulkQueue.add('bulk-send', { staffIds: ids, year, triggeredBy: 'manual' });
     await this.auditService.log(
-      user?.sub ?? 'unknown',
+      user?._id?.toString() ?? 'unknown',
       user?.displayName ?? 'unknown',
       AuditAction.GenerateStatement,
       AuditEntity.EmailLog,
@@ -549,7 +549,7 @@ export class ReportsController {
   async getFundSummaryContributions(
     @Query() dto: FundSummaryQueryDto,
     @Res({ passthrough: true }) res: Response,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     const quarterMap: Record<number, [number, number]> = { 1: [1,3], 2: [4,6], 3: [7,9], 4: [10,12] };
     let fromMonth = dto.fromMonth ?? 1;
@@ -558,7 +558,7 @@ export class ReportsController {
     const summary = await this.reportsService.getFundSummary(dto.year, fromMonth, toMonth);
     if (dto.format === 'csv' || dto.format === 'xlsx') {
       await this.auditService.log(
-        user.sub, user.displayName, AuditAction.Export, AuditEntity.Report,
+        user._id.toString(), user.displayName, AuditAction.Export, AuditEntity.Report,
         'fund-summary-contributions', undefined, { year: dto.year, format: dto.format },
       );
     }
@@ -578,7 +578,7 @@ export class ReportsController {
   async getFundSummaryLoans(
     @Query() dto: FundSummaryQueryDto,
     @Res({ passthrough: true }) res: Response,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     const quarterMap: Record<number, [number, number]> = { 1: [1,3], 2: [4,6], 3: [7,9], 4: [10,12] };
     let fromMonth = dto.fromMonth ?? 1;
@@ -587,7 +587,7 @@ export class ReportsController {
     const summary = await this.reportsService.getFundSummary(dto.year, fromMonth, toMonth);
     if (dto.format === 'csv' || dto.format === 'xlsx' || dto.format === 'pdf') {
       await this.auditService.log(
-        user.sub, user.displayName, dto.format === 'pdf' ? AuditAction.Download : AuditAction.Export,
+        user._id.toString(), user.displayName, dto.format === 'pdf' ? AuditAction.Download : AuditAction.Export,
         AuditEntity.Report, 'fund-summary-loans', undefined, { year: dto.year, format: dto.format },
       );
     }
@@ -614,7 +614,7 @@ export class ReportsController {
   async getFundSummaryClaims(
     @Query() dto: FundSummaryQueryDto,
     @Res({ passthrough: true }) res: Response,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     const quarterMap: Record<number, [number, number]> = { 1: [1,3], 2: [4,6], 3: [7,9], 4: [10,12] };
     let fromMonth = dto.fromMonth ?? 1;
@@ -623,7 +623,7 @@ export class ReportsController {
     const summary = await this.reportsService.getFundSummary(dto.year, fromMonth, toMonth);
     if (dto.format === 'csv' || dto.format === 'xlsx' || dto.format === 'pdf') {
       await this.auditService.log(
-        user.sub, user.displayName, dto.format === 'pdf' ? AuditAction.Download : AuditAction.Export,
+        user._id.toString(), user.displayName, dto.format === 'pdf' ? AuditAction.Download : AuditAction.Export,
         AuditEntity.Report, 'fund-summary-claims', undefined, { year: dto.year, format: dto.format },
       );
     }
@@ -650,7 +650,7 @@ export class ReportsController {
   async getFundSummaryDefaults(
     @Query() dto: FundSummaryQueryDto,
     @Res({ passthrough: true }) res: Response,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     const quarterMap: Record<number, [number, number]> = { 1: [1,3], 2: [4,6], 3: [7,9], 4: [10,12] };
     let fromMonth = dto.fromMonth ?? 1;
@@ -659,7 +659,7 @@ export class ReportsController {
     const summary = await this.reportsService.getFundSummary(dto.year, fromMonth, toMonth);
     if (dto.format === 'csv' || dto.format === 'xlsx' || dto.format === 'pdf') {
       await this.auditService.log(
-        user.sub, user.displayName, dto.format === 'pdf' ? AuditAction.Download : AuditAction.Export,
+        user._id.toString(), user.displayName, dto.format === 'pdf' ? AuditAction.Download : AuditAction.Export,
         AuditEntity.Report, 'fund-summary-defaults', undefined, { year: dto.year, format: dto.format },
       );
     }
@@ -705,14 +705,14 @@ export class ReportsController {
   async getStaffRecordPdf(
     @Query('staffId') staffId: string,
     @Res() res: Response,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     if (!staffId) throw new BadRequestException('staffId is required');
     const pdf = await this.reportsService.generateStaffRecordPdf(staffId);
     const staffDoc = await this.staffModel.findById(staffId).exec();
     const filename = `staff-record-${staffDoc?.staffId ?? staffId}.pdf`;
     await this.auditService.log(
-      user.sub, user.displayName, AuditAction.Download, AuditEntity.Staff, staffId,
+      user._id.toString(), user.displayName, AuditAction.Download, AuditEntity.Staff, staffId,
       undefined, { report: 'staff-record', format: 'pdf' },
     );
     res.setHeader('Content-Type', 'application/pdf');
@@ -725,12 +725,12 @@ export class ReportsController {
   async getExitClearance(
     @Query() q: ReportQueryDto,
     @Res({ passthrough: true }) res: Response,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     const rows = await this.reportsService.getExitClearanceReport();
     if (q.format === 'csv' || q.format === 'xlsx' || q.format === 'pdf') {
       await this.auditService.log(
-        user.sub, user.displayName, q.format === 'pdf' ? AuditAction.Download : AuditAction.Export,
+        user._id.toString(), user.displayName, q.format === 'pdf' ? AuditAction.Download : AuditAction.Export,
         AuditEntity.Report, 'staff-exit-clearance', undefined, { format: q.format },
       );
     }

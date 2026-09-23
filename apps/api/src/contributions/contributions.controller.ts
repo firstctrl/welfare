@@ -33,7 +33,7 @@ export class ContributionsController {
     @Body('month') month?: string,
     @Body('year') year?: string,
     @Body('jobId') jobId?: string,
-    @CurrentUser() user?: { sub: string; displayName: string },
+    @CurrentUser() user?: { _id: { toString(): string }; displayName: string },
   ) {
     if (!file) throw new Error('No file uploaded');
     return this.importService.processImport(
@@ -41,7 +41,7 @@ export class ContributionsController {
       file.originalname,
       month ? parseInt(month, 10) : undefined,
       year ? parseInt(year, 10) : undefined,
-      user?.sub ?? 'system',
+      user?._id?.toString() ?? 'system',
       user?.displayName ?? 'system',
       jobId,
     );
@@ -67,10 +67,10 @@ export class ContributionsController {
   resolveFlagged(
     @Param('batchId') batchId: string,
     @Body() dto: ResolveFlaggedDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     return this.importService.resolveFlagged(
-      batchId, dto.originalStaffId, dto.resolvedStaffMongoId, user.sub, user.displayName,
+      batchId, dto.originalStaffId, dto.resolvedStaffMongoId, user._id.toString(), user.displayName,
     );
   }
 
@@ -78,10 +78,10 @@ export class ContributionsController {
   @RequirePermission(AppModule.Contributions, 'full')
   resolveByStaffId(
     @Body() dto: ResolveByStaffIdDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     return this.importService.resolveByStaffId(
-      dto.originalStaffId, dto.resolvedStaffMongoId, user.sub, user.displayName,
+      dto.originalStaffId, dto.resolvedStaffMongoId, user._id.toString(), user.displayName,
     );
   }
 
@@ -90,18 +90,18 @@ export class ContributionsController {
   dismissFlaggedEntry(
     @Param('batchId') batchId: string,
     @Body() dto: DismissFlaggedEntryDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.importService.dismissFlaggedEntry(batchId, dto.index, user.sub, user.displayName);
+    return this.importService.dismissFlaggedEntry(batchId, dto.index, user._id.toString(), user.displayName);
   }
 
   @Patch('import/:batchId/clear-flagged')
   @RequirePermission(AppModule.Contributions, 'full')
   clearFlaggedEntries(
     @Param('batchId') batchId: string,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.importService.clearFlaggedEntries(batchId, user.sub, user.displayName);
+    return this.importService.clearFlaggedEntries(batchId, user._id.toString(), user.displayName);
   }
 
   @Get('rates')
@@ -114,9 +114,9 @@ export class ContributionsController {
   @RequirePermission(AppModule.Settings, 'full')
   createRate(
     @Body() dto: CreateContributionRateDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.ratesService.create(dto, user.sub, user.displayName);
+    return this.ratesService.create(dto, user._id.toString(), user.displayName);
   }
 
   @Delete('rates/:id')
@@ -124,19 +124,19 @@ export class ContributionsController {
   @RequirePermission(AppModule.Settings, 'full')
   async deleteRate(
     @Param('id') id: string,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    await this.ratesService.delete(id, user.sub, user.displayName);
+    await this.ratesService.delete(id, user._id.toString(), user.displayName);
   }
 
   @Post('manual')
   @RequirePermission(AppModule.Contributions, 'full')
   manualEntry(
     @Body() dto: ManualEntryDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
     return this.contributionsService.processLumpSum(
-      dto.staffId, dto.amount, dto.month, dto.year, user.sub, user.displayName,
+      dto.staffId, dto.amount, dto.month, dto.year, user._id.toString(), user.displayName,
     );
   }
 
@@ -163,9 +163,9 @@ export class ContributionsController {
   @HttpCode(HttpStatus.OK)
   bulkDelete(
     @Body() dto: BulkDeleteDto,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.contributionsService.bulkDeleteContributions(dto.ids, user.sub, user.displayName);
+    return this.contributionsService.bulkDeleteContributions(dto.ids, user._id.toString(), user.displayName);
   }
 
   @Delete(':id')
@@ -173,8 +173,8 @@ export class ContributionsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   delete(
     @Param('id') id: string,
-    @CurrentUser() user: { sub: string; displayName: string },
+    @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.contributionsService.deleteContribution(id, user.sub, user.displayName);
+    return this.contributionsService.deleteContribution(id, user._id.toString(), user.displayName);
   }
 }

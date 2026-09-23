@@ -31,19 +31,19 @@ describe('ClaimsController', () => {
 
   it('create() delegates to claimsService.createClaim with actor identity', async () => {
     const dto = { staffId: 'staff-1', claimType: 'Marriage' as any, month: 1, year: 2026, amount: 500 };
-    const user = { sub: 'actor-1', displayName: 'Actor' };
+    const user = { _id: { toString: () => 'actor-1' }, displayName: 'Actor' };
     await controller.create(dto, user);
     expect(mockClaimsService.createClaim).toHaveBeenCalledWith(dto, 'actor-1', 'Actor');
   });
 
   it('approve() delegates to claimsService.approveClaim', async () => {
-    const user = { sub: 'actor-1', displayName: 'Actor' };
+    const user = { _id: { toString: () => 'actor-1' }, displayName: 'Actor' };
     await controller.approve('claim-1', user);
     expect(mockClaimsService.approveClaim).toHaveBeenCalledWith('claim-1', 'actor-1', 'Actor');
   });
 
   it('reject() delegates to claimsService.rejectClaim with the reason', async () => {
-    const user = { sub: 'actor-1', displayName: 'Actor' };
+    const user = { _id: { toString: () => 'actor-1' }, displayName: 'Actor' };
     await controller.reject('claim-1', { reason: 'Not eligible' }, user);
     expect(mockClaimsService.rejectClaim).toHaveBeenCalledWith('claim-1', 'Not eligible', 'actor-1', 'Actor');
   });
