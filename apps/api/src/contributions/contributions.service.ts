@@ -412,16 +412,20 @@ export class ContributionsService {
     const redirectAmount = Math.min(newPayment, remainingOwed);
     if (redirectAmount <= 0) return newPayment;
 
-    const now = new Date();
-    const month = now.getMonth() + 1;
-    const year = now.getFullYear();
+    const claimed = await this.creditGuarantorRestitution(restitutionLoan, redirectAmount, actorId, actorName, staffId);
+    if (claimed <= 0) return newPayment;
 
+    const now = new Date();
+
+    // Debit the payer's own contribution ledger for the portion actually claimed —
+    // this payment came in as a contribution, so diverting it to the guarantor
+    // must remove it from the payer's contribution balance.
     await this.contributionModel.create({
       staffId,
-      month,
-      year,
+      month: now.getMonth() + 1,
+      year: now.getFullYear(),
       expectedAmount: 0,
-      paidAmount: redirectAmount,
+      paidAmount: claimed,
       surplusCarriedForward: 0,
       isDebit: true,
       status: ContributionStatus.Paid,
@@ -430,36 +434,97 @@ export class ContributionsService {
       recordedBy: actorName,
     });
 
+    return newPayment - claimed;
+  }
+
+  /**
+   * Redirect part of a defaulter's DIRECT LOAN payment (not a contribution
+   * payment) to their guarantor's owed restitution, incrementally, instead
+   * of only compensating the guarantor once at loan settlement. Unlike
+   * redirectToGuarantorRestitution, there is no contribution-ledger debit
+   * side here — this money was never credited as the payer's own
+   * contribution, so there is nothing to remove from it.
+   *
+   * Returns whatever portion of amount was not redirected, for the caller
+   * to apply toward the loan's own instalment schedule.
+   */
+  async redirectLoanPaymentToGuarantor(
+    loan: LoanDocument,
+    amount: number,
+    actorId: string,
+    actorName: string,
+  ): Promise<number> {
+    const remainingOwed = (loan.guarantorRestitutionOwed ?? 0) - (loan.guarantorRestitutionPaid ?? 0);
+    if (remainingOwed <= 0) return amount;
+
+    const redirectAmount = Math.min(amount, remainingOwed);
+    if (redirectAmount <= 0) return amount;
+
+    const claimed = await this.creditGuarantorRestitution(loan, redirectAmount, actorId, actorName, loan.staffId);
+
+    return amount - claimed;
+  }
+
+  /**
+   * Atomically claims up to `redirectAmount` of a loan's remaining guarantor
+   * restitution and, if claimed, credits the guarantor for it. Atomic because
+   * this has two concurrent entry points — a contribution payment landing at
+   * the same moment as a direct loan payment, or two of either — and a plain
+   * read-then-$inc would let both see the same remainingOwed and double-credit
+   * the guarantor. On a lost race (another redirect claimed it first, or the
+   * owed amount dropped between the caller's read and this call) this claims
+   * nothing and returns 0; the shortfall is still owed and redirects on the
+   * next payment. Returns the amount actually claimed (0 or redirectAmount).
+   */
+  private async creditGuarantorRestitution(
+    loan: LoanDocument,
+    redirectAmount: number,
+    actorId: string,
+    actorName: string,
+    borrowerStaffId: string,
+  ): Promise<number> {
+    const claimed = await this.loanModel.findOneAndUpdate(
+      {
+        _id: loan._id,
+        $expr: { $gte: [{ $subtract: ['$guarantorRestitutionOwed', '$guarantorRestitutionPaid'] }, redirectAmount] },
+      },
+      { $inc: { guarantorRestitutionPaid: redirectAmount } },
+      { new: true },
+    ).exec();
+
+    if (!claimed) return 0;
+
+    const now = new Date();
+
     await this.contributionModel.create({
-      staffId: restitutionLoan.guarantorId,
-      month,
-      year,
+      staffId: claimed.guarantorId,
+      month: now.getMonth() + 1,
+      year: now.getFullYear(),
       expectedAmount: 0,
       paidAmount: redirectAmount,
       surplusCarriedForward: 0,
       isDebit: false,
       status: ContributionStatus.Paid,
       source: ContributionSource.DefaulterRestitution,
-      loanId: restitutionLoan._id.toString(),
-      borrowerStaffId: staffId,
+      loanId: claimed._id.toString(),
+      borrowerStaffId,
       recordedBy: actorName,
     });
 
-    const guarantorFullyRestituted = redirectAmount >= remainingOwed;
-    const noBadDebtToRecover = (restitutionLoan.badDebtAmount ?? 0) <= 0;
+    const guarantorFullyRestituted = (claimed.guarantorRestitutionOwed ?? 0) <= (claimed.guarantorRestitutionPaid ?? 0);
+    const noBadDebtToRecover = (claimed.badDebtAmount ?? 0) <= 0;
 
-    await this.loanModel.findByIdAndUpdate(restitutionLoan._id, {
-      $inc: { guarantorRestitutionPaid: redirectAmount },
-      ...(guarantorFullyRestituted && noBadDebtToRecover ? { $set: { recoveredAt: now } } : {}),
-    }).exec();
+    if (guarantorFullyRestituted && noBadDebtToRecover) {
+      await this.loanModel.updateOne({ _id: loan._id }, { $set: { recoveredAt: now } }).exec();
+    }
 
     this.auditService.log(
       actorId, actorName, AuditAction.Update, AuditEntity.Loan,
-      restitutionLoan._id.toString(), undefined,
-      { redirectAmount, guarantorId: restitutionLoan.guarantorId, staffId },
+      claimed._id.toString(), undefined,
+      { redirectAmount, guarantorId: claimed.guarantorId, staffId: borrowerStaffId },
     );
 
-    return newPayment - redirectAmount;
+    return redirectAmount;
   }
 
   /**
