@@ -35,6 +35,8 @@ export class Loan {
   @Prop() forfeitedAt?: Date;
   @Prop() payOffDate?: Date;
   @Prop({ min: 0, default: 0 }) payOffAmountReceived?: number;
+  @Prop({ default: false }) legacy?: boolean;
+  @Prop() legacyCutoverDate?: Date;
 }
 
 export const LoanSchema = SchemaFactory.createForClass(Loan);

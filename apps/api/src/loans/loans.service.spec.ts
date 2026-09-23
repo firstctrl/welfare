@@ -216,6 +216,86 @@ describe('LoansService', () => {
     });
   });
 
+  describe('createForLegacyImport', () => {
+    const instalments = [
+      {
+        instalmentNumber: 1,
+        dueDate: new Date('2025-01-05'),
+        dueAmount: 3000,
+        paidAmount: 3000,
+        paidDate: new Date('2025-01-04'),
+        status: LoanRepaymentStatus.Paid,
+      },
+      {
+        instalmentNumber: 2,
+        dueDate: new Date('2025-02-05'),
+        dueAmount: 3000,
+        paidAmount: 0,
+        status: LoanRepaymentStatus.Pending,
+      },
+    ];
+    const dto = {
+      principalAmount: 5000,
+      tenureMonths: 2,
+      disbursedDate: '2024-12-15',
+      status: LoanStatus.Active,
+      cutoverDate: '2026-01-01',
+      guarantorRestitutionOwed: 800,
+      guarantorRestitutionPaid: 200,
+      chequeNo: 'CHQ-L1',
+      pvNo: 'PV-L1',
+    };
+
+    it('creates a legacy loan with the legacy flag, cutover date, and restitution figures set directly from input', async () => {
+      loanModel.create.mockResolvedValue({ _id: { toString: () => 'loan-legacy-1' } });
+      repaymentModel.insertMany.mockResolvedValue([]);
+
+      await service.createForLegacyImport('staff-1', 'guarantor-1', dto, instalments, 'actor-1', 'Actor');
+
+      expect(loanModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          staffId: 'staff-1',
+          guarantorId: 'guarantor-1',
+          legacy: true,
+          legacyCutoverDate: new Date('2026-01-01'),
+          guarantorRestitutionOwed: 800,
+          guarantorRestitutionPaid: 200,
+          status: LoanStatus.Active,
+          totalRepayable: 6000,
+          monthlyInstalment: 3000,
+        }),
+      );
+    });
+
+    it('inserts instalments exactly as given, trusting status/paidAmount/dueDate rather than recomputing a schedule', async () => {
+      loanModel.create.mockResolvedValue({ _id: { toString: () => 'loan-legacy-1' } });
+      repaymentModel.insertMany.mockResolvedValue([]);
+
+      await service.createForLegacyImport('staff-1', 'guarantor-1', dto, instalments, 'actor-1', 'Actor');
+
+      const inserted = repaymentModel.insertMany.mock.calls[0][0];
+      expect(inserted).toHaveLength(2);
+      expect(inserted[0]).toEqual(
+        expect.objectContaining({
+          loanId: 'loan-legacy-1',
+          instalmentNumber: 1,
+          dueAmount: 3000,
+          paidAmount: 3000,
+          status: LoanRepaymentStatus.Paid,
+          source: RepaymentSource.Import,
+        }),
+      );
+      expect(inserted[1]).toEqual(
+        expect.objectContaining({
+          instalmentNumber: 2,
+          paidAmount: 0,
+          status: LoanRepaymentStatus.Pending,
+          source: undefined,
+        }),
+      );
+    });
+  });
+
   describe('recordPayment', () => {
     const loanId = 'loan-id';
     const dto: RecordPaymentDto = { amount: 3500, paidDate: '2026-04-10', notes: undefined };

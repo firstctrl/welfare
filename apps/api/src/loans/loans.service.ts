@@ -40,6 +40,15 @@ import { LoanScheduleSenderService } from './loan-schedule-sender.service';
 
 type ConfigMap = Record<string, { value: string }>;
 
+export interface LegacyInstalmentInput {
+  instalmentNumber: number;
+  dueDate: Date;
+  dueAmount: number;
+  paidAmount: number;
+  paidDate?: Date;
+  status: LoanRepaymentStatus;
+}
+
 const LOAN_DOCS_BUCKET = 'loan-docs';
 const LOAN_DOC_PRESIGN_TTL = 15 * 60;
 const ALLOWED_DOC_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
@@ -336,6 +345,83 @@ export class LoansService implements OnModuleInit {
       loanId,
       undefined,
       { principalAmount: dto.principalAmount, tenureMonths: dto.tenureMonths },
+    );
+
+    return loan;
+  }
+
+  async createForLegacyImport(
+    staffMongoId: string,
+    guarantorMongoId: string,
+    dto: {
+      principalAmount: number;
+      tenureMonths: number;
+      disbursedDate: string;
+      status: LoanStatus;
+      cutoverDate: string;
+      guarantorRestitutionOwed: number;
+      guarantorRestitutionPaid: number;
+      chequeNo?: string;
+      pvNo?: string;
+      notes?: string;
+    },
+    instalments: LegacyInstalmentInput[],
+    actorId: string,
+    actorName: string,
+  ): Promise<LoanDocument> {
+    const disbursedDate = new Date(dto.disbursedDate);
+    const totalRepayable = round2(instalments.reduce((sum, i) => sum + i.dueAmount, 0));
+    const monthlyInstalment = round2(totalRepayable / dto.tenureMonths);
+    const interestRate = round2(((totalRepayable - dto.principalAmount) / dto.principalAmount) * 100);
+
+    const loan = await this.loanModel.create({
+      staffId: staffMongoId,
+      guarantorId: guarantorMongoId,
+      principalAmount: dto.principalAmount,
+      interestRate,
+      totalRepayable,
+      monthlyInstalment,
+      tenureMonths: dto.tenureMonths,
+      disbursedDate,
+      chequeNo: dto.chequeNo,
+      pvNo: dto.pvNo,
+      notes: dto.notes,
+      status: dto.status,
+      legacy: true,
+      legacyCutoverDate: new Date(dto.cutoverDate),
+      guarantorRestitutionOwed: dto.guarantorRestitutionOwed,
+      guarantorRestitutionPaid: dto.guarantorRestitutionPaid,
+      recordedBy: actorName,
+    });
+
+    const loanId = loan._id.toString();
+    const schedule = instalments.map((i) => ({
+      loanId,
+      staffId: staffMongoId,
+      instalmentNumber: i.instalmentNumber,
+      dueDate: i.dueDate,
+      dueAmount: i.dueAmount,
+      paidAmount: i.paidAmount,
+      penaltyAmount: 0,
+      status: i.status,
+      paidDate: i.paidDate,
+      source: i.paidAmount > 0 ? RepaymentSource.Import : undefined,
+    }));
+    await this.repaymentModel.insertMany(schedule);
+
+    this.auditService.log(
+      actorId,
+      actorName,
+      AuditAction.Import,
+      AuditEntity.Loan,
+      loanId,
+      undefined,
+      {
+        principalAmount: dto.principalAmount,
+        tenureMonths: dto.tenureMonths,
+        legacy: true,
+        instalments: instalments.length,
+      },
     );
 
     return loan;
