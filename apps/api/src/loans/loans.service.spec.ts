@@ -10,7 +10,7 @@ import { SystemConfigService } from '../system-config/system-config.service';
 import { AuditService } from '../audit/audit.service';
 import { ContributionsService } from '../contributions/contributions.service';
 import { MINIO_CLIENT } from '../storage/minio.module';
-import { LoanStatus, LoanRepaymentStatus, RepaymentSource, StaffStatus } from '@welfare/shared';
+import { AuditAction, AuditEntity, LoanStatus, LoanRepaymentStatus, RepaymentSource, StaffStatus } from '@welfare/shared';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { ExitSettlementDto } from './dto/exit-settlement.dto';
 import { LoanScheduleSenderService } from './loan-schedule-sender.service';
@@ -489,6 +489,54 @@ describe('LoansService', () => {
       expect(inst.status).toBe(LoanRepaymentStatus.Paid);
       expect(contributionsService.settleGuarantorRestitution).toHaveBeenCalledWith(loanId, 'actor', 'Actor');
       expect(callOrder).toEqual(['redirect', 'settle']);
+    });
+
+    it('does not redirect imported payments — only direct borrower payments trigger the redirect', async () => {
+      const loan = makeLoan(1000, 0);
+      const inst = makeInstalment(3500);
+
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      repaymentModel.find
+        .mockReturnValueOnce({ sort: () => ({ exec: jest.fn().mockResolvedValue([inst]) }) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
+      configService.getAll.mockResolvedValue(mockConfig());
+
+      await service.recordPaymentInternal(
+        loanId,
+        { amount: 3500, paidDate: '2026-04-10' },
+        RepaymentSource.Import,
+        'actor',
+        'Actor',
+      );
+
+      expect(contributionsService.redirectLoanPaymentToGuarantor).not.toHaveBeenCalled();
+      expect(inst.paidAmount).toBe(3500);
+      expect(inst.status).toBe(LoanRepaymentStatus.Paid);
+    });
+
+    it('records how much of the payment was redirected to the guarantor in the audit log', async () => {
+      const loan = makeLoan(1000, 0);
+      const inst = makeInstalment(3500);
+      const dto: RecordPaymentDto = { amount: 3500, paidDate: '2026-04-10' };
+
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      repaymentModel.find
+        .mockReturnValueOnce({ sort: () => ({ exec: jest.fn().mockResolvedValue([inst]) }) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
+      configService.getAll.mockResolvedValue(mockConfig());
+      contributionsService.redirectLoanPaymentToGuarantor.mockResolvedValue(2500); // 1000 redirected
+
+      await service.recordPayment(loanId, dto, 'actor', 'Actor');
+
+      expect(auditService.log).toHaveBeenCalledWith(
+        'actor',
+        'Actor',
+        AuditAction.RecordPayment,
+        AuditEntity.Loan,
+        loanId,
+        undefined,
+        { amount: 3500, paidDate: '2026-04-10', source: RepaymentSource.DirectPayment, redirectedToGuarantor: 1000 },
+      );
     });
   });
 

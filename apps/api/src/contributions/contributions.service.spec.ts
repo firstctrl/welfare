@@ -31,10 +31,25 @@ const mockContributionModel = {
 
 const mockLoanFindOne = jest.fn();
 const mockLoanFindByIdAndUpdate = jest.fn();
+const mockLoanFindOneAndUpdate = jest.fn();
+const mockLoanUpdateOne = jest.fn();
 const mockLoanModel = {
   findOne: mockLoanFindOne,
   findByIdAndUpdate: mockLoanFindByIdAndUpdate,
+  findOneAndUpdate: mockLoanFindOneAndUpdate,
+  updateOne: mockLoanUpdateOne,
 };
+
+// Simulates the atomic guarantor-restitution claim (loanModel.findOneAndUpdate)
+// succeeding: the resolved doc reflects guarantorRestitutionPaid after the $inc.
+function stubGuarantorClaimSucceeds(loan: Record<string, unknown>, redirectAmount: number) {
+  mockLoanFindOneAndUpdate.mockReturnValue({
+    exec: jest.fn().mockResolvedValue({
+      ...loan,
+      guarantorRestitutionPaid: ((loan.guarantorRestitutionPaid as number) ?? 0) + redirectAmount,
+    }),
+  });
+}
 
 const mockRatesService = { getRateFor: jest.fn().mockResolvedValue(3000) };
 
@@ -60,6 +75,8 @@ describe('ContributionsService', () => {
     mockCreate.mockResolvedValue(undefined);
     mockLoanFindOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
     mockLoanFindByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+    mockLoanFindOneAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+    mockLoanUpdateOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
     mockRatesService.getRateFor.mockResolvedValue(3000);
   });
 
@@ -262,9 +279,9 @@ describe('ContributionsService', () => {
     });
 
     it('creates debit+credit entries and increments guarantorRestitutionPaid when restitution is active', async () => {
-      mockLoanFindOne.mockReturnValue({
-        exec: jest.fn().mockResolvedValue(makeRestitutionLoan(5000, 0)),
-      });
+      const loan = makeRestitutionLoan(5000, 0);
+      mockLoanFindOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      stubGuarantorClaimSucceeds(loan, 3000);
 
       await service.processPayment('staff-1', 1, 2026, 3000, ContributionSource.ManualEntry, 'actor-id', 'Actor');
 
@@ -275,61 +292,82 @@ describe('ContributionsService', () => {
       expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({ staffId: 'guarantor-1', isDebit: false, source: ContributionSource.DefaulterRestitution, paidAmount: 3000, loanId: 'loan-1', borrowerStaffId: 'staff-1' }),
       );
-      expect(mockLoanFindByIdAndUpdate).toHaveBeenCalledWith(
-        expect.anything(),
+      expect(mockLoanFindOneAndUpdate).toHaveBeenCalledWith(
+        {
+          _id: loan._id,
+          $expr: { $gte: [{ $subtract: ['$guarantorRestitutionOwed', '$guarantorRestitutionPaid'] }, 3000] },
+        },
         { $inc: { guarantorRestitutionPaid: 3000 } },
+        { new: true },
       );
     });
 
     it('marks recoveredAt when guarantor restitution is fully paid and there is no bad debt', async () => {
-      mockLoanFindOne.mockReturnValue({
-        exec: jest.fn().mockResolvedValue({ ...makeRestitutionLoan(640, 0), badDebtAmount: 0 }),
-      });
+      const loan = { ...makeRestitutionLoan(640, 0), badDebtAmount: 0 };
+      mockLoanFindOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      stubGuarantorClaimSucceeds(loan, 640);
 
       await service.processPayment('staff-1', 1, 2026, 640, ContributionSource.ManualEntry, 'actor-id', 'Actor');
 
-      expect(mockLoanFindByIdAndUpdate).toHaveBeenCalledWith(
-        expect.anything(),
-        { $inc: { guarantorRestitutionPaid: 640 }, $set: { recoveredAt: expect.any(Date) } },
+      expect(mockLoanUpdateOne).toHaveBeenCalledWith(
+        { _id: loan._id },
+        { $set: { recoveredAt: expect.any(Date) } },
       );
     });
 
     it('does not mark recoveredAt when guarantor restitution is only partially paid', async () => {
-      mockLoanFindOne.mockReturnValue({
-        exec: jest.fn().mockResolvedValue({ ...makeRestitutionLoan(640, 0), badDebtAmount: 0 }),
-      });
+      const loan = { ...makeRestitutionLoan(640, 0), badDebtAmount: 0 };
+      mockLoanFindOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      stubGuarantorClaimSucceeds(loan, 200);
 
       await service.processPayment('staff-1', 1, 2026, 200, ContributionSource.ManualEntry, 'actor-id', 'Actor');
 
-      expect(mockLoanFindByIdAndUpdate).toHaveBeenCalledWith(
+      expect(mockLoanFindOneAndUpdate).toHaveBeenCalledWith(
         expect.anything(),
         { $inc: { guarantorRestitutionPaid: 200 } },
+        { new: true },
       );
+      expect(mockLoanUpdateOne).not.toHaveBeenCalled();
     });
 
     it('does not mark recoveredAt on guarantor payoff when the loan still carries bad debt', async () => {
-      mockLoanFindOne.mockReturnValue({
-        exec: jest.fn().mockResolvedValue({ ...makeRestitutionLoan(640, 0), badDebtAmount: 500 }),
-      });
+      const loan = { ...makeRestitutionLoan(640, 0), badDebtAmount: 500 };
+      mockLoanFindOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      stubGuarantorClaimSucceeds(loan, 640);
 
       await service.processPayment('staff-1', 1, 2026, 640, ContributionSource.ManualEntry, 'actor-id', 'Actor');
 
-      expect(mockLoanFindByIdAndUpdate).toHaveBeenCalledWith(
+      expect(mockLoanFindOneAndUpdate).toHaveBeenCalledWith(
         expect.anything(),
         { $inc: { guarantorRestitutionPaid: 640 } },
+        { new: true },
       );
+      expect(mockLoanUpdateOne).not.toHaveBeenCalled();
     });
 
     it('caps redirect at remaining restitution owed', async () => {
-      mockLoanFindOne.mockReturnValue({
-        exec: jest.fn().mockResolvedValue(makeRestitutionLoan(5000, 4500)),
-      });
+      const loan = makeRestitutionLoan(5000, 4500);
+      mockLoanFindOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      stubGuarantorClaimSucceeds(loan, 500);
 
       await service.processPayment('staff-1', 1, 2026, 3000, ContributionSource.ManualEntry, 'actor-id', 'Actor');
 
       expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({ paidAmount: 500 }),
       );
+    });
+
+    it('does not credit the guarantor or debit the payer when the atomic claim loses a race', async () => {
+      const loan = makeRestitutionLoan(5000, 0);
+      mockLoanFindOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      mockLoanFindOneAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) }); // another redirect claimed it first
+
+      await service.processPayment('staff-1', 1, 2026, 3000, ContributionSource.ManualEntry, 'actor-id', 'Actor');
+
+      expect(mockCreate).not.toHaveBeenCalledWith(
+        expect.objectContaining({ source: ContributionSource.DefaulterRestitution }),
+      );
+      expect(mockLoanUpdateOne).not.toHaveBeenCalled();
     });
 
     it('skips redirect when no active restitution loan', async () => {
@@ -395,9 +433,11 @@ describe('ContributionsService', () => {
     });
 
     it('only redirects the leftover after guarantor restitution consumes part of the payment', async () => {
+      const restitutionLoan = makeRestitutionLoan(1000, 0);
       mockLoanFindOne
-        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(makeRestitutionLoan(1000, 0)) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(restitutionLoan) })
         .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(makeBadDebtLoan(4000, 0)) });
+      stubGuarantorClaimSucceeds(restitutionLoan, 1000);
 
       await service.processPayment('staff-1', 1, 2026, 3000, ContributionSource.ManualEntry, 'actor-id', 'Actor');
 
@@ -413,7 +453,9 @@ describe('ContributionsService', () => {
     });
 
     it('does not query bad debt recovery when guarantor restitution consumes the entire payment', async () => {
-      mockLoanFindOne.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(makeRestitutionLoan(5000, 0)) });
+      const restitutionLoan = makeRestitutionLoan(5000, 0);
+      mockLoanFindOne.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(restitutionLoan) });
+      stubGuarantorClaimSucceeds(restitutionLoan, 3000);
 
       await service.processPayment('staff-1', 1, 2026, 3000, ContributionSource.ManualEntry, 'actor-id', 'Actor');
 
@@ -432,11 +474,13 @@ describe('ContributionsService', () => {
     });
 
     beforeEach(() => {
-      mockLoanFindByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+      mockLoanFindOneAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+      mockLoanUpdateOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
     });
 
     it('credits the guarantor and returns the leftover when the payment exceeds what is owed', async () => {
       const loan = makeLoan(1000, 0) as any;
+      stubGuarantorClaimSucceeds(loan, 1000);
 
       const leftover = await service.redirectLoanPaymentToGuarantor(loan, 3500, 'actor-id', 'Actor');
 
@@ -452,22 +496,31 @@ describe('ContributionsService', () => {
           borrowerStaffId: 'staff-1',
         }),
       );
-      expect(mockLoanFindByIdAndUpdate).toHaveBeenCalledWith(
-        loan._id,
-        { $inc: { guarantorRestitutionPaid: 1000 }, $set: { recoveredAt: expect.any(Date) } },
+      expect(mockLoanFindOneAndUpdate).toHaveBeenCalledWith(
+        {
+          _id: loan._id,
+          $expr: { $gte: [{ $subtract: ['$guarantorRestitutionOwed', '$guarantorRestitutionPaid'] }, 1000] },
+        },
+        { $inc: { guarantorRestitutionPaid: 1000 } },
+        { new: true },
+      );
+      expect(mockLoanUpdateOne).toHaveBeenCalledWith(
+        { _id: loan._id },
+        { $set: { recoveredAt: expect.any(Date) } },
       );
     });
 
     it('caps the redirect at what remains owed and returns the correct leftover', async () => {
       const loan = makeLoan(2000, 1500) as any; // remaining owed = 500
+      stubGuarantorClaimSucceeds(loan, 500);
 
       const leftover = await service.redirectLoanPaymentToGuarantor(loan, 3000, 'actor-id', 'Actor');
 
       expect(leftover).toBe(2500);
       expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ paidAmount: 500 }));
-      expect(mockLoanFindByIdAndUpdate).toHaveBeenCalledWith(
-        loan._id,
-        { $inc: { guarantorRestitutionPaid: 500 }, $set: { recoveredAt: expect.any(Date) } },
+      expect(mockLoanUpdateOne).toHaveBeenCalledWith(
+        { _id: loan._id },
+        { $set: { recoveredAt: expect.any(Date) } },
       );
     });
 
@@ -478,7 +531,7 @@ describe('ContributionsService', () => {
 
       expect(leftover).toBe(3500);
       expect(mockCreate).not.toHaveBeenCalled();
-      expect(mockLoanFindByIdAndUpdate).not.toHaveBeenCalled();
+      expect(mockLoanFindOneAndUpdate).not.toHaveBeenCalled();
     });
 
     it('returns the full amount unchanged when restitution is already fully paid', async () => {
@@ -492,24 +545,31 @@ describe('ContributionsService', () => {
 
     it('does not mark recoveredAt when the loan still carries bad debt', async () => {
       const loan = makeLoan(1000, 0, 500) as any; // badDebtAmount = 500
+      stubGuarantorClaimSucceeds(loan, 1000);
 
       await service.redirectLoanPaymentToGuarantor(loan, 1000, 'actor-id', 'Actor');
 
-      expect(mockLoanFindByIdAndUpdate).toHaveBeenCalledWith(
-        loan._id,
-        { $inc: { guarantorRestitutionPaid: 1000 } },
-      );
+      expect(mockLoanUpdateOne).not.toHaveBeenCalled();
     });
 
     it('does not mark recoveredAt when only partially restituted', async () => {
       const loan = makeLoan(1000, 0) as any;
+      stubGuarantorClaimSucceeds(loan, 300);
 
       await service.redirectLoanPaymentToGuarantor(loan, 300, 'actor-id', 'Actor');
 
-      expect(mockLoanFindByIdAndUpdate).toHaveBeenCalledWith(
-        loan._id,
-        { $inc: { guarantorRestitutionPaid: 300 } },
-      );
+      expect(mockLoanUpdateOne).not.toHaveBeenCalled();
+    });
+
+    it('does not credit the guarantor when the atomic claim loses a race to a concurrent redirect', async () => {
+      const loan = makeLoan(1000, 0) as any;
+      mockLoanFindOneAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) }); // another redirect claimed it first
+
+      const leftover = await service.redirectLoanPaymentToGuarantor(loan, 500, 'actor-id', 'Actor');
+
+      expect(leftover).toBe(500);
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(mockLoanUpdateOne).not.toHaveBeenCalled();
     });
   });
 

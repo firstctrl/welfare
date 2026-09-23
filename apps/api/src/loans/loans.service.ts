@@ -514,12 +514,13 @@ export class LoansService implements OnModuleInit {
     // Incrementally restitute the guarantor from this payment before any of
     // it reduces the borrower's own outstanding balance — mirrors the
     // contribution-payment redirect in ContributionsService.handleRestitutionRedirect.
-    let remaining = await this.contributionsService.redirectLoanPaymentToGuarantor(
-      loan,
-      dto.amount,
-      actorId,
-      actorName,
-    );
+    // Only real, present-tense borrower payments redirect — an imported/backfilled
+    // row may carry a historical paidDate predating the restitution obligation, so
+    // redirecting it would credit the guarantor from money never actually diverted.
+    let remaining = source === RepaymentSource.DirectPayment
+      ? await this.contributionsService.redirectLoanPaymentToGuarantor(loan, dto.amount, actorId, actorName)
+      : dto.amount;
+    const redirectedToGuarantor = round2(dto.amount - remaining);
     const updated: LoanRepaymentDocument[] = [];
 
     for (const inst of pendingInstalments) {
@@ -570,7 +571,7 @@ export class LoansService implements OnModuleInit {
       AuditEntity.Loan,
       loanId,
       undefined,
-      { amount: dto.amount, paidDate: dto.paidDate, source },
+      { amount: dto.amount, paidDate: dto.paidDate, source, redirectedToGuarantor },
     );
 
     return updated;
