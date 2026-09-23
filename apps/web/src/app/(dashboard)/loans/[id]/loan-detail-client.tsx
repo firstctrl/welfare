@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Download, Send, CreditCard, Trash2, Ban, Banknote } from 'lucide-react';
+import { Download, Send, CreditCard, Trash2, Ban, Banknote, History } from 'lucide-react';
 import { LoanStatus, LoanRepaymentStatus, StaffStatus, AppModule } from '@welfare/shared';
 import type { ILoanRepayment } from '@welfare/shared';
 import { getLoan, getLoanSchedule, getLoanDocumentUrl, recordPayment, exitSettle, getLoansByGuarantor, deleteLoan, writeOffLoan, getPayOffPreview, processPayOff } from '@/lib/loans';
@@ -20,7 +20,7 @@ import { Card, CardHeader, CardBody } from '@/components/ui/card';
 import { Field, Input } from '@/components/ui/field';
 import { Modal } from '@/components/ui/modal';
 import { RepaymentBar } from '@/components/ui/repayment-bar';
-import { fmtGHS, fmtDate } from '@/lib/format';
+import { fmtGHS, fmtDate, fmtDateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 const EXIT_STATUSES = new Set<StaffStatus>([StaffStatus.Resigned, StaffStatus.Dismissed, StaffStatus.Deceased]);
@@ -77,6 +77,7 @@ export function LoanDetailClient({ id }: { id: string }) {
   const [showPayOff, setShowPayOff] = useState(false);
   const [payOffDate, setPayOffDate] = useState(today());
   const [amountReceived, setAmountReceived] = useState('');
+  const [historyRow, setHistoryRow] = useState<ILoanRepayment | null>(null);
 
   const { data: loan, isLoading: loanLoading } = useQuery({ queryKey: ['loans', id], queryFn: () => getLoan(id) });
   const { data: schedule, isLoading: scheduleLoading } = useQuery({
@@ -294,6 +295,7 @@ export function LoanDetailClient({ id }: { id: string }) {
                       { label: 'Penalty',       align: 'right' },
                       { label: 'Status',        align: 'left'  },
                       { label: 'Source',        align: 'left'  },
+                      { label: '',              align: 'left'  },
                     ] as { label: string; align: 'left' | 'right' }[]).map((h) => (
                       <th key={h.label} className={`px-4 py-2 text-${h.align} text-xs font-semibold text-neutral-500 uppercase tracking-wide`}>{h.label}</th>
                     ))}
@@ -336,6 +338,19 @@ export function LoanDetailClient({ id }: { id: string }) {
                         </td>
                         <td className="px-4 py-2 text-xs text-neutral-500">
                           {isGuarantor ? <span className="text-accent-700 font-medium">Guarantor offset</span> : (row.source ?? '—')}
+                        </td>
+                        <td className="px-4 py-2">
+                          {!!row.payments?.length && (
+                            <button
+                              type="button"
+                              onClick={() => setHistoryRow(row)}
+                              className="text-neutral-400 hover:text-primary-600 transition-colors"
+                              aria-label={`Payment history for instalment ${row.instalmentNumber}`}
+                              title="Payment history"
+                            >
+                              <History size={16} strokeWidth={1.75} />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -505,6 +520,40 @@ export function LoanDetailClient({ id }: { id: string }) {
           <p className="text-sm text-neutral-700 mt-2">
             Permanently delete this loan and all repayment records? This cannot be undone.
           </p>
+        </Modal>
+      )}
+
+      {/* Payment History Modal */}
+      {historyRow && (
+        <Modal
+          open
+          onClose={() => setHistoryRow(null)}
+          title={`Payment History — Instalment #${historyRow.instalmentNumber}`}
+          size="sm"
+          icon={<History size={20} strokeWidth={1.75} />}
+        >
+          <div className="mt-2 space-y-2">
+            {(historyRow.payments ?? []).map((p, i) => (
+              <div
+                key={i}
+                className={cn(
+                  'rounded-sm border px-3 py-2 text-sm',
+                  p.type === 'Reversal' ? 'border-danger-200 bg-danger-50' : 'border-neutral-200 bg-neutral-50',
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <span className={cn('font-mono tabular font-semibold', p.type === 'Reversal' && 'text-danger-600')}>
+                    {p.type === 'Reversal' ? '−' : ''}{fmtGHS(Math.abs(p.amount))}
+                  </span>
+                  <span className="text-xs text-neutral-500">{p.type === 'Reversal' ? 'Reversed' : 'Paid'} {fmtDate(p.paidDate)}</span>
+                </div>
+                <div className="text-xs text-neutral-500 mt-1">
+                  Recorded by <span className="font-medium text-neutral-700">{p.recordedByName}</span> on {fmtDateTime(p.recordedAt)}
+                </div>
+                {p.notes && <div className="text-xs text-neutral-400 mt-1 italic">{p.notes}</div>}
+              </div>
+            ))}
+          </div>
         </Modal>
       )}
 

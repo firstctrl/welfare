@@ -1,8 +1,23 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
-import { LoanRepaymentStatus, RepaymentSource } from '@welfare/shared';
+import { LoanRepaymentStatus, PaymentEntryType, RepaymentSource } from '@welfare/shared';
 
 export type LoanRepaymentDocument = HydratedDocument<LoanRepayment>;
+
+@Schema({ _id: false })
+export class PaymentEntry {
+  @Prop({ required: true }) amount!: number;
+  @Prop({ required: true }) paidDate!: Date;
+  @Prop({ required: true, default: () => new Date() }) recordedAt!: Date;
+  @Prop({ required: true }) recordedById!: string;
+  @Prop({ required: true }) recordedByName!: string;
+  @Prop({ required: true, enum: RepaymentSource }) source!: RepaymentSource;
+  @Prop() notes?: string;
+  @Prop({ required: true, enum: PaymentEntryType, default: PaymentEntryType.Payment })
+  type!: PaymentEntryType;
+}
+
+export const PaymentEntrySchema = SchemaFactory.createForClass(PaymentEntry);
 
 @Schema({ timestamps: true, collection: 'loan_repayments' })
 export class LoanRepayment {
@@ -21,6 +36,7 @@ export class LoanRepayment {
   @Prop({ enum: RepaymentSource }) source?: RepaymentSource;
   @Prop() guarantorStaffId?: string;
   @Prop() notes?: string;
+  @Prop({ type: [PaymentEntrySchema], default: [] }) payments!: PaymentEntry[];
 }
 
 export const LoanRepaymentSchema = SchemaFactory.createForClass(LoanRepayment);

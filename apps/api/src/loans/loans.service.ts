@@ -19,6 +19,7 @@ import {
   LoanRepaymentStatus,
   LoanStatus,
   PaginatedResult,
+  PaymentEntryType,
   RepaymentSource,
   StaffStatus,
 } from '@welfare/shared';
@@ -521,12 +522,15 @@ export class LoansService implements OnModuleInit {
       }
 
       const outstanding = round2(inst.dueAmount + inst.penaltyAmount - inst.paidAmount);
+      let appliedAmount: number;
 
       if (remaining >= outstanding) {
+        appliedAmount = outstanding;
         inst.paidAmount = round2(inst.paidAmount + outstanding);
         inst.status = LoanRepaymentStatus.Paid;
         remaining = round2(remaining - outstanding);
       } else {
+        appliedAmount = remaining;
         inst.paidAmount = round2(inst.paidAmount + remaining);
         inst.status = LoanRepaymentStatus.Partial;
         remaining = 0;
@@ -535,6 +539,16 @@ export class LoansService implements OnModuleInit {
       inst.paidDate = paidDate;
       inst.source = source;
       if (dto.notes) inst.notes = dto.notes;
+      inst.payments.push({
+        amount: appliedAmount,
+        paidDate,
+        recordedAt: new Date(),
+        recordedById: actorId,
+        recordedByName: actorName,
+        source,
+        notes: dto.notes,
+        type: PaymentEntryType.Payment,
+      });
       await inst.save();
       updated.push(inst);
     }
@@ -636,6 +650,15 @@ export class LoansService implements OnModuleInit {
     const before = { paidAmount: repayment.paidAmount, status: repayment.status, paidDate: repayment.paidDate };
 
     const now = new Date();
+    repayment.payments.push({
+      amount: -repayment.paidAmount,
+      paidDate: repayment.paidDate ?? now,
+      recordedAt: now,
+      recordedById: actorId,
+      recordedByName: actorName,
+      source: repayment.source ?? RepaymentSource.DirectPayment,
+      type: PaymentEntryType.Reversal,
+    });
     repayment.paidAmount = 0;
     repayment.status = repayment.dueDate < now ? LoanRepaymentStatus.Overdue : LoanRepaymentStatus.Pending;
     repayment.paidDate = undefined;

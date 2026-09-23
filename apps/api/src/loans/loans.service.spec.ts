@@ -10,7 +10,7 @@ import { SystemConfigService } from '../system-config/system-config.service';
 import { AuditService } from '../audit/audit.service';
 import { ContributionsService } from '../contributions/contributions.service';
 import { MINIO_CLIENT } from '../storage/minio.module';
-import { LoanStatus, LoanRepaymentStatus, StaffStatus } from '@welfare/shared';
+import { LoanStatus, LoanRepaymentStatus, RepaymentSource, StaffStatus } from '@welfare/shared';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { ExitSettlementDto } from './dto/exit-settlement.dto';
 import { LoanScheduleSenderService } from './loan-schedule-sender.service';
@@ -62,6 +62,7 @@ describe('LoansService', () => {
     repaymentModel = {
       insertMany: jest.fn(),
       find: jest.fn(),
+      findById: jest.fn(),
       findByIdAndUpdate: jest.fn(),
       countDocuments: jest.fn(),
       exists: jest.fn(),
@@ -238,6 +239,7 @@ describe('LoansService', () => {
       paidAmount,
       penaltyAmount,
       status,
+      payments: [] as any[],
       save: jest.fn().mockResolvedValue(undefined),
     });
 
@@ -254,6 +256,42 @@ describe('LoansService', () => {
       expect(inst.save).toHaveBeenCalled();
       expect(inst.status).toBe(LoanRepaymentStatus.Paid);
       expect(inst.paidAmount).toBe(3500);
+    });
+
+    it('appends a payment entry recording who and when', async () => {
+      const inst = makeInstalment(1, LoanRepaymentStatus.Pending);
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(makeLoan()) });
+      repaymentModel.find
+        .mockReturnValueOnce({ sort: () => ({ exec: jest.fn().mockResolvedValue([inst]) }) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
+      configService.getAll.mockResolvedValue(mockConfig());
+
+      await service.recordPayment(loanId, dto, 'actor-1', 'Ama Officer');
+
+      expect(inst.payments).toHaveLength(1);
+      expect(inst.payments[0]).toMatchObject({
+        amount: 3500,
+        recordedById: 'actor-1',
+        recordedByName: 'Ama Officer',
+        type: 'Payment',
+      });
+      expect(new Date(inst.payments[0].paidDate).toISOString().slice(0, 10)).toBe('2026-04-10');
+    });
+
+    it('appends a second payment entry without discarding the first', async () => {
+      const inst = makeInstalment(1, LoanRepaymentStatus.Partial, 1000);
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(makeLoan()) });
+      inst.payments.push({ amount: 1000, recordedById: 'actor-0', recordedByName: 'Prior Officer', type: 'Payment' });
+      repaymentModel.find
+        .mockReturnValueOnce({ sort: () => ({ exec: jest.fn().mockResolvedValue([inst]) }) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
+      configService.getAll.mockResolvedValue(mockConfig());
+
+      await service.recordPayment(loanId, { amount: 2500, paidDate: '2026-04-10' }, 'actor-1', 'Ama Officer');
+
+      expect(inst.payments).toHaveLength(2);
+      expect(inst.payments[0].recordedByName).toBe('Prior Officer');
+      expect(inst.payments[1]).toMatchObject({ amount: 2500, recordedByName: 'Ama Officer', type: 'Payment' });
     });
 
     it('carries surplus to next instalment when overpaying', async () => {
@@ -340,6 +378,40 @@ describe('LoansService', () => {
     });
   });
 
+  describe('deleteRepayment', () => {
+    const loanId = 'loan-id';
+    const repaymentId = 'repayment-id';
+
+    const makeRepayment = (overrides: Record<string, unknown> = {}) => ({
+      _id: repaymentId,
+      loanId,
+      dueDate: new Date('2026-04-05'),
+      paidAmount: 3500,
+      status: LoanRepaymentStatus.Paid,
+      paidDate: new Date('2026-04-10'),
+      source: RepaymentSource.DirectPayment,
+      payments: [{ amount: 3500, recordedById: 'actor-1', recordedByName: 'Ama Officer', type: 'Payment' }] as any[],
+      save: jest.fn().mockResolvedValue(undefined),
+      ...overrides,
+    });
+
+    it('appends a Reversal entry instead of discarding history', async () => {
+      const repayment = makeRepayment();
+      repaymentModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(repayment) });
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue({ status: LoanStatus.Active }) });
+
+      await service.deleteRepayment(loanId, repaymentId, 'actor-2', 'Kofi Manager');
+
+      expect(repayment.payments).toHaveLength(2);
+      expect(repayment.payments[1]).toMatchObject({
+        amount: -3500,
+        recordedById: 'actor-2',
+        recordedByName: 'Kofi Manager',
+        type: 'Reversal',
+      });
+    });
+  });
+
   describe('exitSettle', () => {
     const loanId = 'loan-id';
 
@@ -362,6 +434,7 @@ describe('LoansService', () => {
       paidAmount,
       penaltyAmount,
       status,
+      payments: [] as any[],
       save: jest.fn().mockResolvedValue(undefined),
     });
 

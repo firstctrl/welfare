@@ -1,5 +1,17 @@
 import { LoanRepaymentStatus } from '../enums/loan-repayment-status.enum';
 import { RepaymentSource } from '../enums/repayment-source.enum';
+import { PaymentEntryType } from '../enums/payment-entry-type.enum';
+
+export interface IPaymentEntry {
+  amount: number;
+  paidDate: string;
+  recordedAt: string;
+  recordedById: string;
+  recordedByName: string;
+  source: RepaymentSource;
+  notes?: string;
+  type: PaymentEntryType;
+}
 
 export interface ILoanRepayment {
   _id: string;
@@ -17,6 +29,7 @@ export interface ILoanRepayment {
   source?: RepaymentSource;
   guarantorStaffId?: string;
   notes?: string;
+  payments?: IPaymentEntry[];
   createdAt: string;
   updatedAt: string;
 }
