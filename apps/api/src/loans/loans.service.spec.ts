@@ -75,6 +75,7 @@ describe('LoansService', () => {
       debitGuarantorOffset: jest.fn(),
       debitDefaulterContribution: jest.fn().mockResolvedValue({ debited: 0, remaining: 0 }),
       settleGuarantorRestitution: jest.fn().mockResolvedValue(0),
+      redirectLoanPaymentToGuarantor: jest.fn().mockImplementation(async (_loan: unknown, amount: number) => amount),
     };
     minioClient = { putObject: jest.fn(), presignedGetObject: jest.fn() };
 
@@ -375,6 +376,119 @@ describe('LoansService', () => {
     it('throws NotFoundException when loan does not exist', async () => {
       loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
       await expect(service.recordPayment('missing', dto, 'actor', 'Actor')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('recordPayment — guarantor restitution redirect', () => {
+    const loanId = 'loan-id';
+
+    const makeLoan = (owed: number, paid: number, status = LoanStatus.Active) => ({
+      _id: { toString: () => loanId },
+      staffId: 'staff-123',
+      status,
+      guarantorRestitutionOwed: owed,
+      guarantorRestitutionPaid: paid,
+      toObject: () => ({}),
+    });
+
+    const makeInstalment = (dueAmount: number, paidAmount = 0) => ({
+      _id: { toString: () => 'inst-1' },
+      instalmentNumber: 1,
+      dueDate: new Date('2026-04-05'),
+      dueAmount,
+      paidAmount,
+      penaltyAmount: 0,
+      status: LoanRepaymentStatus.Pending,
+      payments: [] as any[],
+      save: jest.fn().mockResolvedValue(undefined),
+    });
+
+    it('redirects the payment through the guarantor restitution helper before allocating to instalments', async () => {
+      const loan = makeLoan(1000, 0);
+      const inst = makeInstalment(3500);
+      const dto: RecordPaymentDto = { amount: 3500, paidDate: '2026-04-10' };
+
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      repaymentModel.find
+        .mockReturnValueOnce({ sort: () => ({ exec: jest.fn().mockResolvedValue([inst]) }) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
+      configService.getAll.mockResolvedValue(mockConfig());
+      contributionsService.redirectLoanPaymentToGuarantor.mockResolvedValue(2500); // 1000 redirected, 2500 left
+
+      await service.recordPayment(loanId, dto, 'actor', 'Actor');
+
+      expect(contributionsService.redirectLoanPaymentToGuarantor).toHaveBeenCalledWith(loan, 3500, 'actor', 'Actor');
+      expect(inst.paidAmount).toBe(2500);
+      expect(inst.status).toBe(LoanRepaymentStatus.Partial);
+    });
+
+    it('applies the full payment to instalments unchanged when no restitution is owed', async () => {
+      const loan = makeLoan(0, 0);
+      const inst = makeInstalment(3500);
+      const dto: RecordPaymentDto = { amount: 3500, paidDate: '2026-04-10' };
+
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      repaymentModel.find
+        .mockReturnValueOnce({ sort: () => ({ exec: jest.fn().mockResolvedValue([inst]) }) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
+      configService.getAll.mockResolvedValue(mockConfig());
+      // default mock already passes amount through unchanged
+
+      await service.recordPayment(loanId, dto, 'actor', 'Actor');
+
+      expect(contributionsService.redirectLoanPaymentToGuarantor).toHaveBeenCalledWith(loan, 3500, 'actor', 'Actor');
+      expect(inst.paidAmount).toBe(3500);
+      expect(inst.status).toBe(LoanRepaymentStatus.Paid);
+    });
+
+    it('touches no instalment when the entire payment is redirected to the guarantor', async () => {
+      const loan = makeLoan(5000, 0);
+      const inst = makeInstalment(3500);
+      const dto: RecordPaymentDto = { amount: 3500, paidDate: '2026-04-10' };
+
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      repaymentModel.find
+        .mockReturnValueOnce({ sort: () => ({ exec: jest.fn().mockResolvedValue([inst]) }) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
+      configService.getAll.mockResolvedValue(mockConfig());
+      contributionsService.redirectLoanPaymentToGuarantor.mockResolvedValue(0); // fully redirected
+
+      const result = await service.recordPayment(loanId, dto, 'actor', 'Actor');
+
+      expect(result).toEqual([]);
+      expect(inst.save).not.toHaveBeenCalled();
+      expect(inst.paidAmount).toBe(0);
+    });
+
+    it('redirects, completes the loan in the same call, and still runs the lump-sum settlement without double-crediting', async () => {
+      const callOrder: string[] = [];
+      const loan = makeLoan(1000, 700); // 300 still owed going into this payment
+      const inst = makeInstalment(3200); // exactly what remains after redirect
+      const dto: RecordPaymentDto = { amount: 3500, paidDate: '2026-04-10' };
+
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      repaymentModel.find
+        .mockReturnValueOnce({ sort: () => ({ exec: jest.fn().mockResolvedValue([inst]) }) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
+      configService.getAll.mockResolvedValue(mockConfig());
+      contributionsService.redirectLoanPaymentToGuarantor.mockImplementation(async () => {
+        callOrder.push('redirect');
+        return 3200; // 300 redirected (caps at remaining owed), 3200 left
+      });
+      contributionsService.settleGuarantorRestitution.mockImplementation(async () => {
+        callOrder.push('settle');
+        return 0; // nothing left — incremental redirect already covered it
+      });
+      loanModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ ...loan, status: LoanStatus.Completed }),
+      });
+
+      await service.recordPayment(loanId, dto, 'actor', 'Actor');
+
+      expect(inst.paidAmount).toBe(3200);
+      expect(inst.status).toBe(LoanRepaymentStatus.Paid);
+      expect(contributionsService.settleGuarantorRestitution).toHaveBeenCalledWith(loanId, 'actor', 'Actor');
+      expect(callOrder).toEqual(['redirect', 'settle']);
     });
   });
 

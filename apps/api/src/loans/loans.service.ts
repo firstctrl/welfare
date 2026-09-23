@@ -511,7 +511,15 @@ export class LoansService implements OnModuleInit {
     if (pendingInstalments.length === 0)
       throw new BadRequestException('No pending instalments for this loan');
 
-    let remaining = dto.amount;
+    // Incrementally restitute the guarantor from this payment before any of
+    // it reduces the borrower's own outstanding balance — mirrors the
+    // contribution-payment redirect in ContributionsService.handleRestitutionRedirect.
+    let remaining = await this.contributionsService.redirectLoanPaymentToGuarantor(
+      loan,
+      dto.amount,
+      actorId,
+      actorName,
+    );
     const updated: LoanRepaymentDocument[] = [];
 
     for (const inst of pendingInstalments) {
