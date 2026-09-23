@@ -199,6 +199,13 @@ export function LoansListClient() {
             Import Repayments
           </Link>
           <Link
+            href="/loans/legacy-import"
+            className="inline-flex items-center gap-1.5 h-[var(--row-default)] px-4 bg-white border border-neutral-200 text-neutral-700 text-sm font-semibold rounded-sm hover:bg-neutral-50 transition-colors duration-fast"
+          >
+            <Upload size={16} strokeWidth={1.75} />
+            Import Legacy Loans
+          </Link>
+          <Link
             href="/loans/new"
             className="inline-flex items-center gap-1.5 h-[var(--row-default)] px-4 bg-primary-600 text-white text-sm font-semibold rounded-sm hover:bg-primary-700 transition-colors duration-fast"
           >

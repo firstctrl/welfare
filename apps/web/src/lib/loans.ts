@@ -1,5 +1,5 @@
 import { apiClient } from './api-client';
-import type { ILoan, ILoanRepayment, ILoanRepaymentImportBatch, ILoanRecordsImportBatch, PaginatedResult, LoanStatus, IPayOffPreview } from '@welfare/shared';
+import type { ILoan, ILoanRepayment, ILoanRepaymentImportBatch, ILoanRecordsImportBatch, ILoanLegacyImportBatch, PaginatedResult, LoanStatus, IPayOffPreview } from '@welfare/shared';
 
 export interface LoanFilters {
   staffId?: string;
@@ -176,6 +176,46 @@ export async function dismissLoanRecordsFlaggedEntry(batchId: string, index: num
 
 export async function clearLoanRecordsFlaggedEntries(batchId: string): Promise<ILoanRecordsImportBatch> {
   const { data } = await apiClient.patch(`/loans/records-import/${batchId}/clear-flagged`);
+  return data;
+}
+
+export interface LoanLegacyImportResult {
+  batchId: string;
+  created: number;
+  flagged: number;
+  total: number;
+}
+
+export async function importLegacyLoans(file: File, jobId?: string): Promise<LoanLegacyImportResult> {
+  const form = new FormData();
+  form.append('file', file);
+  if (jobId) form.append('jobId', jobId);
+  const { data } = await apiClient.post('/loans/legacy-import', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
+export async function listLegacyImportBatches(
+  page = 1,
+  limit = 20,
+): Promise<PaginatedResult<ILoanLegacyImportBatch>> {
+  const { data } = await apiClient.get('/loans/legacy-import', { params: { page, limit } });
+  return data;
+}
+
+export async function getLegacyImportBatch(batchId: string): Promise<ILoanLegacyImportBatch> {
+  const { data } = await apiClient.get(`/loans/legacy-import/${batchId}`);
+  return data;
+}
+
+export async function dismissLegacyFlaggedEntry(batchId: string, index: number): Promise<ILoanLegacyImportBatch> {
+  const { data } = await apiClient.patch(`/loans/legacy-import/${batchId}/dismiss`, { index });
+  return data;
+}
+
+export async function clearLegacyFlaggedEntries(batchId: string): Promise<ILoanLegacyImportBatch> {
+  const { data } = await apiClient.patch(`/loans/legacy-import/${batchId}/clear-flagged`);
   return data;
 }
 

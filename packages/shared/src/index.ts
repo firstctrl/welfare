@@ -34,6 +34,7 @@ export type { IClaimFlaggedEntry, IClaimImportBatch } from './interfaces/claim-i
 export type { ILoanRepaymentFlaggedEntry, ILoanRepaymentImportBatch } from './interfaces/loan-import-batch.interface';
 export type { IStaffFlaggedEntry, IStaffImportBatch } from './interfaces/staff-import-batch.interface';
 export type { ILoanRecordFlaggedEntry, ILoanRecordsImportBatch } from './interfaces/loan-records-import-batch.interface';
+export type { ILoanLegacyFlaggedEntry, ILoanLegacyImportBatch } from './interfaces/loan-legacy-import-batch.interface';
 export type { IInvestmentFlaggedRow, IInvestmentImportBatch } from './interfaces/investment-import-batch.interface';
 export type { IRemittanceFlaggedRow, IRemittanceImportBatch } from './interfaces/remittance-import-batch.interface';
 export type { IContributionRate } from './interfaces/contribution-rate.interface';
