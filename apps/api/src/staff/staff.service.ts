@@ -114,6 +114,14 @@ export class StaffService implements OnModuleInit {
     return staff;
   }
 
+  async findManyByIds(ids: string[]): Promise<StaffDocument[]> {
+    const unique = Array.from(new Set(ids));
+    return this.staffModel
+      .find({ _id: { $in: unique } })
+      .select('fullName staffId')
+      .exec();
+  }
+
   async findByStaffId(staffId: string): Promise<StaffDocument | null> {
     const normalized = staffId.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return this.staffModel.findOne({ staffId: new RegExp(`^${normalized}$`, 'i') }).exec();

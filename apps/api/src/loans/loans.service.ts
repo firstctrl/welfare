@@ -342,7 +342,9 @@ export class LoansService implements OnModuleInit {
 
   // ───────────────── QUERIES ─────────────────
 
-  async findAll(query: LoanQueryDto): Promise<PaginatedResult<LoanDocument>> {
+  async findAll(
+    query: LoanQueryDto,
+  ): Promise<PaginatedResult<Loan & { _id: string; staffName?: string; staffBusinessId?: string }>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
@@ -351,10 +353,23 @@ export class LoansService implements OnModuleInit {
     if (query.status) filter['status'] = query.status;
 
     const [data, total] = await Promise.all([
-      this.loanModel.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
+      this.loanModel.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean().exec(),
       this.loanModel.countDocuments(filter).exec(),
     ]);
-    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+
+    // Enrich with staff name/staffId for just this page, rather than requiring
+    // the frontend to fetch and cache the entire staff table to join client-side
+    // (which silently breaks once the org has more staff than a hardcoded page size).
+    const staff = await this.staffService.findManyByIds(data.map((l) => l.staffId));
+    const staffMap = new Map(staff.map((s) => [s._id.toString(), s]));
+    const enriched = data.map((loan) => ({
+      ...loan,
+      _id: loan._id.toString(),
+      staffName: staffMap.get(loan.staffId)?.fullName,
+      staffBusinessId: staffMap.get(loan.staffId)?.staffId,
+    }));
+
+    return { data: enriched, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   async findOne(id: string): Promise<LoanDocument> {

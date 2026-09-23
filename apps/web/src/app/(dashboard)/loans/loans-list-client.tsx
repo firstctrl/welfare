@@ -18,7 +18,6 @@ import { LoanStatus, AppModule } from '@welfare/shared';
 import type { ILoan } from '@welfare/shared';
 import { usePermission } from '@/hooks/use-permission';
 import { listLoans, getLoanSchedule, bulkDeleteLoans } from '@/lib/loans';
-import { listStaff } from '@/lib/staff';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusBadge } from '@/components/ui/badge';
@@ -48,17 +47,6 @@ export function LoansListClient() {
     queryKey: ['loans', { page, status, limit }],
     queryFn: () => listLoans({ page, limit, status: status || undefined }),
   });
-
-  const { data: staffData } = useQuery({
-    queryKey: ['staff', 'all'],
-    queryFn: () => listStaff({ limit: 1000 }),
-    staleTime: 10 * 60 * 1000,
-  });
-  const staffMap = useMemo(() => {
-    const m = new Map<string, { fullName: string; staffId: string }>();
-    for (const s of staffData?.data ?? []) m.set(s._id, { fullName: s.fullName, staffId: s.staffId });
-    return m;
-  }, [staffData]);
 
   const scheduleQueries = useQueries({
     queries: (data?.data ?? []).map((loan) => ({
@@ -129,15 +117,12 @@ export function LoansListClient() {
     })] : []),
     col.accessor('staffId', {
       header: 'Staff',
-      cell: (info) => {
-        const s = staffMap.get(info.getValue());
-        return (
-          <div>
-            <div className="font-medium text-neutral-900">{s?.fullName ?? '—'}</div>
-            <div className="text-xs text-neutral-400 font-mono">{s?.staffId ?? '—'}</div>
-          </div>
-        );
-      },
+      cell: ({ row }) => (
+        <div>
+          <div className="font-medium text-neutral-900">{row.original.staffName ?? '—'}</div>
+          <div className="text-xs text-neutral-400 font-mono">{row.original.staffBusinessId ?? '—'}</div>
+        </div>
+      ),
     }),
     col.accessor('principalAmount', {
       header: 'Principal',
@@ -168,7 +153,7 @@ export function LoansListClient() {
       header: 'Status',
       cell: (info) => <StatusBadge status={info.getValue()} />,
     }),
-  ], [staffMap, outstandingMap, permission]);
+  ], [outstandingMap, permission]);
 
   const table = useReactTable({
     data: filtered,

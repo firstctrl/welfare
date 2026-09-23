@@ -3,6 +3,8 @@ import { LoanStatus } from '../enums/loan-status.enum';
 export interface ILoan {
   _id: string;
   staffId: string;
+  staffName?: string;
+  staffBusinessId?: string;
   guarantorId: string;
   principalAmount: number;
   tenureMonths: number;
