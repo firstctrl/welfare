@@ -21,6 +21,7 @@ export class Contribution {
   @Prop() instalmentNumber?: number;
   @Prop() importBatchId?: string;
   @Prop({ required: true }) recordedBy!: string;
+  @Prop() reminderSentAt?: Date;
 }
 
 export const ContributionSchema = SchemaFactory.createForClass(Contribution);

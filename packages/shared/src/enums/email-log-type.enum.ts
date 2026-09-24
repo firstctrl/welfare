@@ -5,4 +5,5 @@ export enum EmailLogType {
   LoanPaymentReminder = 'LoanPaymentReminder',
   LoanForfeitureNotice = 'LoanForfeitureNotice',
   PasswordReset = 'PasswordReset',
+  MissedContributionReminder = 'MissedContributionReminder',
 }

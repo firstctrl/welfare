@@ -11,6 +11,8 @@ import { ContributionRate, ContributionRateSchema } from './schemas/contribution
 import { Loan, LoanSchema } from '../loans/schemas/loan.schema';
 import { SystemConfigModule } from '../system-config/system-config.module';
 import { StaffModule } from '../staff/staff.module';
+import { Staff, StaffSchema } from '../staff/schemas/staff.schema';
+import { MissedContributionReminderJob } from './jobs/missed-contribution-reminder.job';
 
 @Module({
   imports: [
@@ -19,13 +21,14 @@ import { StaffModule } from '../staff/staff.module';
       { name: ImportBatch.name, schema: ImportBatchSchema },
       { name: Loan.name, schema: LoanSchema },
       { name: ContributionRate.name, schema: ContributionRateSchema },
+      { name: Staff.name, schema: StaffSchema },
     ]),
     MulterModule.register({}),
     SystemConfigModule,
     StaffModule,
   ],
   controllers: [ContributionsController],
-  providers: [ContributionsService, ImportService, ContributionRatesService],
+  providers: [ContributionsService, ImportService, ContributionRatesService, MissedContributionReminderJob],
   exports: [ContributionsService],
 })
 export class ContributionsModule {}
