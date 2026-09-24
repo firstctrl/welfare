@@ -660,6 +660,16 @@ describe('LoansService', () => {
         type: 'Reversal',
       });
     });
+
+    it('refuses to reverse a DefaulterDeduction payment — it is a system debit, not a direct payment', async () => {
+      const repayment = makeRepayment({ source: RepaymentSource.DefaulterDeduction });
+      repaymentModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(repayment) });
+
+      await expect(service.deleteRepayment(loanId, repaymentId, 'actor-2', 'Kofi Manager')).rejects.toThrow(
+        'Cannot reverse a DefaulterDeduction payment',
+      );
+      expect(repayment.save).not.toHaveBeenCalled();
+    });
   });
 
   describe('exitSettle', () => {

@@ -6,7 +6,6 @@ import { LoanRepayment } from '../schemas/loan-repayment.schema';
 import { SystemConfigService } from '../../system-config/system-config.service';
 import { AuditService } from '../../audit/audit.service';
 import { ContributionsService } from '../../contributions/contributions.service';
-import { LoansService } from '../loans.service';
 import { LoanRepaymentStatus, LoanStatus } from '@welfare/shared';
 
 const mockConfig = () => ({
@@ -24,7 +23,6 @@ describe('DefaultRecoveryJob', () => {
   let configService: any;
   let auditService: any;
   let contributionsService: any;
-  let loansService: any;
 
   beforeEach(async () => {
     loanModel = {
@@ -43,7 +41,6 @@ describe('DefaultRecoveryJob', () => {
       debitDefaulterContribution: jest.fn(),
       debitGuarantorOffset: jest.fn(),
     };
-    loansService = { checkAndCompleteIfDone: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -53,7 +50,6 @@ describe('DefaultRecoveryJob', () => {
         { provide: SystemConfigService, useValue: configService },
         { provide: AuditService, useValue: auditService },
         { provide: ContributionsService, useValue: contributionsService },
-        { provide: LoansService, useValue: loansService },
       ],
     }).compile();
 
@@ -329,22 +325,6 @@ describe('DefaultRecoveryJob', () => {
 
       const call = loanModel.findByIdAndUpdate.mock.calls[0];
       expect(call[1].$set.recoveredAt).toBeUndefined();
-    });
-
-    it('calls checkAndCompleteIfDone for the loan after recovery runs', async () => {
-      const loan = makeDefaultedLoan();
-      const inst = makeInstalment(5000);
-
-      loanModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([loan]) });
-      repaymentModel.find
-        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([inst]) })
-        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([inst]) });
-      loanModel.findByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
-      contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 5000, remaining: 0 });
-
-      await job.runGracePeriodRecovery();
-
-      expect(loansService.checkAndCompleteIfDone).toHaveBeenCalledWith('loan-1', 'system', 'DefaultRecoveryJob');
     });
 
     it('skips when no defaulted loans past grace expiry', async () => {

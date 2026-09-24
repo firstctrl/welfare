@@ -11,11 +11,18 @@
  * it does not scan for "similar" cases. Re-verifies each record's current
  * state before writing (state may have changed since the bug report).
  *
+ * Uses the real Nest schema definitions (not hand-rolled ones) so writes
+ * are not silently stripped by Mongoose's default strict mode.
+ *
  * Usage: npx ts-node -r tsconfig-paths/register apps/api/src/loans/migrations/remediate-backdated-loan-completions.ts
  * Default is a DRY RUN (no writes). Pass --confirm to actually write.
  */
 import mongoose from 'mongoose';
 import { RepaymentSource } from '@welfare/shared';
+import { LoanSchema } from '../schemas/loan.schema';
+import { LoanRepaymentSchema } from '../schemas/loan-repayment.schema';
+import { ContributionSchema } from '../../contributions/schemas/contribution.schema';
+import { AuditLogSchema } from '../../audit/audit-log.schema';
 
 const MONGO_URI = process.env.MONGODB_URI ?? 'mongodb://localhost:27017/welfare';
 const CONFIRM = process.argv.includes('--confirm');
@@ -37,37 +44,6 @@ const MISLABELED_ROWS: Array<{ loanId: string; instalmentNumber: number }> = [
   { loanId: '6ab2af16b8b481275230b68c', instalmentNumber: 12 },
 ];
 
-const LoanSchema = new mongoose.Schema({
-  status: String,
-  guarantorId: String,
-  guarantorRestitutionOwed: Number,
-  guarantorRestitutionPaid: Number,
-}, { collection: 'loans' });
-
-const LoanRepaymentSchema = new mongoose.Schema({
-  loanId: String,
-  instalmentNumber: Number,
-  status: String,
-}, { collection: 'loan_repayments' });
-
-const ContributionSchema = new mongoose.Schema({
-  loanId: String,
-  instalmentNumber: Number,
-  source: String,
-  paidAmount: Number,
-  isDebit: Boolean,
-}, { collection: 'contributions' });
-
-const AuditLogSchema = new mongoose.Schema({
-  actorId: String,
-  actorName: String,
-  action: String,
-  entity: String,
-  entityId: String,
-  before: mongoose.Schema.Types.Mixed,
-  after: mongoose.Schema.Types.Mixed,
-}, { timestamps: { createdAt: true, updatedAt: false }, collection: 'auditlogs' });
-
 type Models = {
   loanModel: any;
   repaymentModel: any;
@@ -75,22 +51,41 @@ type Models = {
   auditModel: any;
 };
 
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 export async function remediateLoan(
   loanId: string,
   models: Models,
   confirm: boolean,
-): Promise<{ loanId: string; action: 'settled' | 'would-settle' | 'skipped'; reason?: string }> {
+): Promise<{ loanId: string; action: 'settled' | 'would-settle' | 'skipped'; owed?: number; reason?: string }> {
   const loan = await models.loanModel.findById(loanId).exec();
   if (!loan) return { loanId, action: 'skipped', reason: 'loan not found' };
   if (loan.status !== 'Active') return { loanId, action: 'skipped', reason: `status is ${loan.status}, not Active` };
 
-  const owed = (loan.guarantorRestitutionOwed ?? 0) - (loan.guarantorRestitutionPaid ?? 0);
+  const owed = round2((loan.guarantorRestitutionOwed ?? 0) - (loan.guarantorRestitutionPaid ?? 0));
   if (owed <= 0) return { loanId, action: 'skipped', reason: 'no outstanding restitution' };
 
   const unpaid = await models.repaymentModel.find({ loanId, status: { $ne: 'Paid' } }).exec();
   if (unpaid.length > 0) return { loanId, action: 'skipped', reason: `${unpaid.length} instalment(s) not Paid` };
 
-  if (!confirm) return { loanId, action: 'would-settle' };
+  if (!confirm) return { loanId, action: 'would-settle', owed };
+
+  // Status-guarded update first: if this loan's status changed since the read
+  // above (lost a race, or a previous run already completed it), matchedCount
+  // is 0 and we skip rather than crediting the guarantor a second time. A
+  // re-run after a crash between this update and the contribution insert
+  // below sees guarantorRestitutionPaid already incremented (owed <= 0 above)
+  // and skips too — the credit insert is the one step that isn't re-run-safe,
+  // so it always comes after the guard has already committed.
+  const updateResult = await models.loanModel.updateOne(
+    { _id: loanId, status: 'Active' },
+    { $set: { status: 'Completed' }, $inc: { guarantorRestitutionPaid: owed } },
+  );
+  if (!updateResult || updateResult.matchedCount === 0) {
+    return { loanId, action: 'skipped', reason: 'loan status changed before the update could apply' };
+  }
 
   const now = new Date();
   await models.contributionModel.create({
@@ -107,11 +102,6 @@ export async function remediateLoan(
     recordedBy: 'remediation-script',
   });
 
-  await models.loanModel.updateOne(
-    { _id: loanId },
-    { $set: { status: 'Completed' }, $inc: { guarantorRestitutionPaid: owed } },
-  );
-
   await models.auditModel.create({
     actorId: 'remediation-script',
     actorName: 'remediate-backdated-loan-completions',
@@ -122,7 +112,7 @@ export async function remediateLoan(
     after: { status: 'Completed', guarantorRestitutionPaid: (loan.guarantorRestitutionPaid ?? 0) + owed },
   });
 
-  return { loanId, action: 'settled' };
+  return { loanId, action: 'settled', owed };
 }
 
 export async function backfillRepaymentSource(
@@ -130,24 +120,48 @@ export async function backfillRepaymentSource(
   instalmentNumber: number,
   models: Pick<Models, 'repaymentModel' | 'contributionModel'> & Partial<Pick<Models, 'auditModel'>>,
   confirm: boolean,
-): Promise<{ loanId: string; instalmentNumber: number; action: 'backfilled' | 'would-backfill' | 'skipped'; reason?: string }> {
+): Promise<{
+  loanId: string;
+  instalmentNumber: number;
+  action: 'backfilled' | 'would-backfill' | 'skipped';
+  reason?: string;
+  source?: RepaymentSource;
+  guarantorDebited?: number;
+  borrowerDebited?: number;
+}> {
   const row = await models.repaymentModel.findOne({ loanId, instalmentNumber }).exec();
   if (!row) return { loanId, instalmentNumber, action: 'skipped', reason: 'repayment row not found' };
+  if (row.source !== 'GuarantorOffset') {
+    return { loanId, instalmentNumber, action: 'skipped', reason: `row.source is ${row.source}, not GuarantorOffset — nothing to backfill` };
+  }
 
   const debits = await models.contributionModel
     .find({ loanId, instalmentNumber, isDebit: true })
     .exec();
 
-  const guarantorDebited = debits
-    .filter((d: any) => d.source === 'GuarantorOffset')
-    .reduce((sum: number, d: any) => sum + d.paidAmount, 0);
-  const borrowerDebited = debits
-    .filter((d: any) => d.source === 'DefaulterDeduction')
-    .reduce((sum: number, d: any) => sum + d.paidAmount, 0);
+  if (debits.length === 0) {
+    return { loanId, instalmentNumber, action: 'skipped', reason: 'no matching Contribution debit rows found for this instalment' };
+  }
+
+  const guarantorDebited = round2(
+    debits.filter((d: any) => d.source === 'GuarantorOffset').reduce((sum: number, d: any) => sum + d.paidAmount, 0),
+  );
+  const borrowerDebited = round2(
+    debits.filter((d: any) => d.source === 'DefaulterDeduction').reduce((sum: number, d: any) => sum + d.paidAmount, 0),
+  );
+
+  if (round2(guarantorDebited + borrowerDebited) !== round2(row.paidAmount ?? 0)) {
+    return {
+      loanId,
+      instalmentNumber,
+      action: 'skipped',
+      reason: `mismatch: computed split ${guarantorDebited + borrowerDebited} does not equal row.paidAmount ${row.paidAmount}`,
+    };
+  }
 
   const source = guarantorDebited > 0 ? RepaymentSource.GuarantorOffset : RepaymentSource.DefaulterDeduction;
 
-  if (!confirm) return { loanId, instalmentNumber, action: 'would-backfill' };
+  if (!confirm) return { loanId, instalmentNumber, action: 'would-backfill', source, guarantorDebited, borrowerDebited };
 
   await models.repaymentModel.updateOne(
     { _id: row._id },
@@ -166,7 +180,7 @@ export async function backfillRepaymentSource(
     });
   }
 
-  return { loanId, instalmentNumber, action: 'backfilled' };
+  return { loanId, instalmentNumber, action: 'backfilled', source, guarantorDebited, borrowerDebited };
 }
 
 async function run(): Promise<void> {
@@ -174,20 +188,28 @@ async function run(): Promise<void> {
   console.log(`Connected to MongoDB${CONFIRM ? '' : ' (DRY RUN — pass --confirm to write)'}`);
 
   const models: Models = {
-    loanModel: mongoose.model('Loan', LoanSchema),
-    repaymentModel: mongoose.model('LoanRepayment', LoanRepaymentSchema),
-    contributionModel: mongoose.model('Contribution', ContributionSchema),
+    loanModel: mongoose.model('Loan', LoanSchema, 'loans'),
+    repaymentModel: mongoose.model('LoanRepayment', LoanRepaymentSchema, 'loan_repayments'),
+    contributionModel: mongoose.model('Contribution', ContributionSchema, 'contributions'),
     auditModel: mongoose.model('AuditLog', AuditLogSchema),
   };
 
   for (const loanId of LOAN_IDS) {
-    const result = await remediateLoan(loanId, models, CONFIRM);
-    console.log(JSON.stringify(result));
+    try {
+      const result = await remediateLoan(loanId, models, CONFIRM);
+      console.log(JSON.stringify(result));
+    } catch (err) {
+      console.error(`Failed to remediate loan ${loanId}:`, err);
+    }
   }
 
   for (const { loanId, instalmentNumber } of MISLABELED_ROWS) {
-    const result = await backfillRepaymentSource(loanId, instalmentNumber, models, CONFIRM);
-    console.log(JSON.stringify(result));
+    try {
+      const result = await backfillRepaymentSource(loanId, instalmentNumber, models, CONFIRM);
+      console.log(JSON.stringify(result));
+    } catch (err) {
+      console.error(`Failed to backfill loan ${loanId} instalment ${instalmentNumber}:`, err);
+    }
   }
 
   await mongoose.disconnect();

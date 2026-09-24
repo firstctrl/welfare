@@ -15,7 +15,6 @@ import { LoanRepayment, LoanRepaymentDocument } from '../schemas/loan-repayment.
 import { SystemConfigService } from '../../system-config/system-config.service';
 import { AuditService } from '../../audit/audit.service';
 import { ContributionsService } from '../../contributions/contributions.service';
-import { LoansService } from '../loans.service';
 
 type ConfigMap = Record<string, { value: string }>;
 
@@ -33,7 +32,6 @@ export class DefaultRecoveryJob {
     private readonly configService: SystemConfigService,
     private readonly auditService: AuditService,
     private readonly contributionsService: ContributionsService,
-    private readonly loansService: LoansService,
   ) {}
 
   @Cron('10 0 * * *')
@@ -125,7 +123,6 @@ export class DefaultRecoveryJob {
     for (const loan of defaultedLoans) {
       try {
         await this.recoverDefaultedLoan(loan, today);
-        await this.loansService.checkAndCompleteIfDone(loan._id.toString(), 'system', 'DefaultRecoveryJob');
       } catch (err) {
         this.logger.error(`Failed recovery for loan ${loan._id.toString()}`, err);
       }

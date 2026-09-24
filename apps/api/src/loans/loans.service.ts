@@ -785,7 +785,8 @@ export class LoansService implements OnModuleInit {
 
     if (
       repayment.source === RepaymentSource.ExitDeduction ||
-      repayment.source === RepaymentSource.GuarantorOffset
+      repayment.source === RepaymentSource.GuarantorOffset ||
+      repayment.source === RepaymentSource.DefaulterDeduction
     ) {
       throw new BadRequestException(
         `Cannot reverse a ${repayment.source} payment — reverse the originating settlement instead`,
