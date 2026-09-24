@@ -15,7 +15,8 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator';
-import { AppModule } from '@welfare/shared';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { AppModule, UserRole } from '@welfare/shared';
 import { LoansService } from './loans.service';
 import { LoansImportService } from './loans.import.service';
 import { LoansRecordsImportService } from './loans.records.import.service';
@@ -246,6 +247,7 @@ export class LoansController {
 
   @Delete('bulk')
   @RequirePermission(AppModule.Loans, 'full')
+  @Roles(UserRole.WelfareManager, UserRole.Admin)
   @HttpCode(HttpStatus.OK)
   bulkDelete(
     @Body() dto: BulkDeleteDto,
@@ -343,6 +345,7 @@ export class LoansController {
 
   @Delete(':id')
   @RequirePermission(AppModule.Loans, 'full')
+  @Roles(UserRole.WelfareManager, UserRole.Admin)
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteLoan(
     @Param('id') id: string,

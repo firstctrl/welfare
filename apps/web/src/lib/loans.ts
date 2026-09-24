@@ -223,7 +223,9 @@ export async function deleteLoan(id: string): Promise<void> {
   await apiClient.delete(`/loans/${id}`);
 }
 
-export async function bulkDeleteLoans(ids: string[]): Promise<{ deleted: number }> {
+export async function bulkDeleteLoans(
+  ids: string[],
+): Promise<{ deleted: string[]; failed: { id: string; reason: string }[] }> {
   const { data } = await apiClient.delete('/loans/bulk', { data: { ids } });
   return data;
 }
