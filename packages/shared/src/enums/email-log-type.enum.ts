@@ -7,4 +7,5 @@ export enum EmailLogType {
   PasswordReset = 'PasswordReset',
   MissedContributionReminder = 'MissedContributionReminder',
   LoanOverdueReminder = 'LoanOverdueReminder',
+  GracePeriodWarning = 'GracePeriodWarning',
 }
