@@ -40,6 +40,7 @@ export class LoanRepayment {
   @Prop({ min: 0 }) borrowerDebited?: number;
   @Prop() guarantorStaffId?: string;
   @Prop() notes?: string;
+  @Prop() overdueReminderSentAt?: Date;
   @Prop({ type: [PaymentEntrySchema], default: [] }) payments!: PaymentEntry[];
 }
 

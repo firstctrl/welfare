@@ -10,6 +10,7 @@ import { LoansLegacyImportService } from './loans.legacy-import.service';
 import { OverdueDetectionJob } from './jobs/overdue-detection.job';
 import { DefaultRecoveryJob } from './jobs/default-recovery.job';
 import { PaymentReminderJob } from './jobs/payment-reminder.job';
+import { LoanOverdueReminderJob } from './jobs/loan-overdue-reminder.job';
 import { Loan, LoanSchema } from './schemas/loan.schema';
 import { LoanRepayment, LoanRepaymentSchema } from './schemas/loan-repayment.schema';
 import { LoanImportBatch, LoanImportBatchSchema } from './schemas/loan-import-batch.schema';
@@ -39,7 +40,7 @@ import { ContributionsModule } from '../contributions/contributions.module';
     ContributionsModule,
   ],
   controllers: [LoansController, StaffLoansController],
-  providers: [LoansService, LoansImportService, LoansRecordsImportService, LoansLegacyImportService, OverdueDetectionJob, DefaultRecoveryJob, LoanScheduleSenderService, PaymentReminderJob],
+  providers: [LoansService, LoansImportService, LoansRecordsImportService, LoansLegacyImportService, OverdueDetectionJob, DefaultRecoveryJob, LoanScheduleSenderService, PaymentReminderJob, LoanOverdueReminderJob],
   exports: [LoansService],
 })
 export class LoansModule {}
