@@ -851,28 +851,58 @@ describe('LoansService', () => {
   });
 
   describe('bulkDeleteLoans', () => {
-    it('deletes each loan by id and reports the count', async () => {
-      const loan1 = { _id: { toString: () => 'l1' }, status: LoanStatus.Completed };
-      const loan2 = { _id: { toString: () => 'l2' }, status: LoanStatus.Completed };
+    const activeLoan = (id: string) => ({
+      _id: { toString: () => id },
+      status: LoanStatus.Active,
+      guarantorRestitutionOwed: 0,
+      guarantorRestitutionPaid: 0,
+      badDebtAmount: 0,
+      principalAmount: 1000,
+      totalRepayable: 1100,
+      tenureMonths: 1,
+      disbursedDate: new Date('2026-01-01'),
+      staffId: 'staff-1',
+      guarantorId: 'guarantor-1',
+    });
+
+    beforeEach(() => {
+      contributionsService.hasContributionsForLoan = jest.fn().mockResolvedValue(false);
+      repaymentModel.deleteMany.mockReturnValue({ exec: jest.fn().mockResolvedValue(undefined) });
+      loanModel.findByIdAndDelete.mockReturnValue({ exec: jest.fn().mockResolvedValue(undefined) });
+      repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+    });
+
+    it('deletes each deletable loan and reports their ids', async () => {
+      const loan1 = activeLoan('l1');
+      const loan2 = activeLoan('l2');
       loanModel.findById
         .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(loan1) })
         .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(loan2) });
-      repaymentModel.deleteMany.mockReturnValue({ exec: jest.fn().mockResolvedValue(undefined) });
-      loanModel.findByIdAndDelete.mockReturnValue({ exec: jest.fn().mockResolvedValue(undefined) });
+      repaymentModel.exists.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
 
       const result = await service.bulkDeleteLoans(['l1', 'l2'], 'actor-id', 'Actor');
 
-      expect(result).toEqual({ deleted: 2 });
+      expect(result).toEqual({ deleted: ['l1', 'l2'], failed: [] });
       expect(loanModel.findByIdAndDelete).toHaveBeenCalledTimes(2);
     });
 
-    it('stops and throws when an active loan has recorded payments', async () => {
-      const loan1 = { _id: { toString: () => 'l1' }, status: LoanStatus.Active };
-      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan1) });
-      repaymentModel.exists.mockReturnValue({ exec: jest.fn().mockResolvedValue(true) });
+    it('reports a failure for one loan without blocking the ones before or after it in the batch', async () => {
+      const loan1 = activeLoan('l1');
+      const loan2 = { ...activeLoan('l2'), status: LoanStatus.Completed };
+      const loan3 = activeLoan('l3');
+      loanModel.findById
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(loan1) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(loan2) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(loan3) });
+      repaymentModel.exists.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
 
-      await expect(service.bulkDeleteLoans(['l1'], 'actor-id', 'Actor')).rejects.toThrow(BadRequestException);
-      expect(loanModel.findByIdAndDelete).not.toHaveBeenCalled();
+      const result = await service.bulkDeleteLoans(['l1', 'l2', 'l3'], 'actor-id', 'Actor');
+
+      expect(result.deleted).toEqual(['l1', 'l3']);
+      expect(result.failed).toEqual([
+        { id: 'l2', reason: expect.stringContaining('Active loans can be deleted') },
+      ]);
+      expect(loanModel.findByIdAndDelete).toHaveBeenCalledTimes(2);
     });
   });
 });
