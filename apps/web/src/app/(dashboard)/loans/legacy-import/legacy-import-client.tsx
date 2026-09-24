@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
-import { Upload, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Upload, Download, CheckCircle, AlertTriangle } from 'lucide-react';
 import { ImportBatchStatus } from '@welfare/shared';
 import type { ILoanLegacyImportBatch } from '@welfare/shared';
 import { importLegacyLoans, listLegacyImportBatches, dismissLegacyFlaggedEntry, clearLegacyFlaggedEntries } from '@/lib/loans';
@@ -23,6 +23,70 @@ const statusKind: Record<ImportBatchStatus, 'success' | 'warning' | 'info'> = {
   [ImportBatchStatus.Resolved]:  'info',
   [ImportBatchStatus.Completed]: 'success',
 };
+
+function downloadSampleTemplate() {
+  const loanRows = [
+    {
+      'Loan Ref': 'L1',
+      'Staff ID': 'S001',
+      'Guarantor Staff ID': 'S002',
+      'Principal Amount': 6000,
+      'Tenure Months': 2,
+      'Disbursed Date': '15/06/2024',
+      'Status': 'Active',
+      'Cutover Date': '01/01/2026',
+      'Guarantor Restitution Owed': 0,
+      'Guarantor Restitution Paid': 0,
+      'Cheque No': 'CHQ-1001',
+      'PV No': 'PV-2001',
+      'Notes': 'Migrated from old system',
+    },
+    {
+      'Loan Ref': 'L2',
+      'Staff ID': 'S003',
+      'Guarantor Staff ID': 'S004',
+      'Principal Amount': 4000,
+      'Tenure Months': 1,
+      'Disbursed Date': '01/03/2024',
+      'Status': 'Completed',
+      'Cutover Date': '01/01/2026',
+      'Guarantor Restitution Owed': 0,
+      'Guarantor Restitution Paid': 0,
+      'Cheque No': 'CHQ-1002',
+      'PV No': 'PV-2002',
+      'Notes': '',
+    },
+  ];
+  const instalmentRows = [
+    { 'Loan Ref': 'L1', 'Instalment Number': 1, 'Due Date': '05/07/2024', 'Due Amount': 3000, 'Paid Amount': 3000, 'Paid Date': '03/07/2024', 'Status': 'Paid' },
+    { 'Loan Ref': 'L1', 'Instalment Number': 2, 'Due Date': '05/08/2024', 'Due Amount': 3000, 'Paid Amount': 0, 'Paid Date': '', 'Status': 'Pending' },
+    { 'Loan Ref': 'L2', 'Instalment Number': 1, 'Due Date': '05/04/2024', 'Due Amount': 4000, 'Paid Amount': 4000, 'Paid Date': '03/04/2024', 'Status': 'Paid' },
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(loanRows), 'Loans');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(instalmentRows), 'Instalments');
+  XLSX.writeFile(wb, 'legacy-loan-import-sample.xlsx');
+}
+
+const FIELD_REFERENCE: { sheet: string; field: string; rule: string }[] = [
+  { sheet: 'Loans', field: 'Loan Ref', rule: 'Your own choice per loan (e.g. "L1", or the old system’s loan number). Must be unique within the Loans sheet and match exactly on that loan’s Instalments rows.' },
+  { sheet: 'Loans', field: 'Staff ID / Guarantor Staff ID', rule: 'Must match an existing staff member’s Staff ID (the business ID on their profile, not their name).' },
+  { sheet: 'Loans', field: 'Principal Amount', rule: 'Number greater than 0.' },
+  { sheet: 'Loans', field: 'Tenure Months', rule: 'Whole number, 1 or more.' },
+  { sheet: 'Loans', field: 'Disbursed Date', rule: 'Required. Use a real Excel date, or text as DD/MM/YYYY.' },
+  { sheet: 'Loans', field: 'Status', rule: 'Exact match, one of: Active, Completed, Defaulted, WrittenOff, BadDebt.' },
+  { sheet: 'Loans', field: 'Cutover Date', rule: 'Required. Arrears dated before this are frozen from automated overdue/default jobs; on or after it, they’re treated like a normal loan.' },
+  { sheet: 'Loans', field: 'Guarantor Restitution Owed / Paid', rule: 'Optional numbers, default 0 if left blank.' },
+  { sheet: 'Loans', field: 'Cheque No / PV No / Notes', rule: 'Optional free text.' },
+  { sheet: 'Instalments', field: 'Loan Ref', rule: 'Must exactly match a Loan Ref from the Loans sheet. A ref that matches nothing is flagged, not silently dropped.' },
+  { sheet: 'Instalments', field: 'Instalment Number', rule: 'Whole number starting at 1 (not 0). Must be unique within the same Loan Ref.' },
+  { sheet: 'Instalments', field: 'Due Date', rule: 'Required. Same date format as above.' },
+  { sheet: 'Instalments', field: 'Due Amount', rule: 'Number greater than 0.' },
+  { sheet: 'Instalments', field: 'Paid Amount', rule: 'Number, 0 or more (blank = 0). Not checked against Due Amount — your figures are trusted as-is.' },
+  { sheet: 'Instalments', field: 'Paid Date', rule: 'Required only when Status is Paid or Partial; otherwise leave blank.' },
+  { sheet: 'Instalments', field: 'Status', rule: 'Exact match, one of: Pending, Paid, Partial, Overdue, Waived.' },
+];
 
 interface PreviewRow {
   loanRef: string;
@@ -139,6 +203,11 @@ export default function LoanLegacyImportClient() {
         <CardHeader
           title="Upload Excel File"
           subtitle='Two sheets required: "Loans" (Loan Ref, Staff ID, Guarantor Staff ID, Principal Amount, Tenure Months, Disbursed Date, Status, Cutover Date, Guarantor Restitution Owed, Guarantor Restitution Paid, Cheque No, PV No) and "Instalments" (Loan Ref, Instalment Number, Due Date, Due Amount, Paid Amount, Paid Date, Status)'
+          action={
+            <Button variant="secondary" size="sm" Icon={Download} onClick={downloadSampleTemplate}>
+              Download Sample Template
+            </Button>
+          }
         />
         <CardBody className="space-y-4">
           <div
@@ -215,6 +284,38 @@ export default function LoanLegacyImportClient() {
           {importMutation.isPending && progress && (
             <ImportProgressBar processed={progress.processed} total={progress.total} />
           )}
+        </CardBody>
+      </Card>
+
+      {/* Field reference */}
+      <Card>
+        <CardHeader title="Field Reference" subtitle="Column rules for both sheets. Sheet names and column headers must match exactly (case-sensitive)." />
+        <CardBody noPadding>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-neutral-200 bg-neutral-50">
+                  {['Sheet', 'Field', 'Rule'].map((h) => (
+                    <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {FIELD_REFERENCE.map((row, i) => (
+                  <tr key={i} className="hover:bg-neutral-50 align-top">
+                    <td className="px-4 py-2 text-xs text-neutral-400 whitespace-nowrap">{row.sheet}</td>
+                    <td className="px-4 py-2 text-xs font-mono text-neutral-700 whitespace-nowrap">{row.field}</td>
+                    <td className="px-4 py-2 text-xs text-neutral-600">{row.rule}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="px-4 py-3 text-xs text-neutral-500 border-t border-neutral-100">
+            Duplicate Loan Refs on the Loans sheet flag both rows and create neither loan. Re-uploading a whole file after
+            fixing one flagged loan re-creates loans that already succeeded — only re-upload the corrected rows, or dismiss
+            the flagged entries and upload just those.
+          </p>
         </CardBody>
       </Card>
 
