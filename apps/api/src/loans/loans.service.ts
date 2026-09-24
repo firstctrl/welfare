@@ -700,7 +700,12 @@ export class LoansService implements OnModuleInit {
 
   // ───────────────── DELETE LOAN ─────────────────
 
-  async deleteLoan(loanId: string, actorId: string, actorName: string): Promise<void> {
+  async deleteLoan(
+    loanId: string,
+    actorId: string,
+    actorName: string,
+    opts?: { forceDelete?: boolean; reason?: string },
+  ): Promise<void> {
     const loan = await this.findOne(loanId);
 
     if (loan.status !== LoanStatus.Active) {
@@ -720,14 +725,27 @@ export class LoansService implements OnModuleInit {
     if ((loan.badDebtAmount ?? 0) > 0) {
       throw new BadRequestException('Cannot delete a loan with recorded bad debt');
     }
-    if (await this.contributionsService.hasContributionsForLoan(loanId)) {
+
+    const forceDelete = opts?.forceDelete ?? false;
+    if (forceDelete && !opts?.reason?.trim()) {
+      throw new BadRequestException('A reason is required to force-delete a loan');
+    }
+
+    const hasContributions = await this.contributionsService.hasContributionsForLoan(loanId);
+    if (hasContributions && !forceDelete) {
       throw new BadRequestException('Cannot delete a loan with linked contribution records');
+    }
+
+    let reversedContributions: { count: number; totalAmount: number; rows: Record<string, unknown>[] } | undefined;
+    if (hasContributions && forceDelete) {
+      reversedContributions = await this.contributionsService.reverseContributionsForLoan(loanId);
     }
 
     const repayments = await this.repaymentModel.find({ loanId }).exec();
     const snapshot = {
       loan: loan.toObject(),
       repayments: repayments.map((r) => r.toObject()),
+      ...(reversedContributions ? { reversedContributions } : {}),
     };
 
     await this.discountModel
@@ -744,7 +762,12 @@ export class LoansService implements OnModuleInit {
         .removeObject(LOAN_DOCS_BUCKET, loan.documentKey)
         .catch((err: unknown) => this.logger.warn(`Failed to remove loan document ${loan.documentKey}: ${err instanceof Error ? err.message : err}`));
     }
-    this.auditService.log(actorId, actorName, AuditAction.Delete, AuditEntity.Loan, loanId, snapshot, { deleted: true });
+    this.auditService.log(
+      actorId, actorName, AuditAction.Delete, AuditEntity.Loan, loanId, snapshot,
+      forceDelete
+        ? { deleted: true, forced: true, reason: opts?.reason?.trim(), reversedContributionsTotal: reversedContributions?.totalAmount ?? 0 }
+        : { deleted: true },
+    );
   }
 
   async bulkDeleteLoans(

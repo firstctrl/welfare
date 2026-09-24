@@ -945,6 +945,88 @@ describe('LoansService', () => {
       await expect(service.deleteLoan('loan-1', 'actor-1', 'Actor')).rejects.toThrow('linked contribution records');
       expect(loanModel.findByIdAndDelete).not.toHaveBeenCalled();
     });
+
+    it('force-deletes a loan with linked contributions when forceDelete + reason are given, and reverses them', async () => {
+      const loan = activeLoan();
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+      contributionsService.hasContributionsForLoan = jest.fn().mockResolvedValue(true);
+      contributionsService.reverseContributionsForLoan = jest.fn().mockResolvedValue({
+        count: 2,
+        totalAmount: 1500,
+        rows: [{ _id: 'c1' }, { _id: 'c2' }],
+      });
+
+      await service.deleteLoan('loan-1', 'actor-1', 'Actor', { forceDelete: true, reason: 'Duplicate loan entered in error' });
+
+      expect(contributionsService.reverseContributionsForLoan).toHaveBeenCalledWith('loan-1');
+      expect(loanModel.findByIdAndDelete).toHaveBeenCalledWith('loan-1');
+      const [, , , , , before, meta] = auditService.log.mock.calls[0];
+      expect(before.reversedContributions).toEqual({ count: 2, totalAmount: 1500, rows: [{ _id: 'c1' }, { _id: 'c2' }] });
+      expect(meta).toEqual(expect.objectContaining({
+        deleted: true,
+        forced: true,
+        reason: 'Duplicate loan entered in error',
+      }));
+    });
+
+    it('rejects forceDelete with no reason', async () => {
+      const loan = activeLoan();
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      contributionsService.hasContributionsForLoan = jest.fn().mockResolvedValue(true);
+      contributionsService.reverseContributionsForLoan = jest.fn();
+
+      await expect(
+        service.deleteLoan('loan-1', 'actor-1', 'Actor', { forceDelete: true }),
+      ).rejects.toThrow('reason is required');
+      expect(loanModel.findByIdAndDelete).not.toHaveBeenCalled();
+      expect(contributionsService.reverseContributionsForLoan).not.toHaveBeenCalled();
+    });
+
+    it('rejects forceDelete with a whitespace-only reason', async () => {
+      const loan = activeLoan();
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      contributionsService.hasContributionsForLoan = jest.fn().mockResolvedValue(true);
+
+      await expect(
+        service.deleteLoan('loan-1', 'actor-1', 'Actor', { forceDelete: true, reason: '   ' }),
+      ).rejects.toThrow('reason is required');
+    });
+
+    it('does not touch contributions when forceDelete is true but the loan has none linked', async () => {
+      const loan = activeLoan();
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+      contributionsService.hasContributionsForLoan = jest.fn().mockResolvedValue(false);
+      contributionsService.reverseContributionsForLoan = jest.fn();
+
+      await service.deleteLoan('loan-1', 'actor-1', 'Actor', { forceDelete: true, reason: 'just in case' });
+
+      expect(contributionsService.reverseContributionsForLoan).not.toHaveBeenCalled();
+      expect(loanModel.findByIdAndDelete).toHaveBeenCalledWith('loan-1');
+      const [, , , , , before] = auditService.log.mock.calls[0];
+      expect(before.reversedContributions).toBeUndefined();
+    });
+
+    it('still rejects forceDelete on a loan with outstanding guarantor restitution', async () => {
+      const loan = activeLoan({ guarantorRestitutionOwed: 500, guarantorRestitutionPaid: 100 });
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+
+      await expect(
+        service.deleteLoan('loan-1', 'actor-1', 'Actor', { forceDelete: true, reason: 'override attempt' }),
+      ).rejects.toThrow('outstanding guarantor restitution');
+      expect(loanModel.findByIdAndDelete).not.toHaveBeenCalled();
+    });
+
+    it('still rejects forceDelete on a loan with recorded bad debt', async () => {
+      const loan = activeLoan({ badDebtAmount: 200 });
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+
+      await expect(
+        service.deleteLoan('loan-1', 'actor-1', 'Actor', { forceDelete: true, reason: 'override attempt' }),
+      ).rejects.toThrow('recorded bad debt');
+      expect(loanModel.findByIdAndDelete).not.toHaveBeenCalled();
+    });
   });
 
   describe('bulkDeleteLoans', () => {
