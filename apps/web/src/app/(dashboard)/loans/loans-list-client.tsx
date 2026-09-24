@@ -104,7 +104,7 @@ export function LoansListClient() {
   const selectedIds = Object.keys(rowSelection).filter((id) => rowSelection[id]);
 
   const columns = useMemo(() => [
-    ...(permission === 'full' ? [col.display({
+    ...(permission === 'full' && canDelete ? [col.display({
       id: 'select',
       enableSorting: false,
       header: ({ table }) => (
@@ -164,7 +164,7 @@ export function LoansListClient() {
       header: 'Status',
       cell: (info) => <StatusBadge status={info.getValue()} />,
     }),
-  ], [outstandingMap, permission]);
+  ], [outstandingMap, permission, canDelete]);
 
   const table = useReactTable({
     data: filtered,

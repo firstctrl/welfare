@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   Inject,
   Injectable,
   Logger,
@@ -738,7 +739,12 @@ export class LoansService implements OnModuleInit {
     await this.repaymentModel.deleteMany({ loanId }).exec();
     await this.loanModel.findByIdAndDelete(loanId).exec();
     this.meiliClient.index('loans').deleteDocument(loanId).catch(() => { /* non-fatal */ });
-    this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.Loan, loanId, snapshot, { deleted: true });
+    if (loan.documentKey) {
+      this.minioClient
+        .removeObject(LOAN_DOCS_BUCKET, loan.documentKey)
+        .catch((err: unknown) => this.logger.warn(`Failed to remove loan document ${loan.documentKey}: ${err instanceof Error ? err.message : err}`));
+    }
+    this.auditService.log(actorId, actorName, AuditAction.Delete, AuditEntity.Loan, loanId, snapshot, { deleted: true });
   }
 
   async bulkDeleteLoans(
@@ -753,7 +759,12 @@ export class LoansService implements OnModuleInit {
         await this.deleteLoan(id, actorId, actorName);
         deleted.push(id);
       } catch (err: unknown) {
-        failed.push({ id, reason: err instanceof Error ? err.message : 'Delete failed' });
+        if (err instanceof HttpException) {
+          failed.push({ id, reason: err.message });
+        } else {
+          this.logger.error(`Unexpected error deleting loan ${id} during bulk delete`, err);
+          failed.push({ id, reason: 'Delete failed' });
+        }
       }
     }
     return { deleted, failed };

@@ -176,6 +176,7 @@ export function LoanDetailClient({ id }: { id: string }) {
   const hasBadDebt = (loan.badDebtAmount ?? 0) > 0;
   const canDelete =
     canDeleteRole &&
+    !scheduleLoading &&
     loan.status === LoanStatus.Active &&
     !hasPaidPayments &&
     !hasOutstandingRestitution &&
