@@ -13,4 +13,9 @@ describe('LoansController — delete route role gate', () => {
     const roles = Reflect.getMetadata(ROLES_KEY, LoansController.prototype.bulkDelete);
     expect(roles).toEqual([UserRole.WelfareManager, UserRole.Admin]);
   });
+
+  it('keeps the same role gate regardless of the ForceDeleteLoanDto body', () => {
+    const roles = Reflect.getMetadata(ROLES_KEY, LoansController.prototype.deleteLoan);
+    expect(roles).toEqual([UserRole.WelfareManager, UserRole.Admin]);
+  });
 });

@@ -29,6 +29,7 @@ import { ProcessPayOffDto } from './dto/process-payoff.dto';
 import { BulkDeleteDto } from './dto/bulk-delete.dto';
 import { ResolveLoanByStaffIdDto } from './dto/resolve-loan-by-staff-id.dto';
 import { DismissFlaggedEntryDto } from './dto/dismiss-flagged-entry.dto';
+import { ForceDeleteLoanDto } from './dto/force-delete-loan.dto';
 
 @Controller('loans')
 export class LoansController {
@@ -349,8 +350,12 @@ export class LoansController {
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteLoan(
     @Param('id') id: string,
+    @Body() dto: ForceDeleteLoanDto,
     @CurrentUser() user: { _id: { toString(): string }; displayName: string },
   ) {
-    return this.loansService.deleteLoan(id, user._id.toString(), user.displayName);
+    return this.loansService.deleteLoan(id, user._id.toString(), user.displayName, {
+      forceDelete: dto.forceDelete,
+      reason: dto.reason,
+    });
   }
 }
