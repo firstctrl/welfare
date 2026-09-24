@@ -264,6 +264,10 @@ export class ContributionsService {
     return credits - debits;
   }
 
+  async hasContributionsForLoan(loanId: string): Promise<boolean> {
+    return !!(await this.contributionModel.exists({ loanId }).exec());
+  }
+
   async debitDefaulterContribution(
     staffId: string,
     amount: number,

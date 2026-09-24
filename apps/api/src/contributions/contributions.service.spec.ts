@@ -17,6 +17,7 @@ const mockCreate = jest.fn();
 
 const mockFindById = jest.fn();
 const mockFindByIdAndDelete = jest.fn();
+const mockExists = jest.fn();
 
 const mockContributionModel = {
   findOne: mockFindOne,
@@ -27,6 +28,7 @@ const mockContributionModel = {
   create: mockCreate,
   findById: mockFindById,
   findByIdAndDelete: mockFindByIdAndDelete,
+  exists: mockExists,
 };
 
 const mockLoanFindOne = jest.fn();
@@ -593,6 +595,25 @@ describe('ContributionsService', () => {
       mockFindById.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
 
       await expect(service.bulkDeleteContributions(['missing'], 'actor-id', 'Actor')).rejects.toThrow('Contribution missing not found');
+    });
+  });
+
+  describe('hasContributionsForLoan', () => {
+    it('returns true when a Contribution row references the loanId', async () => {
+      mockExists.mockReturnValue({ exec: jest.fn().mockResolvedValue({ _id: 'c1' }) });
+
+      const result = await service.hasContributionsForLoan('loan-1');
+
+      expect(mockExists).toHaveBeenCalledWith({ loanId: 'loan-1' });
+      expect(result).toBe(true);
+    });
+
+    it('returns false when no Contribution row references the loanId', async () => {
+      mockExists.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+
+      const result = await service.hasContributionsForLoan('loan-1');
+
+      expect(result).toBe(false);
     });
   });
 });
