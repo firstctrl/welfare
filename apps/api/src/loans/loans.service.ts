@@ -701,16 +701,51 @@ export class LoansService implements OnModuleInit {
 
   async deleteLoan(loanId: string, actorId: string, actorName: string): Promise<void> {
     const loan = await this.findOne(loanId);
-    if (loan.status === LoanStatus.Active) {
-      const hasPaid = await this.repaymentModel
-        .exists({ loanId, paidAmount: { $gt: 0 } })
-        .exec();
-      if (hasPaid) throw new BadRequestException('Cannot delete an active loan with recorded payments');
+
+    if (loan.status !== LoanStatus.Active) {
+      throw new BadRequestException(
+        'Only Active loans can be deleted — use Write-Off or Exit Settlement to retire this loan',
+      );
     }
+
+    const hasPaid = await this.repaymentModel
+      .exists({ loanId, paidAmount: { $gt: 0 } })
+      .exec();
+    if (hasPaid) throw new BadRequestException('Cannot delete an active loan with recorded payments');
+
+    if ((loan.guarantorRestitutionOwed ?? 0) > (loan.guarantorRestitutionPaid ?? 0)) {
+      throw new BadRequestException('Cannot delete a loan with outstanding guarantor restitution');
+    }
+    if ((loan.badDebtAmount ?? 0) > 0) {
+      throw new BadRequestException('Cannot delete a loan with recorded bad debt');
+    }
+    if (await this.contributionsService.hasContributionsForLoan(loanId)) {
+      throw new BadRequestException('Cannot delete a loan with linked contribution records');
+    }
+
+    const repayments = await this.repaymentModel.find({ loanId }).exec();
+    const snapshot = {
+      loan: {
+        principalAmount: loan.principalAmount,
+        totalRepayable: loan.totalRepayable,
+        tenureMonths: loan.tenureMonths,
+        disbursedDate: loan.disbursedDate,
+        status: loan.status,
+        staffId: loan.staffId,
+        guarantorId: loan.guarantorId,
+      },
+      repayments: repayments.map((r) => ({
+        instalmentNumber: r.instalmentNumber,
+        dueDate: r.dueDate,
+        dueAmount: r.dueAmount,
+        status: r.status,
+      })),
+    };
+
     await this.repaymentModel.deleteMany({ loanId }).exec();
     await this.loanModel.findByIdAndDelete(loanId).exec();
     this.meiliClient.index('loans').deleteDocument(loanId).catch(() => { /* non-fatal */ });
-    this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.Loan, loanId, undefined, { deleted: true });
+    this.auditService.log(actorId, actorName, AuditAction.Update, AuditEntity.Loan, loanId, snapshot, { deleted: true });
   }
 
   async bulkDeleteLoans(loanIds: string[], actorId: string, actorName: string): Promise<{ deleted: number }> {
