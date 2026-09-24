@@ -673,7 +673,7 @@ export class LoansService implements OnModuleInit {
       : penaltyValue;
   }
 
-  private async checkAndCompleteIfDone(
+  async checkAndCompleteIfDone(
     loanId: string,
     actorId: string,
     actorName: string,

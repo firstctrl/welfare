@@ -9,6 +9,7 @@ import { SystemConfigService } from '../../system-config/system-config.service';
 import { AuditService } from '../../audit/audit.service';
 import { ContributionsService } from '../../contributions/contributions.service';
 import { EmailService } from '../../email/email.service';
+import { LoansService } from '../loans.service';
 import { LoanRepaymentStatus, LoanStatus, RepaymentSource } from '@welfare/shared';
 
 const mockConfig = () => ({
@@ -24,6 +25,7 @@ describe('OverdueDetectionJob', () => {
   let configService: any;
   let auditService: any;
   let contributionsService: any;
+  let loansService: any;
 
   beforeEach(async () => {
     repaymentModel = { find: jest.fn() };
@@ -34,6 +36,7 @@ describe('OverdueDetectionJob', () => {
       debitGuarantorOffset: jest.fn(),
       debitDefaulterContribution: jest.fn().mockResolvedValue({ debited: 0, remaining: 0 }),
     };
+    loansService = { checkAndCompleteIfDone: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -46,6 +49,7 @@ describe('OverdueDetectionJob', () => {
         { provide: AuditService, useValue: auditService },
         { provide: ContributionsService, useValue: contributionsService },
         { provide: EmailService, useValue: { send: jest.fn().mockResolvedValue(undefined) } },
+        { provide: LoansService, useValue: loansService },
       ],
     }).compile();
 
@@ -181,5 +185,26 @@ describe('OverdueDetectionJob', () => {
     expect(loanModel.find).toHaveBeenCalledWith(
       expect.objectContaining({ legacy: { $ne: true } }),
     );
+  });
+
+  it('calls checkAndCompleteIfDone for the instalment\'s loan after processing it', async () => {
+    const inst = makeInstalment('loan-1', new Date('2026-04-05'));
+    const realNow = Date;
+    global.Date = class extends Date {
+      constructor(...args: any[]) {
+        if (args.length === 0) { super('2026-05-19'); } else { super(...(args as [any])); }
+      }
+    } as any;
+
+    repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
+    loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(makeLoan()) });
+    configService.getAll.mockResolvedValue(mockConfig());
+    contributionsService.debitGuarantorOffset.mockResolvedValue({ debited: 4000, remaining: 0 });
+
+    await job.detectAndProcess();
+
+    expect(loansService.checkAndCompleteIfDone).toHaveBeenCalledWith('loan-1', 'system', 'Overdue Detection Job');
+
+    global.Date = realNow;
   });
 });

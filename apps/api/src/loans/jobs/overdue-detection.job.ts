@@ -21,6 +21,7 @@ import { AuditService } from '../../audit/audit.service';
 import { ContributionsService } from '../../contributions/contributions.service';
 import { EmailService } from '../../email/email.service';
 import { renderLoanForfeitureNotice } from '../../email/templates/loan-forfeiture-notice.template';
+import { LoansService } from '../loans.service';
 
 type ConfigMap = Record<string, { value: string }>;
 
@@ -42,6 +43,7 @@ export class OverdueDetectionJob {
     private readonly auditService: AuditService,
     private readonly contributionsService: ContributionsService,
     private readonly emailService: EmailService,
+    private readonly loansService: LoansService,
   ) {}
 
   @Cron('5 0 * * *')
@@ -65,6 +67,7 @@ export class OverdueDetectionJob {
     for (const inst of dueInstalments) {
       try {
         await this.processOverdueInstalment(inst, config as ConfigMap, today);
+        await this.loansService.checkAndCompleteIfDone(inst.loanId, 'system', 'Overdue Detection Job');
       } catch (err) {
         this.logger.error(`Failed to process instalment ${inst._id.toString()}`, err);
       }
