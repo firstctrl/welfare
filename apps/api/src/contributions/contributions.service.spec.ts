@@ -619,6 +619,32 @@ describe('ContributionsService', () => {
     });
   });
 
+  describe('peekContributionsForLoan', () => {
+    it('returns the same snapshot as reverseContributionsForLoan but never deletes anything', async () => {
+      const rows = [
+        { _id: 'c1', staffId: 'guarantor-1', source: ContributionSource.GuarantorOffset, paidAmount: 1000, loanId: 'loan-1' },
+      ];
+      mockFind.mockReturnValue({ lean: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(rows) }) });
+
+      const result = await service.peekContributionsForLoan('loan-1');
+
+      expect(mockFind).toHaveBeenCalledWith({
+        loanId: 'loan-1',
+        source: { $in: [ContributionSource.GuarantorOffset, ContributionSource.DefaulterDeduction, ContributionSource.DefaulterRestitution] },
+      });
+      expect(mockDeleteMany).not.toHaveBeenCalled();
+      expect(result).toEqual({ count: 1, totalAmount: 1000, rows });
+    });
+
+    it('returns a zero-count snapshot when the loan has no linked contribution rows', async () => {
+      mockFind.mockReturnValue({ lean: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }) });
+
+      const result = await service.peekContributionsForLoan('loan-1');
+
+      expect(result).toEqual({ count: 0, totalAmount: 0, rows: [] });
+    });
+  });
+
   describe('reverseContributionsForLoan', () => {
     it('deletes every GuarantorOffset/DefaulterDeduction/DefaulterRestitution row for the loan and returns a snapshot', async () => {
       const rows = [

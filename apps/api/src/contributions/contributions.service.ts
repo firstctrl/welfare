@@ -268,10 +268,8 @@ export class ContributionsService {
     return !!(await this.contributionModel.exists({ loanId }).exec());
   }
 
-  async reverseContributionsForLoan(
-    loanId: string,
-  ): Promise<{ count: number; totalAmount: number; rows: Record<string, unknown>[] }> {
-    const filter = {
+  private reversibleContributionsFilter(loanId: string) {
+    return {
       loanId,
       source: {
         $in: [
@@ -281,6 +279,24 @@ export class ContributionsService {
         ],
       },
     };
+  }
+
+  /** Read-only preview of reverseContributionsForLoan — fetches without deleting, for logging before a destructive step. */
+  async peekContributionsForLoan(
+    loanId: string,
+  ): Promise<{ count: number; totalAmount: number; rows: Record<string, unknown>[] }> {
+    const rows = (await this.contributionModel
+      .find(this.reversibleContributionsFilter(loanId))
+      .lean()
+      .exec()) as Record<string, unknown>[];
+    const totalAmount = rows.reduce((sum, r) => sum + ((r.paidAmount as number) ?? 0), 0);
+    return { count: rows.length, totalAmount, rows };
+  }
+
+  async reverseContributionsForLoan(
+    loanId: string,
+  ): Promise<{ count: number; totalAmount: number; rows: Record<string, unknown>[] }> {
+    const filter = this.reversibleContributionsFilter(loanId);
     const rows = (await this.contributionModel.find(filter).lean().exec()) as Record<string, unknown>[];
     if (rows.length === 0) {
       return { count: 0, totalAmount: 0, rows: [] };

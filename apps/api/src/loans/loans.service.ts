@@ -738,7 +738,18 @@ export class LoansService implements OnModuleInit {
 
     let reversedContributions: { count: number; totalAmount: number; rows: Record<string, unknown>[] } | undefined;
     if (hasContributions && forceDelete) {
+      const preview = await this.contributionsService.peekContributionsForLoan(loanId);
+      if (preview.count > 0) {
+        await this.auditService.log(
+          actorId, actorName, AuditAction.Delete, AuditEntity.Loan, loanId,
+          { loan: loan.toObject(), reversedContributions: preview },
+          { event: 'force_delete_contributions_reversed', reason: opts?.reason?.trim(), reversedContributionsTotal: preview.totalAmount },
+        );
+      }
       reversedContributions = await this.contributionsService.reverseContributionsForLoan(loanId);
+      if (await this.contributionsService.hasContributionsForLoan(loanId)) {
+        throw new BadRequestException('Cannot delete a loan — linked contribution records remain after reversal');
+      }
     }
 
     const repayments = await this.repaymentModel.find({ loanId }).exec();

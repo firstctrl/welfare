@@ -950,7 +950,14 @@ describe('LoansService', () => {
       const loan = activeLoan();
       loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
       repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
-      contributionsService.hasContributionsForLoan = jest.fn().mockResolvedValue(true);
+      contributionsService.hasContributionsForLoan = jest.fn()
+        .mockResolvedValueOnce(true) // initial check: contributions linked, forceDelete required
+        .mockResolvedValueOnce(false); // re-check after reversal: none remain
+      contributionsService.peekContributionsForLoan = jest.fn().mockResolvedValue({
+        count: 2,
+        totalAmount: 1500,
+        rows: [{ _id: 'c1' }, { _id: 'c2' }],
+      });
       contributionsService.reverseContributionsForLoan = jest.fn().mockResolvedValue({
         count: 2,
         totalAmount: 1500,
@@ -961,7 +968,9 @@ describe('LoansService', () => {
 
       expect(contributionsService.reverseContributionsForLoan).toHaveBeenCalledWith('loan-1');
       expect(loanModel.findByIdAndDelete).toHaveBeenCalledWith('loan-1');
-      const [, , , , , before, meta] = auditService.log.mock.calls[0];
+      // Two audit entries: the pre-delete reversal notice, then the final loan-delete record.
+      expect(auditService.log).toHaveBeenCalledTimes(2);
+      const [, , , , , before, meta] = auditService.log.mock.calls[1];
       expect(before.reversedContributions).toEqual({ count: 2, totalAmount: 1500, rows: [{ _id: 'c1' }, { _id: 'c2' }] });
       expect(meta).toEqual(expect.objectContaining({
         deleted: true,
@@ -1025,6 +1034,46 @@ describe('LoansService', () => {
       await expect(
         service.deleteLoan('loan-1', 'actor-1', 'Actor', { forceDelete: true, reason: 'override attempt' }),
       ).rejects.toThrow('recorded bad debt');
+      expect(loanModel.findByIdAndDelete).not.toHaveBeenCalled();
+    });
+
+    it('audits the contributions to be reversed before deleting them, so a later failure still leaves a trace', async () => {
+      const loan = activeLoan();
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      contributionsService.hasContributionsForLoan = jest.fn().mockResolvedValue(true);
+      contributionsService.peekContributionsForLoan = jest.fn().mockResolvedValue({
+        count: 1, totalAmount: 500, rows: [{ _id: 'c1' }],
+      });
+      contributionsService.reverseContributionsForLoan = jest.fn().mockRejectedValue(new Error('mongo down'));
+
+      await expect(
+        service.deleteLoan('loan-1', 'actor-1', 'Actor', { forceDelete: true, reason: 'Duplicate loan' }),
+      ).rejects.toThrow('mongo down');
+
+      expect(auditService.log).toHaveBeenCalledWith(
+        'actor-1', 'Actor', AuditAction.Delete, AuditEntity.Loan, 'loan-1',
+        expect.objectContaining({ reversedContributions: { count: 1, totalAmount: 500, rows: [{ _id: 'c1' }] } }),
+        expect.objectContaining({ event: 'force_delete_contributions_reversed', reason: 'Duplicate loan' }),
+      );
+      expect(loanModel.findByIdAndDelete).not.toHaveBeenCalled();
+    });
+
+    it('rejects forceDelete when contributions remain linked after reversal (unswept source)', async () => {
+      const loan = activeLoan();
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      contributionsService.hasContributionsForLoan = jest.fn()
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(true);
+      contributionsService.peekContributionsForLoan = jest.fn().mockResolvedValue({
+        count: 1, totalAmount: 100, rows: [{ _id: 'c1' }],
+      });
+      contributionsService.reverseContributionsForLoan = jest.fn().mockResolvedValue({
+        count: 1, totalAmount: 100, rows: [{ _id: 'c1' }],
+      });
+
+      await expect(
+        service.deleteLoan('loan-1', 'actor-1', 'Actor', { forceDelete: true, reason: 'override attempt' }),
+      ).rejects.toThrow('linked contribution records remain');
       expect(loanModel.findByIdAndDelete).not.toHaveBeenCalled();
     });
   });
