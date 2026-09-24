@@ -10,6 +10,7 @@ import {
   EmailTriggerSource,
   IEmailRecipient,
   LoanRepaymentStatus,
+  PaymentEntryType,
   RepaymentSource,
 } from '@welfare/shared';
 import { LoanRepayment, LoanRepaymentDocument } from '../schemas/loan-repayment.schema';
@@ -127,9 +128,20 @@ export class OverdueDetectionJob {
     if (totalDebited > 0) {
       inst.paidAmount = round2(inst.paidAmount + totalDebited);
       inst.guarantorStaffId = loan.guarantorId;
-      inst.source = RepaymentSource.GuarantorOffset;
+      inst.source = guarantorDebited > 0 ? RepaymentSource.GuarantorOffset : RepaymentSource.DefaulterDeduction;
+      inst.guarantorDebited = round2((inst.guarantorDebited ?? 0) + guarantorDebited);
+      inst.borrowerDebited = round2((inst.borrowerDebited ?? 0) + borrowerDebited);
       inst.paidDate = new Date();
       inst.status = finalRemaining === 0 ? LoanRepaymentStatus.Paid : LoanRepaymentStatus.Partial;
+      inst.payments.push({
+        amount: totalDebited,
+        paidDate: inst.paidDate,
+        recordedAt: new Date(),
+        recordedById: 'system',
+        recordedByName: 'Overdue Detection Job',
+        source: inst.source,
+        type: PaymentEntryType.Payment,
+      });
       await inst.save();
 
       // Borrower owes guarantor whatever guarantor lost. Restitution is paid

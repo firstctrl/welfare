@@ -12,6 +12,8 @@ export class PaymentEntry {
   @Prop({ required: true }) recordedById!: string;
   @Prop({ required: true }) recordedByName!: string;
   @Prop({ required: true, enum: RepaymentSource }) source!: RepaymentSource;
+  @Prop({ min: 0 }) guarantorDebited?: number;
+  @Prop({ min: 0 }) borrowerDebited?: number;
   @Prop() notes?: string;
   @Prop({ required: true, enum: PaymentEntryType, default: PaymentEntryType.Payment })
   type!: PaymentEntryType;
@@ -34,6 +36,8 @@ export class LoanRepayment {
   status!: LoanRepaymentStatus;
   @Prop() paidDate?: Date;
   @Prop({ enum: RepaymentSource }) source?: RepaymentSource;
+  @Prop({ min: 0 }) guarantorDebited?: number;
+  @Prop({ min: 0 }) borrowerDebited?: number;
   @Prop() guarantorStaffId?: string;
   @Prop() notes?: string;
   @Prop({ type: [PaymentEntrySchema], default: [] }) payments!: PaymentEntry[];

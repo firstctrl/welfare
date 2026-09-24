@@ -68,8 +68,11 @@ describe('OverdueDetectionJob', () => {
     penaltyAmount: 0,
     status: LoanRepaymentStatus.Pending,
     source: undefined as any,
+    guarantorDebited: undefined as any,
+    borrowerDebited: undefined as any,
     guarantorStaffId: undefined as any,
     paidDate: undefined as any,
+    payments: [] as any[],
     save: jest.fn().mockResolvedValue(undefined),
   });
 
@@ -204,6 +207,81 @@ describe('OverdueDetectionJob', () => {
     await job.detectAndProcess();
 
     expect(loansService.checkAndCompleteIfDone).toHaveBeenCalledWith('loan-1', 'system', 'Overdue Detection Job');
+
+    global.Date = realNow;
+  });
+
+  it('labels source DefaulterDeduction and records the split when only the borrower is debited', async () => {
+    const inst = makeInstalment('loan-1', new Date('2026-04-05'));
+    const realNow = Date;
+    global.Date = class extends Date {
+      constructor(...args: any[]) {
+        if (args.length === 0) { super('2026-05-19'); } else { super(...(args as [any])); }
+      }
+    } as any;
+
+    repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
+    loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(makeLoan()) });
+    configService.getAll.mockResolvedValue(mockConfig());
+    contributionsService.debitGuarantorOffset.mockResolvedValue({ debited: 0, remaining: 4000 });
+    contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 4000, remaining: 0 });
+
+    await job.detectAndProcess();
+
+    expect(inst.source).toBe(RepaymentSource.DefaulterDeduction);
+    expect(inst.guarantorDebited).toBe(0);
+    expect(inst.borrowerDebited).toBe(4000);
+    expect(inst.payments).toHaveLength(1);
+    expect(inst.payments[0]).toMatchObject({ amount: 4000, source: RepaymentSource.DefaulterDeduction });
+
+    global.Date = realNow;
+  });
+
+  it('keeps source GuarantorOffset and records both split amounts when the payment is mixed', async () => {
+    const inst = makeInstalment('loan-1', new Date('2026-04-05'));
+    const realNow = Date;
+    global.Date = class extends Date {
+      constructor(...args: any[]) {
+        if (args.length === 0) { super('2026-05-19'); } else { super(...(args as [any])); }
+      }
+    } as any;
+
+    repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
+    loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(makeLoan()) });
+    configService.getAll.mockResolvedValue(mockConfig());
+    contributionsService.debitGuarantorOffset.mockResolvedValue({ debited: 1000, remaining: 3000 });
+    contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 3000, remaining: 0 });
+
+    await job.detectAndProcess();
+
+    expect(inst.source).toBe(RepaymentSource.GuarantorOffset);
+    expect(inst.guarantorDebited).toBe(1000);
+    expect(inst.borrowerDebited).toBe(3000);
+    expect(inst.payments).toHaveLength(1);
+    expect(inst.payments[0]).toMatchObject({ amount: 4000, source: RepaymentSource.GuarantorOffset });
+
+    global.Date = realNow;
+  });
+
+  it('does not push a payments entry when nothing was debited', async () => {
+    const inst = makeInstalment('loan-1', new Date('2026-04-05'));
+    const realNow = Date;
+    global.Date = class extends Date {
+      constructor(...args: any[]) {
+        if (args.length === 0) { super('2026-05-19'); } else { super(...(args as [any])); }
+      }
+    } as any;
+
+    repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
+    loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(makeLoan()) });
+    configService.getAll.mockResolvedValue(mockConfig());
+    contributionsService.debitGuarantorOffset.mockResolvedValue({ debited: 0, remaining: 4000 });
+    contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 0, remaining: 4000 });
+
+    await job.detectAndProcess();
+
+    expect(inst.payments).toHaveLength(0);
+    expect(inst.source).toBeUndefined();
 
     global.Date = realNow;
   });
