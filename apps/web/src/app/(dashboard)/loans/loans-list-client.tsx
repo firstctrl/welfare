@@ -14,7 +14,7 @@ import {
 } from '@tanstack/react-table';
 import { X, Plus, Upload, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { LoanStatus, AppModule } from '@welfare/shared';
+import { LoanStatus, AppModule, UserRole } from '@welfare/shared';
 import type { ILoan } from '@welfare/shared';
 import { usePermission } from '@/hooks/use-permission';
 import { listLoans, getLoanSchedule, bulkDeleteLoans } from '@/lib/loans';
@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Pagination, SortableTh } from '@/components/ui/data-table';
 import { Modal } from '@/components/ui/modal';
 import { fmtGHS, fmtDate } from '@/lib/format';
+import { useAuthStore } from '@/store/auth.store';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const col = createColumnHelper<ILoan>();
@@ -34,6 +35,8 @@ export function LoansListClient() {
   const router = useRouter();
   const qc = useQueryClient();
   const permission = usePermission(AppModule.Loans);
+  const role = useAuthStore((s) => s.user?.role);
+  const canDelete = role === UserRole.WelfareManager || role === UserRole.Admin;
   const [page, setPage]               = useState(1);
   const [status, setStatus]           = useState<LoanStatus | ''>('');
   const [filterMonth, setFilterMonth] = useState('');
@@ -85,7 +88,13 @@ export function LoansListClient() {
       qc.invalidateQueries({ queryKey: ['loans'] });
       setRowSelection({});
       setConfirmBulkDelete(false);
-      toast.success(`${result.deleted} loan${result.deleted === 1 ? '' : 's'} deleted`);
+      if (result.failed.length === 0) {
+        toast.success(`${result.deleted.length} loan${result.deleted.length === 1 ? '' : 's'} deleted`);
+      } else {
+        toast.warning(
+          `${result.deleted.length} deleted, ${result.failed.length} failed: ${result.failed.map((f) => f.reason).join('; ')}`,
+        );
+      }
     },
     onError: () => toast.error('Failed to delete selected loans'),
   });
@@ -161,7 +170,7 @@ export function LoansListClient() {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getRowId: (row) => row._id,
-    enableRowSelection: permission === 'full',
+    enableRowSelection: permission === 'full' && canDelete,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     state: { rowSelection, sorting },
@@ -174,7 +183,7 @@ export function LoansListClient() {
 
   return (
     <div className="space-y-4">
-      {selectedIds.length > 0 && (
+      {selectedIds.length > 0 && canDelete && (
         <div className="flex items-center gap-3 justify-end">
           <span className="text-sm text-neutral-600">{selectedIds.length} selected</span>
           <Button variant="danger" Icon={Trash2} onClick={() => setConfirmBulkDelete(true)}>
@@ -333,7 +342,7 @@ export function LoansListClient() {
         >
           <p className="mt-2 text-sm text-neutral-600">
             Delete <strong>{selectedIds.length}</strong> selected loan{selectedIds.length === 1 ? '' : 's'}?
-            Active loans with recorded payments cannot be deleted. This cannot be undone.
+            Only Active loans with no payments, no bad debt, and no outstanding guarantor restitution can be deleted — others in the selection will be skipped and reported. This cannot be undone.
           </p>
           <div className="mt-4 flex justify-end gap-3">
             <Button variant="ghost" onClick={() => setConfirmBulkDelete(false)}>Cancel</Button>

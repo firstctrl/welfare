@@ -8,7 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { Download, Send, CreditCard, Trash2, Ban, Banknote, History } from 'lucide-react';
-import { LoanStatus, LoanRepaymentStatus, PaymentEntryType, StaffStatus, AppModule } from '@welfare/shared';
+import { LoanStatus, LoanRepaymentStatus, PaymentEntryType, StaffStatus, AppModule, UserRole } from '@welfare/shared';
 import type { ILoanRepayment } from '@welfare/shared';
 import { getLoan, getLoanSchedule, getLoanDocumentUrl, recordPayment, exitSettle, getLoansByGuarantor, deleteLoan, writeOffLoan, getPayOffPreview, processPayOff } from '@/lib/loans';
 import { usePermission } from '@/hooks/use-permission';
@@ -22,6 +22,7 @@ import { Modal } from '@/components/ui/modal';
 import { RepaymentBar } from '@/components/ui/repayment-bar';
 import { fmtGHS, fmtDate, fmtDateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/store/auth.store';
 
 const EXIT_STATUSES = new Set<StaffStatus>([StaffStatus.Resigned, StaffStatus.Dismissed, StaffStatus.Deceased]);
 
@@ -70,6 +71,8 @@ export function LoanDetailClient({ id }: { id: string }) {
   const router = useRouter();
   const qc = useQueryClient();
   const permission = usePermission(AppModule.Loans);
+  const role = useAuthStore((s) => s.user?.role);
+  const canDeleteRole = role === UserRole.WelfareManager || role === UserRole.Admin;
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showWriteOffModal, setShowWriteOffModal] = useState(false);
@@ -169,7 +172,14 @@ export function LoanDetailClient({ id }: { id: string }) {
   if (!loan) return <p className="text-sm text-danger-600">Loan not found.</p>;
 
   const hasPaidPayments = !!schedule?.some((r) => r.paidAmount > 0);
-  const canDelete = !(loan.status === LoanStatus.Active && hasPaidPayments);
+  const hasOutstandingRestitution = (loan.guarantorRestitutionOwed ?? 0) > (loan.guarantorRestitutionPaid ?? 0);
+  const hasBadDebt = (loan.badDebtAmount ?? 0) > 0;
+  const canDelete =
+    canDeleteRole &&
+    loan.status === LoanStatus.Active &&
+    !hasPaidPayments &&
+    !hasOutstandingRestitution &&
+    !hasBadDebt;
 
   const showExitPanel = !!borrower && EXIT_STATUSES.has(borrower.status) && loan.status === LoanStatus.Active;
   const showSettlementSummary = loan.status !== LoanStatus.Active &&
@@ -518,7 +528,7 @@ export function LoanDetailClient({ id }: { id: string }) {
           }
         >
           <p className="text-sm text-neutral-700 mt-2">
-            Permanently delete this loan and all repayment records? This cannot be undone.
+            Permanently delete this loan? It has no recorded payments, so nothing else is affected. This cannot be undone.
           </p>
         </Modal>
       )}
