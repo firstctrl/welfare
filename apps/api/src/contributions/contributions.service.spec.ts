@@ -14,6 +14,7 @@ const mockFind = jest.fn();
 const mockCountDocuments = jest.fn();
 const mockAggregate = jest.fn();
 const mockCreate = jest.fn();
+const mockDeleteMany = jest.fn();
 
 const mockFindById = jest.fn();
 const mockFindByIdAndDelete = jest.fn();
@@ -29,6 +30,7 @@ const mockContributionModel = {
   findById: mockFindById,
   findByIdAndDelete: mockFindByIdAndDelete,
   exists: mockExists,
+  deleteMany: mockDeleteMany,
 };
 
 const mockLoanFindOne = jest.fn();
@@ -614,6 +616,39 @@ describe('ContributionsService', () => {
       const result = await service.hasContributionsForLoan('loan-1');
 
       expect(result).toBe(false);
+    });
+  });
+
+  describe('reverseContributionsForLoan', () => {
+    it('deletes every GuarantorOffset/DefaulterDeduction/DefaulterRestitution row for the loan and returns a snapshot', async () => {
+      const rows = [
+        { _id: 'c1', staffId: 'guarantor-1', source: ContributionSource.GuarantorOffset, paidAmount: 1000, loanId: 'loan-1' },
+        { _id: 'c2', staffId: 'staff-1', source: ContributionSource.DefaulterDeduction, paidAmount: 500, loanId: 'loan-1' },
+        { _id: 'c3', staffId: 'guarantor-1', source: ContributionSource.DefaulterRestitution, paidAmount: 300, loanId: 'loan-1' },
+      ];
+      mockFind.mockReturnValue({ lean: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(rows) }) });
+      mockDeleteMany.mockReturnValue({ exec: jest.fn().mockResolvedValue({ deletedCount: 3 }) });
+
+      const result = await service.reverseContributionsForLoan('loan-1');
+
+      expect(mockFind).toHaveBeenCalledWith({
+        loanId: 'loan-1',
+        source: { $in: [ContributionSource.GuarantorOffset, ContributionSource.DefaulterDeduction, ContributionSource.DefaulterRestitution] },
+      });
+      expect(mockDeleteMany).toHaveBeenCalledWith({
+        loanId: 'loan-1',
+        source: { $in: [ContributionSource.GuarantorOffset, ContributionSource.DefaulterDeduction, ContributionSource.DefaulterRestitution] },
+      });
+      expect(result).toEqual({ count: 3, totalAmount: 1800, rows });
+    });
+
+    it('returns a zero-count snapshot and skips deleteMany when the loan has no linked contribution rows', async () => {
+      mockFind.mockReturnValue({ lean: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }) });
+
+      const result = await service.reverseContributionsForLoan('loan-1');
+
+      expect(mockDeleteMany).not.toHaveBeenCalled();
+      expect(result).toEqual({ count: 0, totalAmount: 0, rows: [] });
     });
   });
 });

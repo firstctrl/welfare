@@ -268,6 +268,28 @@ export class ContributionsService {
     return !!(await this.contributionModel.exists({ loanId }).exec());
   }
 
+  async reverseContributionsForLoan(
+    loanId: string,
+  ): Promise<{ count: number; totalAmount: number; rows: Record<string, unknown>[] }> {
+    const filter = {
+      loanId,
+      source: {
+        $in: [
+          ContributionSource.GuarantorOffset,
+          ContributionSource.DefaulterDeduction,
+          ContributionSource.DefaulterRestitution,
+        ],
+      },
+    };
+    const rows = (await this.contributionModel.find(filter).lean().exec()) as Record<string, unknown>[];
+    if (rows.length === 0) {
+      return { count: 0, totalAmount: 0, rows: [] };
+    }
+    await this.contributionModel.deleteMany(filter).exec();
+    const totalAmount = rows.reduce((sum, r) => sum + ((r.paidAmount as number) ?? 0), 0);
+    return { count: rows.length, totalAmount, rows };
+  }
+
   async debitDefaulterContribution(
     staffId: string,
     amount: number,
