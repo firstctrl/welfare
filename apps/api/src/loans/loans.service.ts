@@ -725,23 +725,16 @@ export class LoansService implements OnModuleInit {
 
     const repayments = await this.repaymentModel.find({ loanId }).exec();
     const snapshot = {
-      loan: {
-        principalAmount: loan.principalAmount,
-        totalRepayable: loan.totalRepayable,
-        tenureMonths: loan.tenureMonths,
-        disbursedDate: loan.disbursedDate,
-        status: loan.status,
-        staffId: loan.staffId,
-        guarantorId: loan.guarantorId,
-      },
-      repayments: repayments.map((r) => ({
-        instalmentNumber: r.instalmentNumber,
-        dueDate: r.dueDate,
-        dueAmount: r.dueAmount,
-        status: r.status,
-      })),
+      loan: loan.toObject(),
+      repayments: repayments.map((r) => r.toObject()),
     };
 
+    await this.discountModel
+      .updateMany(
+        { loanId, cancelled: false },
+        { cancelled: true, cancelledAt: new Date(), cancelledReason: 'Loan deleted' },
+      )
+      .exec();
     await this.repaymentModel.deleteMany({ loanId }).exec();
     await this.loanModel.findByIdAndDelete(loanId).exec();
     this.meiliClient.index('loans').deleteDocument(loanId).catch(() => { /* non-fatal */ });

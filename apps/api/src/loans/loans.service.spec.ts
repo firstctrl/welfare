@@ -10,7 +10,7 @@ import { SystemConfigService } from '../system-config/system-config.service';
 import { AuditService } from '../audit/audit.service';
 import { ContributionsService } from '../contributions/contributions.service';
 import { MINIO_CLIENT } from '../storage/minio.module';
-import { AuditAction, AuditEntity, LoanStatus, LoanRepaymentStatus, RepaymentSource, StaffStatus } from '@welfare/shared';
+import { AuditAction, AuditEntity, LoanStatus, LoanRepaymentStatus, PaymentEntryType, RepaymentSource, StaffStatus } from '@welfare/shared';
 import { RecordPaymentDto } from './dto/record-payment.dto';
 import { ExitSettlementDto } from './dto/exit-settlement.dto';
 import { LoanScheduleSenderService } from './loan-schedule-sender.service';
@@ -47,6 +47,7 @@ describe('LoansService', () => {
   let auditService: any;
   let contributionsService: any;
   let minioClient: any;
+  let discountModel: any;
 
   beforeEach(async () => {
     loanModel = {
@@ -78,13 +79,20 @@ describe('LoansService', () => {
       redirectLoanPaymentToGuarantor: jest.fn().mockImplementation(async (_loan: unknown, amount: number) => amount),
     };
     minioClient = { putObject: jest.fn(), presignedGetObject: jest.fn() };
+    discountModel = {
+      create: jest.fn().mockResolvedValue({}),
+      findOne: jest.fn(),
+      updateOne: jest.fn(),
+      updateMany: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(undefined) }),
+      find: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         LoansService,
         { provide: getModelToken(Loan.name), useValue: loanModel },
         { provide: getModelToken(LoanRepayment.name), useValue: repaymentModel },
-        { provide: getModelToken(Discount.name), useValue: { create: jest.fn().mockResolvedValue({}), findOne: jest.fn(), updateOne: jest.fn() } },
+        { provide: getModelToken(Discount.name), useValue: discountModel },
         { provide: StaffService, useValue: staffService },
         { provide: SystemConfigService, useValue: configService },
         { provide: AuditService, useValue: auditService },
@@ -753,20 +761,39 @@ describe('LoansService', () => {
   });
 
   describe('deleteLoan', () => {
-    const activeLoan = (overrides: Record<string, unknown> = {}) => ({
-      _id: { toString: () => 'loan-1' },
-      status: LoanStatus.Active,
-      guarantorRestitutionOwed: 0,
-      guarantorRestitutionPaid: 0,
-      badDebtAmount: 0,
-      principalAmount: 5000,
-      totalRepayable: 5500,
-      tenureMonths: 3,
-      disbursedDate: new Date('2026-01-01'),
-      staffId: 'staff-1',
-      guarantorId: 'guarantor-1',
-      ...overrides,
-    });
+    const activeLoan = (overrides: Record<string, unknown> = {}) => {
+      const loan: Record<string, unknown> = {
+        _id: { toString: () => 'loan-1' },
+        status: LoanStatus.Active,
+        guarantorRestitutionOwed: 0,
+        guarantorRestitutionPaid: 0,
+        badDebtAmount: 0,
+        principalAmount: 5000,
+        totalRepayable: 5500,
+        tenureMonths: 3,
+        disbursedDate: new Date('2026-01-01'),
+        staffId: 'staff-1',
+        guarantorId: 'guarantor-1',
+        ...overrides,
+      };
+      loan.toObject = () => ({ ...loan });
+      return loan;
+    };
+
+    const pendingRepayment = (overrides: Record<string, unknown> = {}) => {
+      const r: Record<string, unknown> = {
+        instalmentNumber: 1,
+        dueDate: new Date('2026-02-01'),
+        dueAmount: 1000,
+        paidAmount: 0,
+        penaltyAmount: 0,
+        status: LoanRepaymentStatus.Pending,
+        payments: [],
+        ...overrides,
+      };
+      r.toObject = () => ({ ...r });
+      return r;
+    };
 
     beforeEach(() => {
       repaymentModel.exists.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
@@ -785,6 +812,41 @@ describe('LoansService', () => {
       expect(loanModel.findByIdAndDelete).toHaveBeenCalledWith('loan-1');
       const [, , , , , before] = auditService.log.mock.calls[0];
       expect(before).toEqual(expect.objectContaining({ loan: expect.objectContaining({ principalAmount: 5000 }) }));
+    });
+
+    it('captures full loan fields and repayment history, including a reversed payment, in the audit snapshot', async () => {
+      const loan = activeLoan({ chequeNo: 'CHQ-1', pvNo: 'PV-1', interestRate: 8 });
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      const repayment = pendingRepayment({
+        penaltyAmount: 50,
+        payments: [
+          { amount: 200, type: PaymentEntryType.Payment },
+          { amount: 200, type: PaymentEntryType.Reversal },
+        ],
+      });
+      repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([repayment]) });
+
+      await service.deleteLoan('loan-1', 'actor-1', 'Actor');
+
+      const [, , , , , before] = auditService.log.mock.calls[0];
+      expect(before.loan).toEqual(expect.objectContaining({ chequeNo: 'CHQ-1', pvNo: 'PV-1', interestRate: 8 }));
+      expect(before.repayments[0]).toEqual(expect.objectContaining({
+        penaltyAmount: 50,
+        payments: expect.arrayContaining([expect.objectContaining({ type: PaymentEntryType.Reversal })]),
+      }));
+    });
+
+    it('cancels any active Origination discount for the loan', async () => {
+      const loan = activeLoan();
+      loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+      repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+
+      await service.deleteLoan('loan-1', 'actor-1', 'Actor');
+
+      expect(discountModel.updateMany).toHaveBeenCalledWith(
+        { loanId: 'loan-1', cancelled: false },
+        expect.objectContaining({ cancelled: true, cancelledReason: expect.any(String) }),
+      );
     });
 
     it('rejects a Completed loan regardless of financial state', async () => {
@@ -851,19 +913,23 @@ describe('LoansService', () => {
   });
 
   describe('bulkDeleteLoans', () => {
-    const activeLoan = (id: string) => ({
-      _id: { toString: () => id },
-      status: LoanStatus.Active,
-      guarantorRestitutionOwed: 0,
-      guarantorRestitutionPaid: 0,
-      badDebtAmount: 0,
-      principalAmount: 1000,
-      totalRepayable: 1100,
-      tenureMonths: 1,
-      disbursedDate: new Date('2026-01-01'),
-      staffId: 'staff-1',
-      guarantorId: 'guarantor-1',
-    });
+    const activeLoan = (id: string) => {
+      const loan: Record<string, unknown> = {
+        _id: { toString: () => id },
+        status: LoanStatus.Active,
+        guarantorRestitutionOwed: 0,
+        guarantorRestitutionPaid: 0,
+        badDebtAmount: 0,
+        principalAmount: 1000,
+        totalRepayable: 1100,
+        tenureMonths: 1,
+        disbursedDate: new Date('2026-01-01'),
+        staffId: 'staff-1',
+        guarantorId: 'guarantor-1',
+      };
+      loan.toObject = () => ({ ...loan });
+      return loan;
+    };
 
     beforeEach(() => {
       contributionsService.hasContributionsForLoan = jest.fn().mockResolvedValue(false);

@@ -86,14 +86,16 @@ export function LoansListClient() {
     mutationFn: (ids: string[]) => bulkDeleteLoans(ids),
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['loans'] });
-      setRowSelection({});
       setConfirmBulkDelete(false);
       if (result.failed.length === 0) {
+        setRowSelection({});
         toast.success(`${result.deleted.length} loan${result.deleted.length === 1 ? '' : 's'} deleted`);
       } else {
-        toast.warning(
-          `${result.deleted.length} deleted, ${result.failed.length} failed: ${result.failed.map((f) => f.reason).join('; ')}`,
-        );
+        setRowSelection(Object.fromEntries(result.failed.map((f) => [f.id, true])));
+        const reasonCounts = new Map<string, number>();
+        for (const f of result.failed) reasonCounts.set(f.reason, (reasonCounts.get(f.reason) ?? 0) + 1);
+        const summary = [...reasonCounts.entries()].map(([reason, count]) => `${count}× ${reason}`).join('; ');
+        toast.warning(`${result.deleted.length} deleted, ${result.failed.length} failed (still selected): ${summary}`);
       }
     },
     onError: () => toast.error('Failed to delete selected loans'),
