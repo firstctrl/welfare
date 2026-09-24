@@ -13,6 +13,7 @@ import { SystemConfigModule } from '../system-config/system-config.module';
 import { StaffModule } from '../staff/staff.module';
 import { Staff, StaffSchema } from '../staff/schemas/staff.schema';
 import { MissedContributionReminderJob } from './jobs/missed-contribution-reminder.job';
+import { GuarantorRestitutionReminderJob } from './jobs/guarantor-restitution-reminder.job';
 
 @Module({
   imports: [
@@ -28,7 +29,7 @@ import { MissedContributionReminderJob } from './jobs/missed-contribution-remind
     StaffModule,
   ],
   controllers: [ContributionsController],
-  providers: [ContributionsService, ImportService, ContributionRatesService, MissedContributionReminderJob],
+  providers: [ContributionsService, ImportService, ContributionRatesService, MissedContributionReminderJob, GuarantorRestitutionReminderJob],
   exports: [ContributionsService],
 })
 export class ContributionsModule {}

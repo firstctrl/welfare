@@ -8,4 +8,5 @@ export enum EmailLogType {
   MissedContributionReminder = 'MissedContributionReminder',
   LoanOverdueReminder = 'LoanOverdueReminder',
   GracePeriodWarning = 'GracePeriodWarning',
+  GuarantorRestitutionReminder = 'GuarantorRestitutionReminder',
 }
