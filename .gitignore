@@ -50,3 +50,6 @@ docs/design-handoff/
 # Playwright
 apps/web/test-results/
 apps/web/playwright-report/
+
+# Worktrees
+.worktrees/
