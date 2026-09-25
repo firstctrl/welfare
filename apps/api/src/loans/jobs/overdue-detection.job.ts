@@ -97,40 +97,40 @@ export class OverdueDetectionJob {
 
     const outstanding = round2(inst.dueAmount + inst.penaltyAmount - inst.paidAmount);
 
-    const { debited: guarantorDebited, remaining: afterGuarantor } =
-      await this.contributionsService.debitGuarantorOffset(
-        loan.guarantorId,
+    const { debited: defaulterDebited, remaining: afterDefaulter } =
+      await this.contributionsService.debitDefaulterContribution(
+        loan.staffId,
         outstanding,
-        inst.loanId,
         'system',
         'Overdue Detection Job',
-        loan.staffId,
+        inst.loanId,
         inst.instalmentNumber,
       );
 
-    // Shortfall not covered by guarantor balance: debit borrower's contributions
-    let borrowerDebited = 0;
-    let finalRemaining = afterGuarantor;
-    if (afterGuarantor > 0) {
-      const { debited, remaining } = await this.contributionsService.debitDefaulterContribution(
-        loan.staffId,
-        afterGuarantor,
+    // Shortfall not covered by defaulter's own contributions: debit guarantor
+    let guarantorDebited = 0;
+    let finalRemaining = afterDefaulter;
+    if (afterDefaulter > 0) {
+      const { debited, remaining } = await this.contributionsService.debitGuarantorOffset(
+        loan.guarantorId,
+        afterDefaulter,
+        inst.loanId,
         'system',
         'Overdue Detection Job',
-        inst.loanId,
+        loan.staffId,
         inst.instalmentNumber,
       );
-      borrowerDebited = debited;
+      guarantorDebited = debited;
       finalRemaining = remaining;
     }
 
-    const totalDebited = round2(guarantorDebited + borrowerDebited);
+    const totalDebited = round2(guarantorDebited + defaulterDebited);
     if (totalDebited > 0) {
       inst.paidAmount = round2(inst.paidAmount + totalDebited);
       inst.guarantorStaffId = loan.guarantorId;
       inst.source = guarantorDebited > 0 ? RepaymentSource.GuarantorOffset : RepaymentSource.DefaulterDeduction;
       inst.guarantorDebited = round2((inst.guarantorDebited ?? 0) + guarantorDebited);
-      inst.borrowerDebited = round2((inst.borrowerDebited ?? 0) + borrowerDebited);
+      inst.borrowerDebited = round2((inst.borrowerDebited ?? 0) + defaulterDebited);
       inst.paidDate = new Date();
       inst.status = finalRemaining === 0 ? LoanRepaymentStatus.Paid : LoanRepaymentStatus.Partial;
       inst.payments.push({
@@ -163,7 +163,7 @@ export class OverdueDetectionJob {
         undefined,
         {
           guarantorDebited,
-          borrowerDebited,
+          borrowerDebited: defaulterDebited,
           remaining: finalRemaining,
           guarantorId: loan.guarantorId,
         },

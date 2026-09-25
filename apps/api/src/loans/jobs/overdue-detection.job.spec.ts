@@ -33,8 +33,8 @@ describe('OverdueDetectionJob', () => {
     configService = { getAll: jest.fn() };
     auditService = { log: jest.fn() };
     contributionsService = {
-      debitGuarantorOffset: jest.fn(),
-      debitDefaulterContribution: jest.fn().mockResolvedValue({ debited: 0, remaining: 0 }),
+      debitDefaulterContribution: jest.fn(),
+      debitGuarantorOffset: jest.fn().mockResolvedValue({ debited: 0, remaining: 0 }),
     };
     loansService = { checkAndCompleteIfDone: jest.fn().mockResolvedValue(undefined) };
 
@@ -79,6 +79,7 @@ describe('OverdueDetectionJob', () => {
   const makeLoan = (guarantorId = 'guarantor-id') => ({
     _id: { toString: () => 'loan-1' },
     guarantorId,
+    staffId: 'staff-1',
     status: LoanStatus.Active,
   });
 
@@ -95,7 +96,7 @@ describe('OverdueDetectionJob', () => {
     expect(inst.save).toHaveBeenCalled();
   });
 
-  it('triggers guarantor offset when grace period has passed (gracePeriodDays=0 and new month)', async () => {
+  it('triggers defaulter debit first, guarantor untouched when defaulter balance fully covers the shortfall', async () => {
     const inst = makeInstalment('loan-1', new Date('2026-04-05'));
     const realNow = Date;
     global.Date = class extends Date {
@@ -108,26 +109,26 @@ describe('OverdueDetectionJob', () => {
     const loan = makeLoan('guarantor-id');
     loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
     configService.getAll.mockResolvedValue(mockConfig());
-    contributionsService.debitGuarantorOffset.mockResolvedValue({ debited: 4000, remaining: 0 });
+    contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 4000, remaining: 0 });
 
     await job.detectAndProcess();
 
-    expect(contributionsService.debitGuarantorOffset).toHaveBeenCalledWith(
-      'guarantor-id',
+    expect(contributionsService.debitDefaulterContribution).toHaveBeenCalledWith(
+      loan.staffId,
       expect.any(Number),
-      'loan-1',
       'system',
       'Overdue Detection Job',
-      undefined,
+      'loan-1',
       undefined,
     );
+    expect(contributionsService.debitGuarantorOffset).not.toHaveBeenCalled();
     expect(inst.status).toBe(LoanRepaymentStatus.Paid);
-    expect(inst.source).toBe(RepaymentSource.GuarantorOffset);
+    expect(inst.source).toBe(RepaymentSource.DefaulterDeduction);
 
     global.Date = realNow;
   });
 
-  it('marks instalment Partial when guarantor balance is insufficient', async () => {
+  it('marks instalment Partial when both defaulter and guarantor balances are insufficient', async () => {
     const inst = makeInstalment('loan-1', new Date('2026-04-05'));
     const realNow = Date;
     global.Date = class extends Date {
@@ -139,9 +140,9 @@ describe('OverdueDetectionJob', () => {
     repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
     loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(makeLoan()) });
     configService.getAll.mockResolvedValue(mockConfig());
-    contributionsService.debitGuarantorOffset.mockResolvedValue({ debited: 1000, remaining: 3000 });
-    // Borrower also has no balance to cover the shortfall
-    contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 0, remaining: 3000 });
+    contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 1000, remaining: 3000 });
+    // Guarantor also has no balance to cover the remaining shortfall
+    contributionsService.debitGuarantorOffset.mockResolvedValue({ debited: 0, remaining: 3000 });
 
     await job.detectAndProcess();
 
@@ -202,6 +203,7 @@ describe('OverdueDetectionJob', () => {
     repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
     loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(makeLoan()) });
     configService.getAll.mockResolvedValue(mockConfig());
+    contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 0, remaining: 4000 });
     contributionsService.debitGuarantorOffset.mockResolvedValue({ debited: 4000, remaining: 0 });
 
     await job.detectAndProcess();
@@ -211,7 +213,7 @@ describe('OverdueDetectionJob', () => {
     global.Date = realNow;
   });
 
-  it('labels source DefaulterDeduction and records the split when only the borrower is debited', async () => {
+  it('labels source DefaulterDeduction and records the split when only the defaulter is debited', async () => {
     const inst = makeInstalment('loan-1', new Date('2026-04-05'));
     const realNow = Date;
     global.Date = class extends Date {
@@ -223,7 +225,6 @@ describe('OverdueDetectionJob', () => {
     repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
     loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(makeLoan()) });
     configService.getAll.mockResolvedValue(mockConfig());
-    contributionsService.debitGuarantorOffset.mockResolvedValue({ debited: 0, remaining: 4000 });
     contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 4000, remaining: 0 });
 
     await job.detectAndProcess();
@@ -233,6 +234,7 @@ describe('OverdueDetectionJob', () => {
     expect(inst.borrowerDebited).toBe(4000);
     expect(inst.payments).toHaveLength(1);
     expect(inst.payments[0]).toMatchObject({ amount: 4000, source: RepaymentSource.DefaulterDeduction });
+    expect(contributionsService.debitGuarantorOffset).not.toHaveBeenCalled();
 
     global.Date = realNow;
   });
@@ -249,8 +251,8 @@ describe('OverdueDetectionJob', () => {
     repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
     loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(makeLoan()) });
     configService.getAll.mockResolvedValue(mockConfig());
-    contributionsService.debitGuarantorOffset.mockResolvedValue({ debited: 1000, remaining: 3000 });
-    contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 3000, remaining: 0 });
+    contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 3000, remaining: 1000 });
+    contributionsService.debitGuarantorOffset.mockResolvedValue({ debited: 1000, remaining: 0 });
 
     await job.detectAndProcess();
 
@@ -282,6 +284,88 @@ describe('OverdueDetectionJob', () => {
 
     expect(inst.payments).toHaveLength(0);
     expect(inst.source).toBeUndefined();
+
+    global.Date = realNow;
+  });
+
+  it('leaves the guarantor untouched when the defaulter balance fully covers the outstanding amount', async () => {
+    const inst = makeInstalment('loan-1', new Date('2026-04-05'));
+    const realNow = Date;
+    global.Date = class extends Date {
+      constructor(...args: any[]) {
+        if (args.length === 0) { super('2026-05-19'); } else { super(...(args as [any])); }
+      }
+    } as any;
+
+    repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
+    loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(makeLoan()) });
+    configService.getAll.mockResolvedValue(mockConfig());
+    contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 4000, remaining: 0 });
+
+    await job.detectAndProcess();
+
+    expect(contributionsService.debitGuarantorOffset).not.toHaveBeenCalled();
+    expect(inst.guarantorDebited).toBe(0);
+    expect(inst.borrowerDebited).toBe(4000);
+
+    global.Date = realNow;
+  });
+
+  it('debits the guarantor only for the shortfall when the defaulter has a partial balance', async () => {
+    const inst = makeInstalment('loan-1', new Date('2026-04-05'));
+    const realNow = Date;
+    global.Date = class extends Date {
+      constructor(...args: any[]) {
+        if (args.length === 0) { super('2026-05-19'); } else { super(...(args as [any])); }
+      }
+    } as any;
+
+    repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
+    const loan = makeLoan('guarantor-id');
+    loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+    configService.getAll.mockResolvedValue(mockConfig());
+    contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 2500, remaining: 1500 });
+    contributionsService.debitGuarantorOffset.mockResolvedValue({ debited: 1500, remaining: 0 });
+
+    await job.detectAndProcess();
+
+    expect(contributionsService.debitGuarantorOffset).toHaveBeenCalledWith(
+      'guarantor-id',
+      1500,
+      'loan-1',
+      'system',
+      'Overdue Detection Job',
+      loan.staffId,
+      undefined,
+    );
+    expect(inst.status).toBe(LoanRepaymentStatus.Paid);
+    expect(inst.guarantorDebited).toBe(1500);
+    expect(inst.borrowerDebited).toBe(2500);
+
+    global.Date = realNow;
+  });
+
+  it('covers the full outstanding amount from the guarantor when the defaulter has zero balance', async () => {
+    const inst = makeInstalment('loan-1', new Date('2026-04-05'));
+    const realNow = Date;
+    global.Date = class extends Date {
+      constructor(...args: any[]) {
+        if (args.length === 0) { super('2026-05-19'); } else { super(...(args as [any])); }
+      }
+    } as any;
+
+    repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
+    loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(makeLoan()) });
+    configService.getAll.mockResolvedValue(mockConfig());
+    contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 0, remaining: 4000 });
+    contributionsService.debitGuarantorOffset.mockResolvedValue({ debited: 4000, remaining: 0 });
+
+    await job.detectAndProcess();
+
+    expect(inst.status).toBe(LoanRepaymentStatus.Paid);
+    expect(inst.guarantorDebited).toBe(4000);
+    expect(inst.borrowerDebited).toBe(0);
+    expect(inst.source).toBe(RepaymentSource.GuarantorOffset);
 
     global.Date = realNow;
   });
