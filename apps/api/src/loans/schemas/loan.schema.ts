@@ -26,6 +26,7 @@ export class Loan {
   @Prop({ required: true }) recordedBy!: string;
   @Prop() defaultedAt?: Date;
   @Prop() endOfTenureGraceExpiry?: Date;
+  @Prop() gracePeriodWarningSentAt?: Date;
   @Prop({ min: 0, default: 0 }) defaulterContributionDebited!: number;
   @Prop({ min: 0, default: 0 }) guarantorRestitutionOwed!: number;
   @Prop({ min: 0, default: 0 }) guarantorRestitutionPaid!: number;

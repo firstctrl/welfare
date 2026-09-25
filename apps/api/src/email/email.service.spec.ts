@@ -142,5 +142,29 @@ describe('EmailService', () => {
         expect.objectContaining({ status: EmailLogStatus.Failed }),
       );
     });
+
+    it('returns the resulting status to the caller so a failed send can be told apart from a sent one', async () => {
+      const { Resend } = jest.requireMock<{ Resend: jest.Mock }>('resend');
+      const mockSend = jest.fn().mockRejectedValue(new Error('provider error'));
+      Resend.mockImplementation(() => ({ emails: { send: mockSend } }));
+
+      mockConfigGetAll.mockResolvedValue({
+        EMAIL_PROVIDER: { value: 'resend' },
+        RESEND_API_KEY: { value: 'bad-key' },
+        EMAIL_FROM_ADDRESS: { value: 'noreply@test.com' },
+        EMAIL_FROM_NAME: { value: 'Test' },
+      });
+      mockLogCreate.mockResolvedValue({});
+
+      const status = await service.send(
+        { staffId: 's4', staffName: 'Dana', email: 'dana@test.com' },
+        EmailLogType.LoanSchedule,
+        'Subject',
+        '<p>Hi</p>',
+        EmailTriggerSource.Manual,
+      );
+
+      expect(status).toBe(EmailLogStatus.Failed);
+    });
   });
 });

@@ -48,6 +48,7 @@ describe('LoansService', () => {
   let contributionsService: any;
   let minioClient: any;
   let discountModel: any;
+  let loanScheduleSender: any;
 
   beforeEach(async () => {
     loanModel = {
@@ -86,6 +87,10 @@ describe('LoansService', () => {
       updateMany: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(undefined) }),
       find: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }),
     };
+    loanScheduleSender = {
+      sendForLoan: jest.fn().mockResolvedValue(undefined),
+      sendGuarantorCapNotice: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -98,7 +103,7 @@ describe('LoansService', () => {
         { provide: AuditService, useValue: auditService },
         { provide: ContributionsService, useValue: contributionsService },
         { provide: MINIO_CLIENT, useValue: minioClient },
-        { provide: LoanScheduleSenderService, useValue: { sendForLoan: jest.fn().mockResolvedValue(undefined) } },
+        { provide: LoanScheduleSenderService, useValue: loanScheduleSender },
         { provide: MEILISEARCH_CLIENT, useValue: { index: jest.fn().mockReturnValue({ addDocuments: jest.fn().mockResolvedValue(undefined), deleteDocument: jest.fn().mockResolvedValue(undefined), updateSettings: jest.fn().mockResolvedValue(undefined) }) } },
       ],
     }).compile();
@@ -173,6 +178,45 @@ describe('LoansService', () => {
       expect(new Date(firstInstalment.dueDate).getDate()).toBe(5);
       expect(new Date(firstInstalment.dueDate).getMonth()).toBe(3); // April = 3
       expect(result).toBe(savedLoan);
+    });
+
+    it('fires the guarantor cap notice when this loan brings the guarantor to the configured cap', async () => {
+      staffService.findById
+        .mockResolvedValueOnce(activeStaff('staff-mongo-id', 'SF001'))
+        .mockResolvedValueOnce(activeStaff('guarantor-mongo-id', 'SF002'));
+
+      loanModel.findOne.mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(null) });
+      loanModel.countDocuments = jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(2) });
+
+      configService.getAll.mockResolvedValue({
+        ...mockConfig(),
+        MAX_LOANS_PER_GUARANTOR: { value: '3' },
+      });
+
+      const savedLoan = {
+        _id: { toString: () => 'loan-id' },
+        staffId: 'staff-mongo-id',
+        principalAmount: 10000,
+        interestRate: 5,
+        totalRepayable: 10500,
+        monthlyInstalment: 3500,
+        tenureMonths: 3,
+        disbursedDate: new Date('2026-03-15'),
+        status: LoanStatus.Active,
+        toObject: () => ({}),
+      };
+
+      loanModel.create.mockResolvedValue(savedLoan);
+      repaymentModel.insertMany.mockResolvedValue([]);
+
+      const loan = await service.create(dto, 'actor', 'Actor');
+
+      expect(loanScheduleSender.sendGuarantorCapNotice).toHaveBeenCalledWith(
+        dto.guarantorId,
+        3,
+        3,
+        loan._id.toString(),
+      );
     });
 
     it('throws BadRequestException when staff is not Active', async () => {

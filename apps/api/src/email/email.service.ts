@@ -38,7 +38,7 @@ export class EmailService {
     subject: string,
     html: string,
     triggeredBy: EmailTriggerSource,
-  ): Promise<void> {
+  ): Promise<EmailLogStatus> {
     const config = await this.configService.getAll();
     const provider = (config['EMAIL_PROVIDER']?.value ?? 'smtp') as EmailProvider;
     const fromAddress = config['EMAIL_FROM_ADDRESS']?.value ?? 'noreply@welfare.local';
@@ -96,6 +96,8 @@ export class EmailService {
     } catch (logErr) {
       this.logger.error(`Failed to write email log: ${(logErr as Error).message}`);
     }
+
+    return status;
   }
 
   async sendWithAttachment(

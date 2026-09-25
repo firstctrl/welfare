@@ -8,6 +8,7 @@ import { Staff, StaffDocument } from '../staff/schemas/staff.schema';
 import { EmailService } from '../email/email.service';
 import { SystemConfigService } from '../system-config/system-config.service';
 import { renderLoanSchedule } from '../email/templates/loan-schedule.template';
+import { renderGuarantorCapNotice } from '../email/templates/guarantor-cap-notice.template';
 
 @Injectable()
 export class LoanScheduleSenderService {
@@ -68,6 +69,40 @@ export class LoanScheduleSenderService {
       `Your Loan Repayment Schedule - Loan #${loan._id.toString().slice(-6).toUpperCase()}`,
       html,
       EmailTriggerSource.Cron,
+    );
+  }
+
+  async sendGuarantorCapNotice(
+    guarantorId: string,
+    activeCount: number,
+    maxPerGuarantor: number,
+    loanRef: string,
+  ): Promise<void> {
+    if (maxPerGuarantor <= 0 || activeCount < maxPerGuarantor) return;
+
+    const guarantor = await this.staffModel.findById(guarantorId).exec();
+    if (!guarantor?.email) {
+      this.logger.warn(`Skipping guarantor cap notice for ${guarantorId} — no email on record`);
+      return;
+    }
+
+    const config = await this.configService.getAll();
+    const organisationName = config['EMAIL_FROM_NAME']?.value ?? 'Welfare System';
+
+    const html = renderGuarantorCapNotice({
+      guarantorName: guarantor.fullName,
+      activeCount,
+      maxPerGuarantor,
+      loanRef,
+      organisationName,
+    });
+
+    await this.emailService.send(
+      { staffId: guarantor._id.toString(), staffName: guarantor.fullName, email: guarantor.email },
+      EmailLogType.GuarantorCapNotice,
+      'You Have Reached Your Guarantor Limit',
+      html,
+      EmailTriggerSource.Manual,
     );
   }
 }

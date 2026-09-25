@@ -174,8 +174,9 @@ export class LoansService implements OnModuleInit {
       throw new BadRequestException('Guarantor is not Active');
 
     const maxPerGuarantor = parseInt(config[ConfigKey.MaxLoansPerGuarantor]?.value ?? '0', 10);
+    let guarantorLoanCount = 0;
     if (maxPerGuarantor > 0) {
-      const guarantorLoanCount = await this.loanModel
+      guarantorLoanCount = await this.loanModel
         .countDocuments({ guarantorId: dto.guarantorId, status: LoanStatus.Active })
         .exec();
       if (guarantorLoanCount >= maxPerGuarantor)
@@ -223,6 +224,12 @@ export class LoansService implements OnModuleInit {
     this.syncLoanToMeilisearch(loan, staff.fullName, staff.staffId);
 
     const loanId = loan._id.toString();
+    if (maxPerGuarantor > 0) {
+      void this.loanScheduleSender
+        .sendGuarantorCapNotice(dto.guarantorId, guarantorLoanCount + 1, maxPerGuarantor, loanId)
+        .catch(err => this.logger.error(`Guarantor cap notice failed for ${dto.guarantorId}`, err));
+    }
+
     const totalInterest = round2(totalRepayable - dto.principalAmount);
     const baseInterestPerInst = round2(totalInterest / dto.tenureMonths);
     const schedule = Array.from({ length: dto.tenureMonths }, (_, i) => {
