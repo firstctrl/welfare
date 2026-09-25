@@ -95,7 +95,7 @@ function SectionCard({ title, meta, children, onSave, saving, dirty, canEdit }: 
 // ─── cron presets ───────────────────────────────────────────────────────────
 
 const CRON_PRESETS: { label: string; value: string }[] = [
-  { label: 'Quarterly — 1st Jan, Apr, Jul, Oct', value: '0 8 1 1,4,7,10 *' },
+  { label: 'Quarterly — 6th Jan, Apr, Jul, Oct', value: '0 8 6 1,4,7,10 *' },
   { label: 'Bi-annual — 1st Jan & Jul', value: '0 8 1 1,7 *' },
   { label: 'Monthly — 1st of each month', value: '0 8 1 * *' },
   { label: 'Monthly — 5th of each month', value: '0 8 5 * *' },
@@ -525,7 +525,7 @@ function initEmail(cfg: ConfigMap): EmailFields {
     OUTLOOK_PORT:                      cfg['OUTLOOK_PORT']?.value ?? '',
     OUTLOOK_USERNAME:                  cfg['OUTLOOK_USERNAME']?.value ?? '',
     OUTLOOK_PASSWORD:                  cfg['OUTLOOK_PASSWORD']?.value ?? '',
-    EMAIL_CONTRIBUTION_STATEMENT_CRON: cfg['EMAIL_CONTRIBUTION_STATEMENT_CRON']?.value ?? '0 8 1 1,4,7,10 *',
+    EMAIL_CONTRIBUTION_STATEMENT_CRON: cfg['EMAIL_CONTRIBUTION_STATEMENT_CRON']?.value ?? '0 8 6 1,4,7,10 *',
     EMAIL_LOAN_SCHEDULE_ENABLED:       cfg['EMAIL_LOAN_SCHEDULE_ENABLED']?.value ?? 'false',
   };
 }
