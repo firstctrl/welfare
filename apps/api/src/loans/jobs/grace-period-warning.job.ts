@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { EmailLogType, EmailTriggerSource, IEmailRecipient, LoanStatus } from '@welfare/shared';
+import { EmailLogStatus, EmailLogType, EmailTriggerSource, IEmailRecipient, LoanStatus, StaffStatus } from '@welfare/shared';
 import { Loan, LoanDocument } from '../schemas/loan.schema';
 import { Staff, StaffDocument } from '../../staff/schemas/staff.schema';
 import { EmailService } from '../../email/email.service';
@@ -26,23 +26,25 @@ export class GracePeriodWarningJob {
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const targetDate = new Date(today);
-    targetDate.setDate(targetDate.getDate() + 7);
-    const targetEnd = new Date(targetDate);
+    const targetEnd = new Date(today);
+    targetEnd.setDate(targetEnd.getDate() + 7);
     targetEnd.setHours(23, 59, 59, 999);
 
     const config = await this.configService.getAll();
     const organisationName = config['EMAIL_FROM_NAME']?.value ?? 'Welfare System';
 
+    // From today through 7 days out (not an exact single day) — a loan whose
+    // grace period is under 7 days at the moment it first qualifies would
+    // otherwise never match the query and never get warned.
     const loans = await this.loanModel
       .find({
         status: LoanStatus.Defaulted,
-        endOfTenureGraceExpiry: { $gte: targetDate, $lte: targetEnd },
+        endOfTenureGraceExpiry: { $gte: today, $lte: targetEnd },
         gracePeriodWarningSentAt: { $exists: false },
       })
       .exec();
 
-    this.logger.log(`Found ${loans.length} loans with grace period ending in 7 days`);
+    this.logger.log(`Found ${loans.length} loans with grace period ending within 7 days`);
 
     for (const loan of loans) {
       try {
@@ -54,7 +56,7 @@ export class GracePeriodWarningJob {
           this.staffModel.findById(loan.guarantorId).exec(),
         ]);
 
-        if (borrower?.email) {
+        if (borrower?.email && borrower.status === StaffStatus.Active) {
           const html = renderGracePeriodWarning({
             recipientName: borrower.fullName,
             role: 'Borrower',
@@ -64,11 +66,11 @@ export class GracePeriodWarningJob {
             organisationName,
           });
           const recipient: IEmailRecipient = { staffId: borrower._id.toString(), staffName: borrower.fullName, email: borrower.email };
-          await this.emailService.send(recipient, EmailLogType.GracePeriodWarning, `Grace Period Ending - Loan Ref ${loanRef}`, html, EmailTriggerSource.Cron);
-          sentAny = true;
+          const status = await this.emailService.send(recipient, EmailLogType.GracePeriodWarning, `Grace Period Ending - Loan Ref ${loanRef}`, html, EmailTriggerSource.Cron);
+          if (status === EmailLogStatus.Sent) sentAny = true;
         }
 
-        if (guarantor?.email) {
+        if (guarantor?.email && guarantor.status === StaffStatus.Active) {
           const html = renderGracePeriodWarning({
             recipientName: guarantor.fullName,
             role: 'Guarantor',
@@ -78,8 +80,8 @@ export class GracePeriodWarningJob {
             organisationName,
           });
           const recipient: IEmailRecipient = { staffId: guarantor._id.toString(), staffName: guarantor.fullName, email: guarantor.email };
-          await this.emailService.send(recipient, EmailLogType.GracePeriodWarning, `Grace Period Ending - Loan Ref ${loanRef}`, html, EmailTriggerSource.Cron);
-          sentAny = true;
+          const status = await this.emailService.send(recipient, EmailLogType.GracePeriodWarning, `Grace Period Ending - Loan Ref ${loanRef}`, html, EmailTriggerSource.Cron);
+          if (status === EmailLogStatus.Sent) sentAny = true;
         }
 
         if (sentAny) {

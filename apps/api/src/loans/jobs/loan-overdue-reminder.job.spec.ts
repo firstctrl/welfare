@@ -6,7 +6,7 @@ import { Loan } from '../schemas/loan.schema';
 import { Staff } from '../../staff/schemas/staff.schema';
 import { SystemConfigService } from '../../system-config/system-config.service';
 import { EmailService } from '../../email/email.service';
-import { LoanStatus } from '@welfare/shared';
+import { EmailLogStatus, LoanStatus, StaffStatus } from '@welfare/shared';
 
 describe('LoanOverdueReminderJob', () => {
   let job: LoanOverdueReminderJob;
@@ -21,7 +21,7 @@ describe('LoanOverdueReminderJob', () => {
     loanModel = { findById: jest.fn() };
     staffModel = { findById: jest.fn() };
     configService = { getAll: jest.fn().mockResolvedValue({ EMAIL_FROM_NAME: { value: 'Test Union' } }) };
-    emailService = { send: jest.fn().mockResolvedValue(undefined) };
+    emailService = { send: jest.fn().mockResolvedValue(EmailLogStatus.Sent) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -51,7 +51,7 @@ describe('LoanOverdueReminderJob', () => {
     const inst = makeInst();
     repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
     loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue({ _id: { toString: () => 'loan-1' }, status: LoanStatus.Active }) });
-    staffModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue({ _id: { toString: () => 'staff-1' }, fullName: 'Kofi Mensah', email: 'kofi@example.com' }) });
+    staffModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue({ _id: { toString: () => 'staff-1' }, fullName: 'Kofi Mensah', email: 'kofi@example.com', status: StaffStatus.Active }) });
 
     await job.sendOverdueReminders();
 
@@ -71,5 +71,39 @@ describe('LoanOverdueReminderJob', () => {
 
     expect(emailService.send).not.toHaveBeenCalled();
     expect(repaymentModel.updateOne).not.toHaveBeenCalled();
+  });
+
+  it('skips a borrower who is no longer Active staff', async () => {
+    const inst = makeInst();
+    repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
+    loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue({ _id: { toString: () => 'loan-1' }, status: LoanStatus.Active }) });
+    staffModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue({ _id: { toString: () => 'staff-1' }, fullName: 'Kofi Mensah', email: 'kofi@example.com', status: StaffStatus.Resigned }) });
+
+    await job.sendOverdueReminders();
+
+    expect(emailService.send).not.toHaveBeenCalled();
+    expect(repaymentModel.updateOne).not.toHaveBeenCalled();
+  });
+
+  it('does not mark the instalment sent when the email send fails', async () => {
+    const inst = makeInst();
+    repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
+    loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue({ _id: { toString: () => 'loan-1' }, status: LoanStatus.Active }) });
+    staffModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue({ _id: { toString: () => 'staff-1' }, fullName: 'Kofi Mensah', email: 'kofi@example.com', status: StaffStatus.Active }) });
+    emailService.send.mockResolvedValue(EmailLogStatus.Failed);
+
+    await job.sendOverdueReminders();
+
+    expect(repaymentModel.updateOne).not.toHaveBeenCalled();
+  });
+
+  it('only queries instalments overdue within the lookback window, not every Overdue row ever', async () => {
+    repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([]) });
+
+    await job.sendOverdueReminders();
+
+    expect(repaymentModel.find).toHaveBeenCalledWith(
+      expect.objectContaining({ dueDate: expect.any(Object) }),
+    );
   });
 });

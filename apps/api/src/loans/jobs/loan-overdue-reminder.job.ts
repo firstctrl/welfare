@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { EmailLogType, EmailTriggerSource, IEmailRecipient, LoanRepaymentStatus, LoanStatus } from '@welfare/shared';
+import { EmailLogStatus, EmailLogType, EmailTriggerSource, IEmailRecipient, LoanRepaymentStatus, LoanStatus, StaffStatus } from '@welfare/shared';
 import { LoanRepayment, LoanRepaymentDocument } from '../schemas/loan-repayment.schema';
 import { Loan, LoanDocument } from '../schemas/loan.schema';
 import { Staff, StaffDocument } from '../../staff/schemas/staff.schema';
@@ -33,9 +33,15 @@ export class LoanOverdueReminderJob {
     const config = await this.configService.getAll();
     const organisationName = config['EMAIL_FROM_NAME']?.value ?? 'Welfare System';
 
+    // Bounded to the last 14 days so a first deploy (or a cron outage) doesn't
+    // flood every already-overdue instalment with a "just became overdue" email.
+    const lookbackStart = new Date();
+    lookbackStart.setDate(lookbackStart.getDate() - 14);
+
     const overdue = await this.repaymentModel
       .find({
         status: LoanRepaymentStatus.Overdue,
+        dueDate: { $gte: lookbackStart },
         overdueReminderSentAt: { $exists: false },
       })
       .exec();
@@ -48,7 +54,7 @@ export class LoanOverdueReminderJob {
         if (!loan || loan.status !== LoanStatus.Active) continue;
 
         const staff = await this.staffModel.findById(inst.staffId).exec();
-        if (!staff?.email) continue;
+        if (!staff?.email || staff.status !== StaffStatus.Active) continue;
 
         const outstanding = round2(inst.dueAmount + inst.penaltyAmount - inst.paidAmount);
         const html = renderLoanOverdueReminder({
@@ -63,7 +69,7 @@ export class LoanOverdueReminderJob {
           staffName: staff.fullName,
           email: staff.email,
         };
-        await this.emailService.send(
+        const status = await this.emailService.send(
           recipient,
           EmailLogType.LoanOverdueReminder,
           `Loan Instalment Overdue - Ref ${inst.loanId.slice(-6).toUpperCase()}`,
@@ -71,7 +77,9 @@ export class LoanOverdueReminderJob {
           EmailTriggerSource.Cron,
         );
 
-        await this.repaymentModel.updateOne({ _id: inst._id }, { $set: { overdueReminderSentAt: new Date() } }).exec();
+        if (status === EmailLogStatus.Sent) {
+          await this.repaymentModel.updateOne({ _id: inst._id }, { $set: { overdueReminderSentAt: new Date() } }).exec();
+        }
       } catch (err) {
         this.logger.error(`Overdue reminder failed for instalment ${inst._id.toString()}`, err);
       }

@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { EmailLogType, EmailTriggerSource, IEmailRecipient } from '@welfare/shared';
+import { EmailLogType, EmailTriggerSource, IEmailRecipient, LoanStatus, StaffStatus } from '@welfare/shared';
 import { Loan, LoanDocument } from '../../loans/schemas/loan.schema';
 import { Staff, StaffDocument } from '../../staff/schemas/staff.schema';
 import { EmailService } from '../../email/email.service';
@@ -28,7 +28,10 @@ export class GuarantorRestitutionReminderJob {
     const organisationName = config['EMAIL_FROM_NAME']?.value ?? 'Welfare System';
 
     const loans = await this.loanModel
-      .find({ $expr: { $gt: ['$guarantorRestitutionOwed', '$guarantorRestitutionPaid'] } })
+      .find({
+        status: { $in: [LoanStatus.Active, LoanStatus.Defaulted] },
+        $expr: { $gt: ['$guarantorRestitutionOwed', '$guarantorRestitutionPaid'] },
+      })
       .exec();
 
     this.logger.log(`Found ${loans.length} loans with unresolved guarantor restitution`);
@@ -39,7 +42,7 @@ export class GuarantorRestitutionReminderJob {
           this.staffModel.findById(loan.guarantorId).exec(),
           this.staffModel.findById(loan.staffId).exec(),
         ]);
-        if (!guarantor?.email) continue;
+        if (!guarantor?.email || guarantor.status !== StaffStatus.Active) continue;
 
         const amountOwed = (loan.guarantorRestitutionOwed ?? 0) - (loan.guarantorRestitutionPaid ?? 0);
         const loanRef = loan._id.toString().slice(-6).toUpperCase();
