@@ -265,6 +265,46 @@ describe('OverdueDetectionJob', () => {
     global.Date = realNow;
   });
 
+  it('marks Partial and records only the guarantor share as restitution owed when both defaulter and guarantor are only partially able to cover the shortfall', async () => {
+    const inst = makeInstalment('loan-1', new Date('2026-04-05'));
+    const realNow = Date;
+    global.Date = class extends Date {
+      constructor(...args: any[]) {
+        if (args.length === 0) { super('2026-05-19'); } else { super(...(args as [any])); }
+      }
+    } as any;
+
+    repaymentModel.find.mockReturnValue({ exec: jest.fn().mockResolvedValue([inst]) });
+    const loan = makeLoan('guarantor-id');
+    loanModel.findById.mockReturnValue({ exec: jest.fn().mockResolvedValue(loan) });
+    configService.getAll.mockResolvedValue(mockConfig());
+    contributionsService.debitDefaulterContribution.mockResolvedValue({ debited: 1500, remaining: 2500 });
+    contributionsService.debitGuarantorOffset.mockResolvedValue({ debited: 1000, remaining: 1500 });
+
+    await job.detectAndProcess();
+
+    expect(inst.status).toBe(LoanRepaymentStatus.Partial);
+    expect(inst.source).toBe(RepaymentSource.GuarantorOffset);
+    expect(inst.guarantorDebited).toBe(1000);
+    expect(inst.borrowerDebited).toBe(1500);
+    expect(inst.paidAmount).toBe(2500);
+    expect(loanModel.updateOne).toHaveBeenCalledWith(
+      { _id: loan._id },
+      { $inc: { guarantorRestitutionOwed: 1000 } },
+    );
+    expect(auditService.log).toHaveBeenCalledWith(
+      'system',
+      'Overdue Detection Job',
+      expect.anything(),
+      expect.anything(),
+      'inst-1',
+      undefined,
+      expect.objectContaining({ guarantorDebited: 1000, borrowerDebited: 1500, remaining: 1500 }),
+    );
+
+    global.Date = realNow;
+  });
+
   it('does not push a payments entry when nothing was debited', async () => {
     const inst = makeInstalment('loan-1', new Date('2026-04-05'));
     const realNow = Date;
