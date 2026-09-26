@@ -244,17 +244,18 @@ export class ContributionsService {
     return agg ?? { totalExpected: 0, totalPaid: 0, totalSurplus: 0, countPaid: 0, countPartial: 0, countMissed: 0 };
   }
 
-  async getBalance(staffId: string): Promise<number> {
+  async getBalance(staffId: string, asOfDate?: Date): Promise<number> {
+    const dateFilter = asOfDate ? { createdAt: { $lte: asOfDate } } : {};
     const [creditResult, debitResult] = await Promise.all([
       this.contributionModel
         .aggregate([
-          { $match: { staffId, isDebit: { $ne: true } } },
+          { $match: { staffId, isDebit: { $ne: true }, ...dateFilter } },
           { $group: { _id: null, total: { $sum: '$paidAmount' } } },
         ])
         .exec(),
       this.contributionModel
         .aggregate([
-          { $match: { staffId, isDebit: true } },
+          { $match: { staffId, isDebit: true, ...dateFilter } },
           { $group: { _id: null, total: { $sum: '$paidAmount' } } },
         ])
         .exec(),

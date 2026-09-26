@@ -265,6 +265,41 @@ describe('ContributionsService', () => {
     });
   });
 
+  describe('getBalance with asOfDate', () => {
+    it('bounds both the credit and debit aggregations by createdAt when asOfDate is given', async () => {
+      mockAggregate
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([{ total: 9000 }]) }) // credits
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([{ total: 2000 }]) }); // debits
+
+      const asOf = new Date('2025-06-01T00:00:00.000Z');
+      const result = await service.getBalance('staff-1', asOf);
+
+      expect(result).toBe(7000);
+      expect(mockAggregate).toHaveBeenNthCalledWith(1, [
+        { $match: { staffId: 'staff-1', isDebit: { $ne: true }, createdAt: { $lte: asOf } } },
+        { $group: { _id: null, total: { $sum: '$paidAmount' } } },
+      ]);
+      expect(mockAggregate).toHaveBeenNthCalledWith(2, [
+        { $match: { staffId: 'staff-1', isDebit: true, createdAt: { $lte: asOf } } },
+        { $group: { _id: null, total: { $sum: '$paidAmount' } } },
+      ]);
+    });
+
+    it('omits the createdAt bound entirely when asOfDate is not given (unchanged as-of-now behavior)', async () => {
+      mockAggregate
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([{ total: 5000 }]) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
+
+      const result = await service.getBalance('staff-1');
+
+      expect(result).toBe(5000);
+      expect(mockAggregate).toHaveBeenNthCalledWith(1, [
+        { $match: { staffId: 'staff-1', isDebit: { $ne: true } } },
+        { $group: { _id: null, total: { $sum: '$paidAmount' } } },
+      ]);
+    });
+  });
+
   describe('handleRestitutionRedirect (via processPayment)', () => {
     const makeRestitutionLoan = (owed: number, paid: number) => ({
       _id: { toString: () => 'loan-1' },
