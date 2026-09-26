@@ -8,6 +8,7 @@ import { LoansService } from './loans.service';
 import { StaffService } from '../staff/staff.service';
 import { AuditService } from '../audit/audit.service';
 import { ImportProgressService } from '../common/import-progress.service';
+import { ContributionsService } from '../contributions/contributions.service';
 
 const mockCreate = jest.fn();
 const mockFindByIdAndUpdate = jest.fn();
@@ -18,6 +19,7 @@ const mockStaffService = {
 };
 const mockAuditService = { log: jest.fn() };
 const mockProgressService = { start: jest.fn(), increment: jest.fn(), complete: jest.fn(), get: jest.fn() };
+const mockContributionsService = { getBalance: jest.fn().mockResolvedValue(0) };
 
 function twoSheetBuffer(
   loanRows: Record<string, unknown>[],
@@ -53,12 +55,14 @@ describe('LoansLegacyImportService', () => {
         { provide: StaffService, useValue: mockStaffService },
         { provide: AuditService, useValue: mockAuditService },
         { provide: ImportProgressService, useValue: mockProgressService },
+        { provide: ContributionsService, useValue: mockContributionsService },
       ],
     }).compile();
     service = module.get(LoansLegacyImportService);
     jest.clearAllMocks();
     mockFindByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
     mockCreate.mockResolvedValue({ _id: { toString: () => 'batch-1' } });
+    mockContributionsService.getBalance.mockResolvedValue(0);
   });
 
   it('creates a legacy loan from a valid loan row and its matching instalment rows', async () => {
@@ -172,5 +176,74 @@ describe('LoansLegacyImportService', () => {
     const flaggedArg = mockFindByIdAndUpdate.mock.calls[0][1].$set.flaggedEntries;
     expect(flaggedArg[0].principalAmount).toBe(0);
     expect(Number.isFinite(flaggedArg[0].principalAmount)).toBe(true);
+  });
+
+  describe('guarantor restitution owed cross-check', () => {
+    const loanRowWithRestitution = {
+      'Loan Ref': 'L1', 'Staff ID': 'S1', 'Guarantor Staff ID': 'S2',
+      'Principal Amount': 6000, 'Tenure Months': 2, 'Disbursed Date': '15/12/2024',
+      'Status': 'Active', 'Cutover Date': '01/01/2026',
+      'Guarantor Restitution Owed': 800, 'Guarantor Restitution Paid': 200,
+      'Cheque No': 'C1', 'PV No': 'PV1',
+    };
+    const instalmentRowsWithPaidDates = [
+      { 'Loan Ref': 'L1', 'Instalment Number': 1, 'Due Date': '05/01/2025', 'Due Amount': 3000, 'Paid Amount': 3000, 'Paid Date': '04/01/2025', 'Status': 'Paid' },
+      { 'Loan Ref': 'L1', 'Instalment Number': 2, 'Due Date': '05/02/2025', 'Due Amount': 3000, 'Paid Amount': 3000, 'Paid Date': '10/02/2025', 'Status': 'Paid' },
+    ];
+
+    it('does not query contributions or flag when Guarantor Restitution Owed is 0', async () => {
+      const buffer = twoSheetBuffer([validLoanRow], validInstalmentRows);
+
+      const result = await service.processImport(buffer, 'f.xlsx', 'actor-1', 'Actor');
+
+      expect(mockContributionsService.getBalance).not.toHaveBeenCalled();
+      expect(result.flagged).toBe(0);
+      expect(result.created).toBe(1);
+    });
+
+    it('does not flag when the defaulter had no available balance as of the latest paid instalment (correct defaulter-first history)', async () => {
+      mockContributionsService.getBalance.mockResolvedValue(0);
+      const buffer = twoSheetBuffer([loanRowWithRestitution], instalmentRowsWithPaidDates);
+
+      const result = await service.processImport(buffer, 'f.xlsx', 'actor-1', 'Actor');
+
+      expect(mockContributionsService.getBalance).toHaveBeenCalledWith('resolved-S1', new Date('2025-02-10'));
+      expect(result.flagged).toBe(0);
+      expect(result.created).toBe(1);
+    });
+
+    it('flags, without skipping creation, when the defaulter had available balance the claimed figure ignores', async () => {
+      mockContributionsService.getBalance.mockResolvedValue(500);
+      const buffer = twoSheetBuffer([loanRowWithRestitution], instalmentRowsWithPaidDates);
+
+      const result = await service.processImport(buffer, 'f.xlsx', 'actor-1', 'Actor');
+
+      expect(result.created).toBe(1);
+      expect(result.flagged).toBe(1);
+      const flaggedEntries = mockFindByIdAndUpdate.mock.calls[0][1].$set.flaggedEntries;
+      expect(flaggedEntries[0]).toEqual(
+        expect.objectContaining({
+          loanRef: 'L1',
+          staffId: 'S1',
+          guarantorId: 'S2',
+          reason: expect.stringContaining('Guarantor Restitution Owed may not reflect defaulter-first order'),
+        }),
+      );
+      expect(flaggedEntries[0].reason).toContain('500');
+    });
+
+    it('does not query contributions or flag when no instalment row has a Paid Date (nothing to cross-check against)', async () => {
+      const unpaidInstalmentRows = [
+        { 'Loan Ref': 'L1', 'Instalment Number': 1, 'Due Date': '05/01/2025', 'Due Amount': 3000, 'Paid Amount': 0, 'Status': 'Pending' },
+        { 'Loan Ref': 'L1', 'Instalment Number': 2, 'Due Date': '05/02/2025', 'Due Amount': 3000, 'Paid Amount': 0, 'Status': 'Pending' },
+      ];
+      const buffer = twoSheetBuffer([loanRowWithRestitution], unpaidInstalmentRows);
+
+      const result = await service.processImport(buffer, 'f.xlsx', 'actor-1', 'Actor');
+
+      expect(mockContributionsService.getBalance).not.toHaveBeenCalled();
+      expect(result.flagged).toBe(0);
+      expect(result.created).toBe(1);
+    });
   });
 });

@@ -16,6 +16,7 @@ import { StaffService } from '../staff/staff.service';
 import { AuditService } from '../audit/audit.service';
 import { normalizeExcelDate } from '../common/utils/excel-date.util';
 import { ImportProgressService } from '../common/import-progress.service';
+import { ContributionsService } from '../contributions/contributions.service';
 
 interface LoanRow {
   'Loan Ref'?: string;
@@ -59,6 +60,7 @@ export class LoansLegacyImportService {
     private readonly staffService: StaffService,
     private readonly auditService: AuditService,
     private readonly progressService: ImportProgressService,
+    private readonly contributionsService: ContributionsService,
   ) {}
 
   async processImport(
@@ -201,6 +203,21 @@ export class LoansLegacyImportService {
             actorName,
           );
           created++;
+
+          if (guarantorRestitutionOwed > 0) {
+            const paidDates = instalments
+              .map((inst) => inst.paidDate)
+              .filter((d): d is Date => d !== undefined);
+            if (paidDates.length > 0) {
+              const asOfDate = new Date(Math.max(...paidDates.map((d) => d.getTime())));
+              const defaulterBalance = await this.contributionsService.getBalance(staff._id.toString(), asOfDate);
+              if (defaulterBalance > 0) {
+                flag(
+                  `Guarantor Restitution Owed may not reflect defaulter-first order — defaulter had ${defaulterBalance.toFixed(2)} available at the time`,
+                );
+              }
+            }
+          }
         } catch (err: unknown) {
           flag(err instanceof Error ? err.message : 'Processing error');
         }
