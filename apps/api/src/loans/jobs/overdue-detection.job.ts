@@ -147,10 +147,15 @@ export class OverdueDetectionJob {
       // Borrower owes guarantor whatever guarantor lost. Restitution is paid
       // back to guarantor over time via handleRestitutionRedirect on future
       // borrower contributions, and any unpaid remainder on loan settlement.
-      if (guarantorDebited > 0) {
+      if (defaulterDebited > 0 || guarantorDebited > 0) {
         await this.loanModel.updateOne(
           { _id: loan._id },
-          { $inc: { guarantorRestitutionOwed: guarantorDebited } },
+          {
+            $inc: {
+              ...(defaulterDebited > 0 ? { defaulterContributionDebited: defaulterDebited } : {}),
+              ...(guarantorDebited > 0 ? { guarantorRestitutionOwed: guarantorDebited } : {}),
+            },
+          },
         );
       }
 
