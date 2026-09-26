@@ -33,6 +33,7 @@ import {
   ClaimStatus,
   hasPayrollGapDuringHistory,
   PAYROLL_GAP_NOTICE,
+  repaymentSourceLabel,
 } from '@welfare/shared';
 import { Contribution, ContributionDocument } from '../contributions/schemas/contribution.schema';
 import { Loan, LoanDocument } from '../loans/schemas/loan.schema';
@@ -722,6 +723,7 @@ export class ReportsService {
           <td style="text-align:right">${r.penaltyAmount > 0 ? fmt(r.penaltyAmount) : '-'}</td>
           <td>${r.paidDate ? new Date(r.paidDate).toLocaleDateString('en-GB') : '-'}</td>
           <td style="background:${statusBg[r.status] ?? '#fff'};font-weight:bold;font-size:10px">${r.status}</td>
+          <td style="font-size:10px">${repaymentSourceLabel(r.source)}</td>
         </tr>`,
       )
       .join('');
@@ -790,11 +792,11 @@ ${(stmt.kpis.guarantorOffsetAmount ?? 0) > 0 || (stmt.kpis.borrowerContributionO
   <thead>
     <tr>
       <th>#</th><th>Due Date</th><th>Due (GHS)</th><th>Principal</th><th>Interest</th>
-      <th>Paid (GHS)</th><th>Penalty</th><th>Paid Date</th><th>Status</th>
+      <th>Paid (GHS)</th><th>Penalty</th><th>Paid Date</th><th>Status</th><th>Source</th>
     </tr>
   </thead>
   <tbody>
-    ${instalmentRows || '<tr><td colspan="9" style="text-align:center;padding:20px;color:#999">No instalment records found</td></tr>'}
+    ${instalmentRows || '<tr><td colspan="10" style="text-align:center;padding:20px;color:#999">No instalment records found</td></tr>'}
   </tbody>
 </table>
 </body></html>`;

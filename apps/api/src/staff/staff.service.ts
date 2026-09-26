@@ -210,7 +210,11 @@ export class StaffService implements OnModuleInit {
     return { staff, requiresSettlement };
   }
 
-  async isLoanEligible(id: string): Promise<{ eligible: boolean; reason?: string }> {
+  async isLoanEligible(id: string): Promise<{
+    eligible: boolean;
+    reason?: string;
+    defaultHistory?: { count: number; totalDeducted: number; lastDefaultedAt: string };
+  }> {
     const staff = await this.findById(id);
     if (staff.status !== StaffStatus.Active) {
       return { eligible: false, reason: 'Staff is not active' };
@@ -232,7 +236,41 @@ export class StaffService implements OnModuleInit {
     if (activeCount >= maxActiveLoans) {
       return { eligible: false, reason: 'Staff already has an active loan' };
     }
-    return { eligible: true };
+
+    const defaultHistory = await this.getDefaultHistory(id);
+    return { eligible: true, defaultHistory };
+  }
+
+  private async getDefaultHistory(
+    staffId: string,
+  ): Promise<{ count: number; totalDeducted: number; lastDefaultedAt: string } | undefined> {
+    const defaultedLoans = await this.loanModel
+      .find({
+        staffId,
+        $or: [
+          { defaulterContributionDebited: { $gt: 0 } },
+          { guarantorRestitutionOwed: { $gt: 0 } },
+        ],
+      })
+      .sort({ defaultedAt: -1 })
+      .exec();
+
+    if (defaultedLoans.length === 0) return undefined;
+
+    const totalDeducted = defaultedLoans.reduce(
+      (sum, l) => sum + (l.defaulterContributionDebited ?? 0) + (l.guarantorRestitutionOwed ?? 0),
+      0,
+    );
+    const lastDefaultedAt = defaultedLoans
+      .map(l => l.defaultedAt)
+      .filter((d): d is Date => !!d)
+      .sort((a, b) => b.getTime() - a.getTime())[0];
+
+    return {
+      count: defaultedLoans.length,
+      totalDeducted: Math.round(totalDeducted * 100) / 100,
+      lastDefaultedAt: (lastDefaultedAt ?? new Date()).toISOString(),
+    };
   }
 
   async deleteStaff(id: string, actorId: string, actorName: string): Promise<void> {

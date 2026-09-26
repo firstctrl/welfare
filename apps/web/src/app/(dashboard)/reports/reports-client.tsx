@@ -11,7 +11,7 @@ import {
 } from '@tanstack/react-table';
 import { Download, Send, FileText, TrendingUp, AlertCircle, Banknote, BarChart3, Search, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { AppModule } from '@welfare/shared';
+import { AppModule, repaymentSourceLabel } from '@welfare/shared';
 import { usePermission } from '@/hooks/use-permission';
 import {
   getArrears,
@@ -580,6 +580,7 @@ function LoanStatementPanel({ canSend }: { canSend: boolean }) {
                       Paid Date
                     </th>
                     <th className="px-3 py-2.5 text-left font-semibold">Status</th>
+                    <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap">Source</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
@@ -624,6 +625,9 @@ function LoanStatementPanel({ canSend }: { canSend: boolean }) {
                         >
                           {r.status}
                         </span>
+                      </td>
+                      <td className="px-3 py-2 text-neutral-500 whitespace-nowrap">
+                        {repaymentSourceLabel(r.source)}
                       </td>
                     </tr>
                   ))}

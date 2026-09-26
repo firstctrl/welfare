@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { LoanStatus } from '@welfare/shared';
 import type { IStaff } from '@welfare/shared';
 import { searchStaff, getLoanEligibility } from '@/lib/staff';
@@ -166,6 +166,7 @@ export function NewLoanClient() {
   });
 
   const ineligible = !!selectedStaff && eligibility?.eligible === false;
+  const formFrozen = ineligible || guarantorAtCap;
   const submitDisabled = isSubmitting || mutation.isPending || guarantorAtCap || ineligible || principalOutOfRange;
 
   return (
@@ -204,6 +205,14 @@ export function NewLoanClient() {
                           <XCircle size={12} strokeWidth={1.75} /> Ineligible: {eligibility.reason}
                         </>
                       )}
+                    </div>
+                  )}
+                  {selectedStaff && eligibility?.defaultHistory && (
+                    <div className="flex items-center gap-1.5 text-xs mt-1 px-2 py-1 rounded-xs bg-warning-50 text-warning-700">
+                      <AlertTriangle size={12} strokeWidth={1.75} /> Defaulted before:{' '}
+                      {eligibility.defaultHistory.count} loan{eligibility.defaultHistory.count !== 1 ? 's' : ''},{' '}
+                      {fmtGHS(eligibility.defaultHistory.totalDeducted)} deducted, last on{' '}
+                      {fmtDate(new Date(eligibility.defaultHistory.lastDefaultedAt))}
                     </div>
                   )}
                 </div>
@@ -261,7 +270,7 @@ export function NewLoanClient() {
                     step="0.01"
                     prefix="₵"
                     error={!!errors.principalAmount || principalOutOfRange}
-                    disabled={ineligible}
+                    disabled={formFrozen}
                   />
                 </Field>
 
@@ -274,7 +283,7 @@ export function NewLoanClient() {
                         label: `${i + 1} month${i > 0 ? 's' : ''}`,
                       }))}
                       error={!!errors.tenureMonths}
-                      disabled={ineligible}
+                      disabled={formFrozen}
                     />
                   </Field>
                   {cfg && (
@@ -290,7 +299,7 @@ export function NewLoanClient() {
                     {...register('disbursedDate')}
                     type="date"
                     error={!!errors.disbursedDate}
-                    disabled={ineligible}
+                    disabled={formFrozen}
                   />
                 </Field>
 
@@ -299,7 +308,7 @@ export function NewLoanClient() {
                     {...register('chequeNo')}
                     placeholder="e.g. CHQ-00123"
                     error={!!errors.chequeNo}
-                    disabled={ineligible}
+                    disabled={formFrozen}
                   />
                 </Field>
 
@@ -308,7 +317,7 @@ export function NewLoanClient() {
                     {...register('pvNo')}
                     placeholder="e.g. PV-2024-001"
                     error={!!errors.pvNo}
-                    disabled={ineligible}
+                    disabled={formFrozen}
                   />
                 </Field>
 
@@ -319,7 +328,7 @@ export function NewLoanClient() {
                   <input
                     type="file"
                     accept=".pdf,image/jpeg,image/png"
-                    disabled={ineligible}
+                    disabled={formFrozen}
                     onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
                     className="w-full text-sm text-neutral-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-xs file:border-0 file:text-sm file:bg-neutral-100 file:text-neutral-700 hover:file:bg-neutral-200 file:font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   />

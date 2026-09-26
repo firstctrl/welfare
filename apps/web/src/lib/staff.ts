@@ -146,7 +146,11 @@ export async function bulkDeleteStaff(ids: string[]): Promise<{ deleted: number 
 
 export async function getLoanEligibility(
   id: string,
-): Promise<{ eligible: boolean; reason?: string }> {
+): Promise<{
+  eligible: boolean;
+  reason?: string;
+  defaultHistory?: { count: number; totalDeducted: number; lastDefaultedAt: string };
+}> {
   const { data } = await apiClient.get(`/staff/${id}/eligibility`);
   return data;
 }

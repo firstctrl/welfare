@@ -16,7 +16,7 @@ export { ConfigKey } from './enums/config-key.enum';
 export { AuditAction } from './enums/audit-action.enum';
 export { AuditEntity } from './enums/audit-entity.enum';
 export { EmailTriggerSource } from './enums/email-trigger-source.enum';
-export { RepaymentSource } from './enums/repayment-source.enum';
+export { RepaymentSource, REPAYMENT_SOURCE_LABELS, repaymentSourceLabel } from './enums/repayment-source.enum';
 export { PaymentEntryType } from './enums/payment-entry-type.enum';
 export { ClaimType } from './enums/claim-type.enum';
 export { CessationReason } from './enums/cessation-reason.enum';
