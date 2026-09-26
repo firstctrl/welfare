@@ -19,7 +19,7 @@ const mockStaffService = {
 };
 const mockAuditService = { log: jest.fn() };
 const mockProgressService = { start: jest.fn(), increment: jest.fn(), complete: jest.fn(), get: jest.fn() };
-const mockContributionsService = { getBalance: jest.fn().mockResolvedValue(0) };
+const mockContributionsService = { getBalanceAsOfPeriod: jest.fn().mockResolvedValue(0) };
 
 function twoSheetBuffer(
   loanRows: Record<string, unknown>[],
@@ -62,7 +62,7 @@ describe('LoansLegacyImportService', () => {
     jest.clearAllMocks();
     mockFindByIdAndUpdate.mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
     mockCreate.mockResolvedValue({ _id: { toString: () => 'batch-1' } });
-    mockContributionsService.getBalance.mockResolvedValue(0);
+    mockContributionsService.getBalanceAsOfPeriod.mockResolvedValue(0);
   });
 
   it('creates a legacy loan from a valid loan row and its matching instalment rows', async () => {
@@ -196,24 +196,24 @@ describe('LoansLegacyImportService', () => {
 
       const result = await service.processImport(buffer, 'f.xlsx', 'actor-1', 'Actor');
 
-      expect(mockContributionsService.getBalance).not.toHaveBeenCalled();
+      expect(mockContributionsService.getBalanceAsOfPeriod).not.toHaveBeenCalled();
       expect(result.flagged).toBe(0);
       expect(result.created).toBe(1);
     });
 
     it('does not flag when the defaulter had no available balance as of the latest paid instalment (correct defaulter-first history)', async () => {
-      mockContributionsService.getBalance.mockResolvedValue(0);
+      mockContributionsService.getBalanceAsOfPeriod.mockResolvedValue(0);
       const buffer = twoSheetBuffer([loanRowWithRestitution], instalmentRowsWithPaidDates);
 
       const result = await service.processImport(buffer, 'f.xlsx', 'actor-1', 'Actor');
 
-      expect(mockContributionsService.getBalance).toHaveBeenCalledWith('resolved-S1', new Date('2025-02-10'));
+      expect(mockContributionsService.getBalanceAsOfPeriod).toHaveBeenCalledWith('resolved-S1', 2, 2025);
       expect(result.flagged).toBe(0);
       expect(result.created).toBe(1);
     });
 
     it('flags, without skipping creation, when the defaulter had available balance the claimed figure ignores', async () => {
-      mockContributionsService.getBalance.mockResolvedValue(500);
+      mockContributionsService.getBalanceAsOfPeriod.mockResolvedValue(500);
       const buffer = twoSheetBuffer([loanRowWithRestitution], instalmentRowsWithPaidDates);
 
       const result = await service.processImport(buffer, 'f.xlsx', 'actor-1', 'Actor');
@@ -229,6 +229,7 @@ describe('LoansLegacyImportService', () => {
           reason: expect.stringContaining('Guarantor Restitution Owed may not reflect defaulter-first order'),
         }),
       );
+      expect(flaggedEntries[0].reason).toContain('LOAN WAS IMPORTED');
       expect(flaggedEntries[0].reason).toContain('500');
     });
 
@@ -241,9 +242,36 @@ describe('LoansLegacyImportService', () => {
 
       const result = await service.processImport(buffer, 'f.xlsx', 'actor-1', 'Actor');
 
-      expect(mockContributionsService.getBalance).not.toHaveBeenCalled();
+      expect(mockContributionsService.getBalanceAsOfPeriod).not.toHaveBeenCalled();
       expect(result.flagged).toBe(0);
       expect(result.created).toBe(1);
+    });
+
+    it('does not query contributions or flag when every Paid Date is unparseable', async () => {
+      const invalidDateInstalmentRows = [
+        { 'Loan Ref': 'L1', 'Instalment Number': 1, 'Due Date': '05/01/2025', 'Due Amount': 3000, 'Paid Amount': 3000, 'Paid Date': 'not-a-date', 'Status': 'Paid' },
+      ];
+      const buffer = twoSheetBuffer([loanRowWithRestitution], invalidDateInstalmentRows);
+
+      const result = await service.processImport(buffer, 'f.xlsx', 'actor-1', 'Actor');
+
+      expect(mockContributionsService.getBalanceAsOfPeriod).not.toHaveBeenCalled();
+      expect(result.flagged).toBe(0);
+      expect(result.created).toBe(1);
+    });
+
+    it('flags with a distinct reason, without skipping creation, when the balance cross-check itself throws', async () => {
+      mockContributionsService.getBalanceAsOfPeriod.mockRejectedValueOnce(new Error('mongo blip'));
+      const buffer = twoSheetBuffer([loanRowWithRestitution], instalmentRowsWithPaidDates);
+
+      const result = await service.processImport(buffer, 'f.xlsx', 'actor-1', 'Actor');
+
+      expect(result.created).toBe(1);
+      expect(result.flagged).toBe(1);
+      const flaggedEntries = mockFindByIdAndUpdate.mock.calls[0][1].$set.flaggedEntries;
+      expect(flaggedEntries[0].reason).toContain('LOAN WAS IMPORTED');
+      expect(flaggedEntries[0].reason).toContain('restitution cross-check failed');
+      expect(flaggedEntries[0].reason).toContain('mongo blip');
     });
   });
 });

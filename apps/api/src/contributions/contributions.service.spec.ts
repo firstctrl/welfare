@@ -300,6 +300,37 @@ describe('ContributionsService', () => {
     });
   });
 
+  describe('getBalanceAsOfPeriod', () => {
+    it('bounds both aggregations to contribution periods at or before the given month/year', async () => {
+      mockAggregate
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([{ total: 9000 }]) })
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([{ total: 2000 }]) });
+
+      const result = await service.getBalanceAsOfPeriod('staff-1', 2, 2025);
+
+      expect(result).toBe(7000);
+      const periodFilter = { $or: [{ year: { $lt: 2025 } }, { year: 2025, month: { $lte: 2 } }] };
+      expect(mockAggregate).toHaveBeenNthCalledWith(1, [
+        { $match: { staffId: 'staff-1', isDebit: { $ne: true }, ...periodFilter } },
+        { $group: { _id: null, total: { $sum: '$paidAmount' } } },
+      ]);
+      expect(mockAggregate).toHaveBeenNthCalledWith(2, [
+        { $match: { staffId: 'staff-1', isDebit: true, ...periodFilter } },
+        { $group: { _id: null, total: { $sum: '$paidAmount' } } },
+      ]);
+    });
+
+    it('rounds the result to 2 decimals to avoid floating-point residue', async () => {
+      mockAggregate
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([{ total: 0.1 + 0.2 }]) }) // 0.30000000000000004
+        .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue([]) });
+
+      const result = await service.getBalanceAsOfPeriod('staff-1', 2, 2025);
+
+      expect(result).toBe(0.3);
+    });
+  });
+
   describe('handleRestitutionRedirect (via processPayment)', () => {
     const makeRestitutionLoan = (owed: number, paid: number) => ({
       _id: { toString: () => 'loan-1' },

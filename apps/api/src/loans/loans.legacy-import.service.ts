@@ -205,17 +205,27 @@ export class LoansLegacyImportService {
           created++;
 
           if (guarantorRestitutionOwed > 0) {
-            const paidDates = instalments
-              .map((inst) => inst.paidDate)
-              .filter((d): d is Date => d !== undefined);
-            if (paidDates.length > 0) {
-              const asOfDate = new Date(Math.max(...paidDates.map((d) => d.getTime())));
-              const defaulterBalance = await this.contributionsService.getBalance(staff._id.toString(), asOfDate);
-              if (defaulterBalance > 0) {
-                flag(
-                  `Guarantor Restitution Owed may not reflect defaulter-first order — defaulter had ${defaulterBalance.toFixed(2)} available at the time`,
+            try {
+              const paidDates = instalments
+                .map((inst) => inst.paidDate)
+                .filter((d): d is Date => d !== undefined && !isNaN(d.getTime()));
+              if (paidDates.length > 0) {
+                const asOfDate = new Date(Math.max(...paidDates.map((d) => d.getTime())));
+                const defaulterBalance = await this.contributionsService.getBalanceAsOfPeriod(
+                  staff._id.toString(),
+                  asOfDate.getMonth() + 1,
+                  asOfDate.getFullYear(),
                 );
+                if (defaulterBalance > 0) {
+                  flag(
+                    `LOAN WAS IMPORTED — Guarantor Restitution Owed may not reflect defaulter-first order — defaulter had ${defaulterBalance.toFixed(2)} available at the time. This is a warning, not a failure; do not re-upload this row.`,
+                  );
+                }
               }
+            } catch (err: unknown) {
+              flag(
+                `LOAN WAS IMPORTED — restitution cross-check failed: ${err instanceof Error ? err.message : 'Unknown error'}. Do not re-upload this row; verify manually.`,
+              );
             }
           }
         } catch (err: unknown) {

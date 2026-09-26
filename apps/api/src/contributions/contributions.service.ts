@@ -265,6 +265,34 @@ export class ContributionsService {
     return credits - debits;
   }
 
+  /**
+   * Balance as of a contribution period (month/year), not a record's createdAt.
+   * Historical contributions (e.g. bulk-imported legacy periods) carry a createdAt
+   * of when they were entered into the system, not the period they cover, so
+   * getBalance's createdAt bound cannot answer "what was the balance as of period X"
+   * for backfilled data. This filters on the period fields instead.
+   */
+  async getBalanceAsOfPeriod(staffId: string, month: number, year: number): Promise<number> {
+    const periodFilter = { $or: [{ year: { $lt: year } }, { year, month: { $lte: month } }] };
+    const [creditResult, debitResult] = await Promise.all([
+      this.contributionModel
+        .aggregate([
+          { $match: { staffId, isDebit: { $ne: true }, ...periodFilter } },
+          { $group: { _id: null, total: { $sum: '$paidAmount' } } },
+        ])
+        .exec(),
+      this.contributionModel
+        .aggregate([
+          { $match: { staffId, isDebit: true, ...periodFilter } },
+          { $group: { _id: null, total: { $sum: '$paidAmount' } } },
+        ])
+        .exec(),
+    ]);
+    const credits = (creditResult as { total: number }[])[0]?.total ?? 0;
+    const debits = (debitResult as { total: number }[])[0]?.total ?? 0;
+    return Math.round((credits - debits) * 100) / 100;
+  }
+
   async hasContributionsForLoan(loanId: string): Promise<boolean> {
     return !!(await this.contributionModel.exists({ loanId }).exec());
   }
