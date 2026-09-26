@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import { Banknote, TrendingUp, AlertCircle, BarChart3, Users, ChevronDown, ChevronRight, Download } from 'lucide-react';
-import { getFundSummary, downloadFundSummaryFile } from '@/lib/reports';
+import { getFundSummary, getFundSummaryYears, downloadFundSummaryFile } from '@/lib/reports';
 import type { FundSummaryParams } from '@/lib/reports';
 import type {
   IFundSummaryContributionBreakdownRow,
@@ -14,7 +14,7 @@ import type {
   IFundSummaryClaimsBreakdownRow,
 } from '@welfare/shared';
 import { KpiCard } from '@/components/ui/kpi-card';
-import { Field, Input, Select } from '@/components/ui/field';
+import { Field, Select } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
 import { fmtGHS, fmtGHSShort } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -169,6 +169,14 @@ export function FundSummaryPanel() {
     queryFn:  () => getFundSummary(params),
   });
 
+  const { data: years } = useQuery({
+    queryKey: ['fund-summary-years'],
+    queryFn:  getFundSummaryYears,
+  });
+  const yearOptions = [...new Set([...(years ?? []), CUR_YEAR])]
+    .sort((a, b) => b - a)
+    .map(y => ({ value: String(y), label: String(y) }));
+
   const monthOptions = MONTHS.map((m, i) => ({ value: String(i + 1), label: m }));
 
   return (
@@ -221,9 +229,9 @@ export function FundSummaryPanel() {
       {/* Filter bar */}
       <div className="flex flex-wrap items-end gap-4 p-4 bg-neutral-50 border border-neutral-200 rounded-md">
         <Field label="Year">
-          <Input
-            type="number"
-            value={year}
+          <Select
+            options={yearOptions}
+            value={String(year)}
             onChange={(e) => setYear(+e.target.value)}
             style={{ width: 100 }}
           />

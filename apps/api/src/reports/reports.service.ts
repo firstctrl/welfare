@@ -1668,6 +1668,11 @@ ${logoBase64 ? '<div class="watermark"></div>' : ''}
     }
   }
 
+  async getFundSummaryYears(): Promise<number[]> {
+    const years = await this.contribModel.distinct('year').exec();
+    return (years as number[]).sort((a, b) => b - a);
+  }
+
   async getFundSummary(year: number, fromMonth: number, toMonth: number): Promise<IFundSummaryReport> {
     const periodStart = new Date(year, fromMonth - 1, 1);
     const periodEnd   = new Date(year, toMonth, 0, 23, 59, 59);

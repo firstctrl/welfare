@@ -259,6 +259,11 @@ export async function getFundSummary(params: FundSummaryParams): Promise<IFundSu
   return data;
 }
 
+export async function getFundSummaryYears(): Promise<number[]> {
+  const { data } = await apiClient.get('/reports/fund-summary/years');
+  return data;
+}
+
 export async function downloadFundSummaryFile(
   sub: 'contributions' | 'loans' | 'defaults' | 'claims',
   params: FundSummaryParams,

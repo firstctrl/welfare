@@ -568,6 +568,12 @@ export class ReportsController {
     return { jobId: job.id, queued: ids.length };
   }
 
+  @Get('fund-summary/years')
+  @RequirePermission(AppModule.Reports, 'readonly')
+  async getFundSummaryYears() {
+    return this.reportsService.getFundSummaryYears();
+  }
+
   @Get('fund-summary')
   @RequirePermission(AppModule.Reports, 'readonly')
   async getFundSummary(@Query() dto: FundSummaryQueryDto) {
