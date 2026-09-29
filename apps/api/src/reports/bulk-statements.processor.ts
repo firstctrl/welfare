@@ -45,7 +45,7 @@ export class BulkStatementsProcessor extends WorkerHost {
         if (!staff?.email) {
           failed++;
         } else {
-          const pdf = await this.reportsService.generateStatementPdf(staffId);
+          const pdf = await this.reportsService.generateStatementPdf(staffId, year);
           await this.emailService.sendWithAttachment(
             { staffId, staffName: staff.fullName, email: staff.email },
             `Your Welfare Department Contribution Statement - ${year}`,

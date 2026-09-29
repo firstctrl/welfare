@@ -1009,7 +1009,7 @@ ${(stmt.kpis.guarantorOffsetAmount ?? 0) > 0 || (stmt.kpis.borrowerContributionO
 
   // ─────────────────────────── STAFF STATEMENT ───────────────────────────
 
-  async getStaffContributionStatement(staffMongoId: string): Promise<{
+  async getStaffContributionStatement(staffMongoId: string, year?: number): Promise<{
     staff: { _id: string; fullName: string; staffId: string; email?: string };
     kpis: { totalPaid: number; totalExpected: number; missedMonths: number; totalSurplus: number; collectionRate: number; totalOffsets: number; totalClaims: number };
     payrollGapNotice?: string;
@@ -1027,7 +1027,7 @@ ${(stmt.kpis.guarantorOffsetAmount ?? 0) > 0 || (stmt.kpis.borrowerContributionO
     if (!staff) throw new Error(`Staff ${staffMongoId} not found`);
 
     const contribs = await this.contribModel
-      .find({ staffId: staffMongoId, isDebit: { $ne: true } })
+      .find({ staffId: staffMongoId, isDebit: { $ne: true }, ...(year ? { year } : {}) })
       .sort({ year: 1, month: 1 })
       .exec();
 
@@ -1039,6 +1039,7 @@ ${(stmt.kpis.guarantorOffsetAmount ?? 0) > 0 || (stmt.kpis.borrowerContributionO
         staffId: staffMongoId,
         isDebit: true,
         source: { $in: ['GuarantorOffset', 'DefaulterDeduction'] },
+        ...(year ? { year } : {}),
       })
       .exec();
 
@@ -1100,17 +1101,23 @@ ${(stmt.kpis.guarantorOffsetAmount ?? 0) > 0 || (stmt.kpis.borrowerContributionO
     const totalPaid = contribs.reduce((s, c) => s + c.paidAmount, 0);
     const totalExpected = contribs.reduce((s, c) => s + c.expectedAmount, 0);
     const totalSurplus = contribs.reduce((s, c) => s + c.surplusCarriedForward, 0);
-    const missedStart = (staff as any).dateOfFirstContribution ?? (await this.getEarliestContributionDate(staffMongoId));
+    let missedStart = (staff as any).dateOfFirstContribution ?? (await this.getEarliestContributionDate(staffMongoId));
     const now = new Date();
     const staffUpdatedAt = (staff as any).updatedAt;
-    const missedEnd = EXITED_STATUSES.includes(staff.status) && staffUpdatedAt && staffUpdatedAt < now ? staffUpdatedAt : now;
+    let missedEnd = EXITED_STATUSES.includes(staff.status) && staffUpdatedAt && staffUpdatedAt < now ? staffUpdatedAt : now;
+    if (year) {
+      const yearStart = new Date(year, 0, 1);
+      const yearEnd = new Date(year, 11, 31, 23, 59, 59);
+      if (missedStart && missedStart < yearStart) missedStart = yearStart;
+      if (missedEnd > yearEnd) missedEnd = yearEnd;
+    }
     const { missedCount, partialCount } = await this.getMissedAndPartialCounts(staffMongoId, missedStart, missedEnd);
     const missedMonths = missedCount + partialCount;
     const collectionRate = totalExpected > 0 ? Math.round((totalPaid / totalExpected) * 100) : 0;
     const totalOffsets = offsetDebits.reduce((s, d) => s + d.paidAmount, 0);
 
     const approvedClaims = await this.claimModel
-      .find({ staffId: staffMongoId, status: ClaimStatus.Approved })
+      .find({ staffId: staffMongoId, status: ClaimStatus.Approved, ...(year ? { year } : {}) })
       .sort({ year: 1 })
       .exec();
     const totalClaims = approvedClaims.reduce((s, c) => s + c.amount, 0);
@@ -1137,8 +1144,8 @@ ${(stmt.kpis.guarantorOffsetAmount ?? 0) > 0 || (stmt.kpis.borrowerContributionO
     };
   }
 
-  async generateStatementPdf(staffMongoId: string): Promise<Buffer> {
-    const { staff, kpis, rows, claimYears, payrollGapNotice } = await this.getStaffContributionStatement(staffMongoId);
+  async generateStatementPdf(staffMongoId: string, year?: number): Promise<Buffer> {
+    const { staff, kpis, rows, claimYears, payrollGapNotice } = await this.getStaffContributionStatement(staffMongoId, year);
     const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const fmt = (n: number) => `GHS ${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
