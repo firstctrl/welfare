@@ -14,7 +14,12 @@ describe('BulkStatementsProcessor', () => {
     processor = new BulkStatementsProcessor(staffModel, reportsService, emailService);
   });
 
-  const job = (data: any) => ({ data, updateProgress: jest.fn() }) as any;
+  // updateData mutates job.data like BullMQ does, so a re-run of the same job sees saved progress.
+  const job = (data: any) => {
+    const j: any = { data, updateProgress: jest.fn() };
+    j.updateData = jest.fn(async (d: any) => { j.data = d; });
+    return j;
+  };
 
   it('scopes the statement to the selected year on manual send', async () => {
     await processor.process(job({ staffIds: ['a'], year: 2025, triggeredBy: 'manual' }));
@@ -33,5 +38,31 @@ describe('BulkStatementsProcessor', () => {
     expect(subject).toBe('Your Welfare Department Contribution Statement');
     expect(body).not.toContain('undefined');
     expect(attachments[0].filename).toBe('statement-S001.pdf');
+  });
+
+  it('saves its position after each staff member', async () => {
+    const j = job({ staffIds: ['a', 'b'], triggeredBy: 'manual' });
+    await processor.process(j);
+
+    expect(j.updateData).toHaveBeenCalledTimes(2);
+    expect(j.data).toMatchObject({ nextIndex: 2, sent: 2, failed: 0 });
+  });
+
+  it('resumes after a restart without re-emailing staff already done', async () => {
+    const j = job({ staffIds: ['a', 'b', 'c'], triggeredBy: 'cron', nextIndex: 2, sent: 1, failed: 1 });
+    const result = await processor.process(j);
+
+    expect(reportsService.generateStatementPdf).toHaveBeenCalledTimes(1);
+    expect(reportsService.generateStatementPdf).toHaveBeenCalledWith('c', undefined);
+    expect(result).toEqual({ sent: 2, failed: 1, total: 3 });
+  });
+
+  it('keeps its position when a send fails', async () => {
+    emailService.sendWithAttachment.mockRejectedValueOnce(new Error('smtp down'));
+    const j = job({ staffIds: ['a', 'b'], triggeredBy: 'manual' });
+    const result = await processor.process(j);
+
+    expect(result).toEqual({ sent: 1, failed: 1, total: 2 });
+    expect(j.data).toMatchObject({ nextIndex: 2, sent: 1, failed: 1 });
   });
 });

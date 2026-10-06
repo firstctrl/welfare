@@ -13,6 +13,11 @@ export interface BulkSendJobData {
   /** Scopes the statement to one year (manual send). Omitted by the scheduled send, which mails full history. */
   year?: number;
   triggeredBy: 'manual' | 'cron';
+  // Progress saved after each staff member, so a job restarted by a deploy
+  // resumes where it stopped instead of re-emailing everyone from the start.
+  nextIndex?: number;
+  sent?: number;
+  failed?: number;
 }
 
 export interface BulkSendJobResult {
@@ -21,7 +26,8 @@ export interface BulkSendJobResult {
   total: number;
 }
 
-@Processor('bulk-statements')
+// Allow the job to survive several API restarts mid-send; it resumes from nextIndex.
+@Processor('bulk-statements', { maxStalledCount: 10 })
 export class BulkStatementsProcessor extends WorkerHost {
   private readonly logger = new Logger(BulkStatementsProcessor.name);
 
@@ -36,10 +42,12 @@ export class BulkStatementsProcessor extends WorkerHost {
   async process(job: Job<BulkSendJobData>): Promise<BulkSendJobResult> {
     const { staffIds, year, triggeredBy } = job.data;
     const total = staffIds.length;
-    let sent = 0;
-    let failed = 0;
+    const start = job.data.nextIndex ?? 0;
+    let sent = job.data.sent ?? 0;
+    let failed = job.data.failed ?? 0;
+    if (start > 0) this.logger.log(`Job ${job.id} resuming at ${start}/${total}`);
 
-    for (let i = 0; i < total; i++) {
+    for (let i = start; i < total; i++) {
       const staffId = staffIds[i];
       try {
         const staff = await this.staffModel.findById(staffId).exec();
@@ -61,6 +69,7 @@ export class BulkStatementsProcessor extends WorkerHost {
         failed++;
       }
 
+      await job.updateData({ ...job.data, nextIndex: i + 1, sent, failed });
       await job.updateProgress(Math.round(((i + 1) / total) * 100));
     }
 
