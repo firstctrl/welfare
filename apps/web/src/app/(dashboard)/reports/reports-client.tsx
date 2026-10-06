@@ -29,6 +29,7 @@ import {
   downloadStatementPdf,
   triggerBulkSend,
   getBulkSendStatus,
+  getFundSummaryYears,
   buildDownloadUrl,
   getLoanBorrowers,
   getLoanStatement,
@@ -1008,7 +1009,8 @@ function StaffStatementPanel({ canSend }: { canSend: boolean }) {
 
 function BulkStatementsPanel({ canSend }: { canSend: boolean }) {
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [year, setYear]               = useState(CUR_YEAR);
+  // undefined = all years (full contribution history)
+  const [year, setYear]               = useState<number | undefined>(CUR_YEAR);
   const [sendTo, setSendTo]           = useState<'all' | 'selected'>('all');
   const [staffInput, setStaffInput]   = useState('');
   const [staffOptions, setStaffOptions] = useState<{ _id: string; fullName: string; staffId: string }[]>([]);
@@ -1017,6 +1019,17 @@ function BulkStatementsPanel({ canSend }: { canSend: boolean }) {
   const [jobId, setJobId]             = useState<string | null>(null);
   const [polling, setPolling]         = useState(false);
   const [status, setStatus]           = useState<Awaited<ReturnType<typeof getBulkSendStatus>> | null>(null);
+
+  const { data: years } = useQuery({
+    queryKey: ['fund-summary-years'],
+    queryFn:  getFundSummaryYears,
+  });
+  const yearOptions = [
+    { value: 'all', label: 'All years (full history)' },
+    ...[...new Set([...(years ?? []), CUR_YEAR])]
+      .sort((a, b) => b - a)
+      .map(y => ({ value: String(y), label: String(y) })),
+  ];
 
   const handleSearch = useCallback(async (q: string) => {
     setStaffInput(q);
@@ -1087,11 +1100,11 @@ function BulkStatementsPanel({ canSend }: { canSend: boolean }) {
       {/* Config */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-4 bg-neutral-50 rounded-md border border-neutral-200">
         <Field label="Statement Year">
-          <Input
-            type="number"
-            value={year}
-            onChange={(e) => setYear(+e.target.value)}
-            style={{ width: 120 }}
+          <Select
+            options={yearOptions}
+            value={year === undefined ? 'all' : String(year)}
+            onChange={(e) => setYear(e.target.value === 'all' ? undefined : +e.target.value)}
+            style={{ width: 200 }}
           />
         </Field>
 

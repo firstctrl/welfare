@@ -173,7 +173,8 @@ export async function downloadStaffRecordPdf(staffMongoId: string, staffNo: stri
 }
 
 export interface BulkSendParams {
-  year: number;
+  /** Omit to send full contribution history. */
+  year?: number;
   sendTo: 'all' | 'selected';
   staffIds?: string[];
 }

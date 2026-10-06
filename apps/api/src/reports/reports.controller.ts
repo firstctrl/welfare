@@ -533,12 +533,16 @@ export class ReportsController {
   @Post('contributions/bulk-send')
   @RequirePermission(AppModule.Reports, 'full')
   async triggerBulkSend(
-    @Body('year') year: number,
+    @Body('year') year: number | null | undefined,
     @Body('sendTo') sendTo: 'all' | 'selected',
     @Body('staffIds') staffIds?: string[],
     @CurrentUser() user?: { _id: { toString(): string }; displayName: string },
   ) {
-    if (!year) throw new BadRequestException('year is required');
+    // No year = full contribution history (same as the scheduled send).
+    if (year != null && !Number.isInteger(year)) {
+      throw new BadRequestException('year must be a whole number');
+    }
+    year = year ?? undefined;
 
     let ids: string[];
     if (sendTo === 'selected') {
@@ -563,7 +567,7 @@ export class ReportsController {
       AuditEntity.EmailLog,
       job.id!,
       undefined,
-      { year, sendTo, staffCount: ids.length, triggeredBy: 'manual' },
+      { year: year ?? 'all', sendTo, staffCount: ids.length, triggeredBy: 'manual' },
     );
     return { jobId: job.id, queued: ids.length };
   }
