@@ -10,7 +10,8 @@ import { ReportsService } from './reports.service';
 
 export interface BulkSendJobData {
   staffIds: string[];
-  year: number;
+  /** Scopes the statement to one year (manual send). Omitted by the scheduled send, which mails full history. */
+  year?: number;
   triggeredBy: 'manual' | 'cron';
 }
 
@@ -48,9 +49,9 @@ export class BulkStatementsProcessor extends WorkerHost {
           const pdf = await this.reportsService.generateStatementPdf(staffId, year);
           await this.emailService.sendWithAttachment(
             { staffId, staffName: staff.fullName, email: staff.email },
-            `Your Welfare Department Contribution Statement - ${year}`,
-            `<p>Dear ${staff.fullName},</p><p>Please find attached your welfare contribution statement for ${year}.</p><p>Kind regards,<br/>Welfare Department</p>`,
-            [{ filename: `statement-${staff.staffId}-${year}.pdf`, content: pdf }],
+            year ? `Your Welfare Department Contribution Statement - ${year}` : `Your Welfare Department Contribution Statement`,
+            `<p>Dear ${staff.fullName},</p><p>Please find attached your welfare contribution statement${year ? ` for ${year}` : ''}.</p><p>Kind regards,<br/>Welfare Department</p>`,
+            [{ filename: year ? `statement-${staff.staffId}-${year}.pdf` : `statement-${staff.staffId}.pdf`, content: pdf }],
             triggeredBy === 'cron' ? EmailTriggerSource.Cron : EmailTriggerSource.Manual,
           );
           sent++;

@@ -44,7 +44,6 @@ export class BulkStatementsCronService {
       return;
     }
 
-    const year = new Date().getFullYear();
     const staffWithEmail = await this.staffModel
       .find({ status: StaffStatus.Active, email: { $exists: true, $ne: '' } })
       .select('_id')
@@ -57,7 +56,8 @@ export class BulkStatementsCronService {
     }
 
     const staffIds = (staffWithEmail as any[]).map((s: any) => s._id.toString());
-    const job = await this.queue.add('bulk-send', { staffIds, year, triggeredBy: 'cron' });
+    // No year: scheduled statements carry the staff's full contribution history.
+    const job = await this.queue.add('bulk-send', { staffIds, triggeredBy: 'cron' });
     this.logger.log(`Scheduled bulk send queued: ${staffIds.length} staff, job ${job.id}`);
   }
 }
